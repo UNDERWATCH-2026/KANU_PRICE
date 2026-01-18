@@ -6,7 +6,7 @@ import psycopg2
 # 1. Supabase DB 연결 정보
 # =========================
 # ⚠️ 아래 DB_PASSWORD만 실제 비밀번호로 교체하세요
-DB_PASSWORD = "KANU2026PRICE!!"
+DB_PASSWORD = "KANUPRICE2026!"
 
 DATABASE_URL = (
     f"postgresql://postgres:{DB_PASSWORD}"
@@ -72,3 +72,4 @@ if st.button("조회"):
 # =========================
 st.divider()
 st.caption("ⓒ Underwatch · Price Intelligence PoC")
+
