@@ -7,7 +7,7 @@ conn = psycopg2.connect(
     database="postgres",
     user="postgres",
     password="KANU2026PRICE!!",
-    port=5432
+    port=5432,
     sslmode="require"
 )
 
@@ -35,4 +35,5 @@ if st.button("조회"):
 
         st.subheader("📋 가격 이력")
         st.dataframe(df)
+
 
