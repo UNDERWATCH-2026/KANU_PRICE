@@ -10,7 +10,7 @@ DB_PASSWORD = "KANUPRICE2026!"
 
 DATABASE_URL = (
     f"postgresql://postgres:{DB_PASSWORD}"
-    "@db.fgaxjjpktwksdoizerwh.supabase.co:5432/postgres"
+    "@db.fgaxjjpktwksdoizerwh.supabase.co:6543/postgres"
     "?sslmode=require"
 )
 
@@ -72,4 +72,5 @@ if st.button("조회"):
 # =========================
 st.divider()
 st.caption("ⓒ Underwatch · Price Intelligence PoC")
+
 
