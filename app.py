@@ -1,18 +1,17 @@
-import streamlit as st
-import pandas as pd
 import psycopg2
+import urllib.parse
 
-# =========================
-# 1. Supabase DB 연결 정보
-# =========================
-# ⚠️ 아래 DB_PASSWORD만 실제 비밀번호로 교체하세요
-DB_PASSWORD = "KANUPRICE2026!"
+DB_PASSWORD_RAW = "KANUPRICE2026!"
+DB_PASSWORD = urllib.parse.quote(DB_PASSWORD_RAW)
 
 DATABASE_URL = (
     f"postgresql://postgres:{DB_PASSWORD}"
     "@db.fgaxjjpktwksdoizerwh.supabase.co:6543/postgres"
     "?sslmode=require"
 )
+
+conn = psycopg2.connect(DATABASE_URL)
+
 
 # =========================
 # 2. DB 연결
@@ -72,5 +71,6 @@ if st.button("조회"):
 # =========================
 st.divider()
 st.caption("ⓒ Underwatch · Price Intelligence PoC")
+
 
 
