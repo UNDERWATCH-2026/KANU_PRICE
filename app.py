@@ -5,7 +5,7 @@ DB_PASSWORD_RAW = "KANUPRICE2026!"
 DB_PASSWORD = urllib.parse.quote(DB_PASSWORD_RAW)
 
 DATABASE_URL = (
-    f"postgresql://postgres:{DB_PASSWORD}"
+    f"postgresql://postgres.fgaxjjpktwksdoizerwh:{DB_PASSWORD}"
     "@db.fgaxjjpktwksdoizerwh.supabase.co:6543/postgres"
     "?sslmode=require"
 )
@@ -71,6 +71,7 @@ if st.button("조회"):
 # =========================
 st.divider()
 st.caption("ⓒ Underwatch · Price Intelligence PoC")
+
 
 
 
