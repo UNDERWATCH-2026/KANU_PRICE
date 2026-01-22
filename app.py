@@ -40,14 +40,14 @@ if use_event_filter:
 if product_name:
     query = supabase.table("product_all_events") \
         .select(
-            "event_date, event_type, "
+            "product_name, event_date, event_type, "
             "prev_normal_price, current_normal_price, "
             "prev_sale_price, current_sale_price"
         ) \
         .ilike("product_name", f"%{product_name}%") \
         .order("event_date")
 
-    # 필터를 사용할 때만 event_type 조건 추가
+    # (이벤트 필터 체크박스 로직을 쓰는 경우에만)
     if selected_events is not None:
         query = query.in_("event_type", selected_events)
 
@@ -56,9 +56,6 @@ if product_name:
     if not res.data:
         st.warning("해당 제품의 이벤트가 없습니다.")
     else:
-        # =========================
-        # 3️⃣ 데이터 가공
-        # =========================
         df = pd.DataFrame(res.data)
 
         def format_price(v):
@@ -81,11 +78,7 @@ if product_name:
             axis=1
         )
 
-        df_view = df[["event_date", "event_type", "가격변동"]]
-
-        # =========================
-        # 4️⃣ 스타일링
-        # =========================
+        # 스타일 함수는 데이터 있을 때 정의
         def highlight_event(row):
             color_map = {
                 "신제품": "#E3F2FD",
@@ -98,19 +91,14 @@ if product_name:
             }
             return [f"background-color: {color_map.get(row.event_type, '')}"] * len(row)
 
-# =========================
-# 제품별 타임라인 출력
-# =========================
-for product, g in df.groupby("product_name"):
-    st.subheader(product)
-
-    df_view = g[["event_date", "event_type", "가격변동"]]
-
-    st.dataframe(
-        df_view.style.apply(highlight_event, axis=1),
-        use_container_width=True
-    )
+        # ✅ 제품별 타임라인 출력 (여기가 반드시 이 위치)
+        for product, g in df.groupby("product_name"):
+            st.subheader(product)
+            df_view = g[["event_date", "event_type", "가격변동"]]
+            st.dataframe(
+                df_view.style.apply(highlight_event, axis=1),
+                use_container_width=True
+            )
 
 else:
     st.info("상단에 제품명을 입력하세요.")
-
