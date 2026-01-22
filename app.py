@@ -20,26 +20,16 @@ st.write("제품명을 입력하면 이벤트 타임라인을 보여줍니다.")
 product_name = st.text_input("제품명 입력")
 
 if product_name:
-    query = """
-        select
-          event_date,
-          event_type,
-          event_detail
-        from product_event_timeline
-        where product_name = %s
-        order by event_date
-    """
+    res = supabase.table("product_all_events") \
+        .select(
+            "event_date, event_type, prev_normal_price, current_normal_price, prev_sale_price, current_sale_price"
+        ) \
+        .ilike("product_name", f"%{product_name}%") \
+        .order("event_date") \
+        .execute()
 
-    result = supabase.rpc(
-        "execute_sql",
-        {
-            "sql": query,
-            "params": [product_name]
-        }
-    ).execute()
-
-    if result.data:
-        df = pd.DataFrame(result.data)
+    if res.data:
+        df = pd.DataFrame(res.data)
         st.dataframe(df)
     else:
         st.warning("해당 제품의 이벤트가 없습니다.")
