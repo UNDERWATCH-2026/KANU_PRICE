@@ -18,7 +18,8 @@ st.title("캡슐 커피 가격 · 상태 이벤트 타임라인")
 # =========================
 product_name = st.text_input("제품명 입력 (부분 검색 가능)")
 
-use_event_filter = st.checkbox("이벤트 유형 필터 사용", value=False)
+# 이벤트 유형 필터 UI (기본: 전체, 숨김)
+use_event_filter = st.checkbox("이벤트 유형 선택", value=False)
 
 event_types = [
     "신제품", "품절", "복원",
@@ -29,7 +30,7 @@ event_types = [
 selected_events = None
 if use_event_filter:
     selected_events = st.multiselect(
-        "이벤트 유형 선택",
+        "보고 싶은 이벤트 유형 선택",
         event_types,
         default=event_types
     )
@@ -39,19 +40,20 @@ if use_event_filter:
 # =========================
 if product_name:
     query = supabase.table("product_all_events") \
-        .select(
-            "product_name, event_date, event_type, "
-            "prev_normal_price, current_normal_price, "
-            "prev_sale_price, current_sale_price"
-        ) \
-        .ilike("product_name", f"%{product_name}%") \
-        .order("event_date")
+    .select(
+        "product_name, event_date, event_type, "
+        "prev_normal_price, current_normal_price, "
+        "prev_sale_price, current_sale_price"
+    ) \
+    .ilike("product_name", f"%{product_name}%") \
+    .order("event_date")
 
-    # (이벤트 필터 체크박스 로직을 쓰는 경우에만)
+    # 👉 필터를 사용할 때만 event_type 조건 추가
     if selected_events is not None:
         query = query.in_("event_type", selected_events)
 
     res = query.execute()
+
 
     if not res.data:
         st.warning("해당 제품의 이벤트가 없습니다.")
@@ -102,3 +104,4 @@ if product_name:
 
 else:
     st.info("상단에 제품명을 입력하세요.")
+
