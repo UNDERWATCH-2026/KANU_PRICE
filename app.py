@@ -98,11 +98,19 @@ if product_name:
             }
             return [f"background-color: {color_map.get(row.event_type, '')}"] * len(row)
 
-        st.subheader("이벤트 타임라인")
-        st.dataframe(
-            df_view.style.apply(highlight_event, axis=1),
-            use_container_width=True
-        )
+# =========================
+# 제품별 타임라인 출력
+# =========================
+for product, g in df.groupby("product_name"):
+    st.subheader(product)
+
+    df_view = g[["event_date", "event_type", "가격변동"]]
+
+    st.dataframe(
+        df_view.style.apply(highlight_event, axis=1),
+        use_container_width=True
+    )
 
 else:
     st.info("상단에 제품명을 입력하세요.")
+
