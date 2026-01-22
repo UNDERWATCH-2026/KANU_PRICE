@@ -18,32 +18,40 @@ st.title("캡슐 커피 가격 · 상태 이벤트 타임라인")
 # =========================
 product_name = st.text_input("제품명 입력 (부분 검색 가능)")
 
+use_event_filter = st.checkbox("이벤트 유형 필터 사용", value=False)
+
 event_types = [
     "신제품", "품절", "복원",
     "정상가 인상", "정상가 인하",
     "할인 시작", "할인 종료"
 ]
 
-selected_events = st.multiselect(
-    "이벤트 유형 선택",
-    event_types,
-    default=event_types
-)
+selected_events = None
+if use_event_filter:
+    selected_events = st.multiselect(
+        "이벤트 유형 선택",
+        event_types,
+        default=event_types
+    )
 
 # =========================
 # 2️⃣ 데이터 조회
 # =========================
 if product_name:
-    res = supabase.table("product_all_events") \
+    query = supabase.table("product_all_events") \
         .select(
             "event_date, event_type, "
             "prev_normal_price, current_normal_price, "
             "prev_sale_price, current_sale_price"
         ) \
         .ilike("product_name", f"%{product_name}%") \
-        .in_("event_type", selected_events) \
-        .order("event_date") \
-        .execute()
+        .order("event_date")
+
+    # 필터를 사용할 때만 event_type 조건 추가
+    if selected_events is not None:
+        query = query.in_("event_type", selected_events)
+
+    res = query.execute()
 
     if not res.data:
         st.warning("해당 제품의 이벤트가 없습니다.")
@@ -53,7 +61,6 @@ if product_name:
         # =========================
         df = pd.DataFrame(res.data)
 
-        # 가격 표시 가공
         def format_price(v):
             if v is None:
                 return "-"
