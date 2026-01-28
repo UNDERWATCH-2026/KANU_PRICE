@@ -17,6 +17,8 @@ st.set_page_config(page_title="Capsule Price Intelligence", layout="wide")
 st.markdown("""
 <style>
 .stApp { background-color: #F7F8FA; }
+header { visibility: hidden; height: 0px; }
+.block-container { padding-top: 1rem; }
 .card {
     background:#FFF;
     border-radius:12px;
@@ -167,3 +169,4 @@ if product_name:
 
 else:
     st.info("상단에 제품명을 입력하세요.")
+
