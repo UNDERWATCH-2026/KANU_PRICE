@@ -24,10 +24,11 @@ st.markdown("""
 
 .card {
     background: #FFFFFF;
-    border-radius: 14px;
-    padding: 18px 20px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.04);
-    margin-bottom: 14px;
+    border-radius: 12px;
+    padding: 14px 16px;        /* 🔽 padding 줄임 */
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    margin-bottom: 10px;
+    min-height: 80px;          /* 🔽 카드 높이 고정 */
 }
 
 .section-title {
@@ -37,14 +38,15 @@ st.markdown("""
 }
 
 .kpi-label {
-    font-size: 13px;
+    font-size: 12px;
     color: #6B7280;
 }
 
+
 .kpi-number {
-    font-size: 26px;
+    font-size: 22px;           /* 🔽 숫자 크기 */
     font-weight: 700;
-    margin-top: 4px;
+    margin-top: 2px;
 }
 
 .event-date {
@@ -141,12 +143,17 @@ if product_name:
         ),
         axis=1
     )
+    def kpi(label, value):
+    st.markdown(f"""
+    <div class="card">
+        <div class="kpi-label">{label}</div>
+        <div class="kpi-number">{value}</div>
+    </div>
+    """, unsafe_allow_html=True)
 
     # =========================
     # KPI 요약
     # =========================
-    k1, k2, k3, k4 = st.columns(4)
-
     def kpi(label, value):
         st.markdown(f"""
         <div class="card">
@@ -154,11 +161,21 @@ if product_name:
             <div class="kpi-number">{value}</div>
         </div>
         """, unsafe_allow_html=True)
+    
+    k1, k2, k3, k4 = st.columns(4)
+    
+    with k1:
+        kpi("할인 시작", (df["event_type"] == "할인 시작").sum())
+    
+    with k2:
+        kpi("할인 종료", (df["event_type"] == "할인 종료").sum())
+    
+    with k3:
+        kpi("정상가 변동", df["event_type"].isin(["정상가 인상", "정상가 인하"]).sum())
+    
+    with k4:
+        kpi("품절", (df["event_type"] == "품절").sum())
 
-    kpi("할인 시작", (df["event_type"] == "할인 시작").sum())
-    kpi("할인 종료", (df["event_type"] == "할인 종료").sum())
-    kpi("정상가 변동", df["event_type"].isin(["정상가 인상", "정상가 인하"]).sum())
-    kpi("품절", (df["event_type"] == "품절").sum())
 
     st.divider()
 
@@ -293,3 +310,4 @@ if product_name:
 
 else:
     st.info("상단에 제품명을 입력하세요.")
+
