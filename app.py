@@ -55,7 +55,7 @@ def kpi(label, value):
 # =========================
 # 타이틀
 # =========================
-st.title("📊 Capsule Price Intelligence")
+st.title("Capsule Price Intelligence")
 st.caption("제품 단위 가격 · 할인 · 정상가 · 품절 이벤트 분석")
 st.divider()
 
