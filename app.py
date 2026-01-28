@@ -6,7 +6,7 @@ from supabase import create_client
 # Supabase 설정
 # =========================
 SUPABASE_URL = "https://fgaxjjpktwksdoizerwh.supabase.co"
-SUPABASE_KEY = "YOUR_SUPABASE_SERVICE_KEY"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZnYXhqanBrdHdrc2RvaXplcndoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2ODcyNzM3MSwiZXhwIjoyMDg0MzAzMzcxfQ.bBSInJ9t08yA1Spw4HuOQnczUtVElzhO_QPSUBkMk1g"
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # =========================
@@ -169,4 +169,5 @@ if product_name:
 
 else:
     st.info("상단에 제품명을 입력하세요.")
+
 
