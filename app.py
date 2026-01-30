@@ -69,7 +69,16 @@ if products:
     price_res = supabase.table("product_price_events_enriched").select("*").execute()
 
     if price_res.data:
-        price_df = pd.DataFrame(price_res.data)
+        price_df = pd.DataFrame(price_res.data or [])
+
+        price_df = price_df.reindex(columns=[
+            "product_name",
+            "event_date",
+            "price_event_type",
+            "current_unit_price"
+        ])
+
+
     else:
         price_df = pd.DataFrame(columns=[
             "product_name","event_date","price_event_type","current_unit_price"
@@ -81,43 +90,48 @@ if products:
     pres_res = supabase.table("product_presence_events").select("*").execute()
 
     if pres_res.data:
-        pres_df = pd.DataFrame(pres_res.data)
+        pres_df = pd.DataFrame(pres_res.data or [])
+
+        # ⭐ 컬럼 강제 생성 (핵심)
+        pres_df = pres_df.reindex(columns=[
+            "product_name",
+            "event_date",
+            "event_type"
+        ])
+
     else:
         pres_df = pd.DataFrame(columns=[
             "product_name","event_date","event_type"
         ])
 
-    # =================================
-    # 3. 날짜 타입 변환 (필수 ⭐⭐⭐)
-    # =================================
-    if "event_date" in price_df.columns:
-        price_df["event_date"] = pd.to_datetime(price_df["event_date"], errors="coerce")
 
-    if "event_date" in pres_df.columns:
-        pres_df["event_date"] = pd.to_datetime(pres_df["event_date"], errors="coerce")
-
+    # =================================
+    # 3. 날짜 타입 변환 (항상 존재하므로 바로 변환 ⭐⭐⭐)
+    # =================================
+    price_df["event_date"] = pd.to_datetime(price_df["event_date"], errors="coerce")
+    pres_df["event_date"] = pd.to_datetime(pres_df["event_date"], errors="coerce")
+    
+    
     # =================================
     # 4. 제품 필터
     # =================================
     keyword = "|".join(products)
-
-    if "product_name" in price_df.columns:
-        price_df = price_df[price_df["product_name"].str.contains(keyword, na=False)]
-
-    if "product_name" in pres_df.columns:
-        pres_df = pres_df[pres_df["product_name"].str.contains(keyword, na=False)]
-
+    
+    price_df = price_df[price_df["product_name"].str.contains(keyword, na=False)]
+    pres_df = pres_df[pres_df["product_name"].str.contains(keyword, na=False)]
+    
+    
     # =================================
     # 5. 날짜 필터
     # =================================
     if len(date_range) == 2:
         start, end = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
-
+    
         price_df = price_df[
             (price_df["event_date"] >= start) &
             (price_df["event_date"] <= end)
         ]
-
+    
         pres_df = pres_df[
             (pres_df["event_date"] >= start) &
             (pres_df["event_date"] <= end)
@@ -200,3 +214,4 @@ if products:
 
 else:
     st.info("상단에 제품명을 입력하세요.")
+
