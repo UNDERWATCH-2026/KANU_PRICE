@@ -103,27 +103,64 @@ if products:
 
 
     # =========================
-    # KPI 계산
+    # KPI 계산 (안전 버전 ⭐⭐⭐)
     # =========================
-    discount_start = (price_df.price_event_type == "DISCOUNT_START").sum()
-    discount_end = (price_df.price_event_type == "DISCOUNT_END").sum()
-    normal_change = price_df.price_event_type.isin(["NORMAL_UP","NORMAL_DOWN"]).sum()
-    sale_change = price_df.price_event_type.isin(["SALE_UP","SALE_DOWN"]).sum()
-
-    new_cnt = (pres_df.event_type == "NEW").sum()
-    oos_cnt = (pres_df.event_type == "OUT_OF_STOCK").sum()
-    restock_cnt = (pres_df.event_type == "RESTOCK").sum()
-
-
+    
+    # --- price 이벤트 ---
+    if "price_event_type" in price_df.columns:
+    
+        discount_start = (price_df["price_event_type"] == "DISCOUNT_START").sum()
+        discount_end = (price_df["price_event_type"] == "DISCOUNT_END").sum()
+    
+        normal_change = price_df["price_event_type"].isin(
+            ["NORMAL_UP", "NORMAL_DOWN"]
+        ).sum()
+    
+        sale_change = price_df["price_event_type"].isin(
+            ["SALE_UP", "SALE_DOWN"]
+        ).sum()
+    
+    else:
+        discount_start = discount_end = normal_change = sale_change = 0
+    
+    
+    # --- presence 이벤트 ---
+    if "event_type" in pres_df.columns:
+    
+        new_cnt = (pres_df["event_type"] == "NEW").sum()
+        oos_cnt = (pres_df["event_type"] == "OUT_OF_STOCK").sum()
+        restock_cnt = (pres_df["event_type"] == "RESTOCK").sum()
+    
+    else:
+        new_cnt = oos_cnt = restock_cnt = 0
+    
+    
+    # =========================
+    # KPI 표시
+    # =========================
+    
     cols = st.columns(7)
-
-    with cols[0]: kpi("할인 시작", discount_start)
-    with cols[1]: kpi("할인 종료", discount_end)
-    with cols[2]: kpi("정상가 변동", normal_change)
-    with cols[3]: kpi("할인가 변동", sale_change)
-    with cols[4]: kpi("신제품 출시", new_cnt)
-    with cols[5]: kpi("품절", oos_cnt)
-    with cols[6]: kpi("재입고", restock_cnt)
+    
+    with cols[0]:
+        kpi("할인 시작", discount_start)
+    
+    with cols[1]:
+        kpi("할인 종료", discount_end)
+    
+    with cols[2]:
+        kpi("정상가 변동", normal_change)
+    
+    with cols[3]:
+        kpi("할인가 변동", sale_change)
+    
+    with cols[4]:
+        kpi("신제품 출시", new_cnt)
+    
+    with cols[5]:
+        kpi("품절", oos_cnt)
+    
+    with cols[6]:
+        kpi("재입고", restock_cnt)
 
 
     # =========================
@@ -165,3 +202,4 @@ if products:
             unit = f" | {format_price(r['current_unit_price'])}원/개"
 
         st.write(f"{r['event_date']} · {r['product_name']} · {label}{unit}")
+
