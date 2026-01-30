@@ -80,11 +80,18 @@ meta_res = supabase.table("filter_products").select(
 ).execute()
 
 meta_df = pd.DataFrame(meta_res.data or [])
+meta_df["product_name"] = meta_df.get("product_name", "").fillna("").astype(str)
+
 
 if keywords:
-    mask = meta_df["product_name"].apply(
-        lambda x: any(k.lower() in x.lower() for k in keywords)
+    meta_df["product_name"] = meta_df["product_name"].fillna("").astype(str)
+
+    mask = meta_df["product_name"].str.contains(
+        "|".join(keywords),
+        case=False,
+        na=False
     )
+
     meta_df = meta_df[mask]
 
 st.subheader("📦 조회할 제품 선택")
@@ -223,3 +230,4 @@ for product, g in merged.groupby("product_name"):
             price=f" | {format_price(r['current_unit_price'])}원/개"
 
         st.write(f"{r['event_date'].date()} · {label}{price}")
+
