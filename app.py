@@ -42,6 +42,7 @@ def format_price(v):
 def kpi(label, value):
     st.metric(label, int(value))
 
+
 # =========================
 # 입력 영역
 # =========================
@@ -58,6 +59,7 @@ with col2:
 
 products = [p.strip() for p in product_input.split(",") if p.strip()]
 
+
 # =========================
 # 실행
 # =========================
@@ -68,92 +70,76 @@ if products:
     # =================================
     price_res = supabase.table("product_price_events_enriched").select("*").execute()
 
-    if price_res.data:
-        price_df = pd.DataFrame(price_res.data or [])
+    price_df = pd.DataFrame(price_res.data or [])
 
-        price_df = price_df.reindex(columns=[
-            "product_name",
-            "event_date",
-            "price_event_type",
-            "current_unit_price"
-        ])
+    price_df = price_df.reindex(columns=[
+        "product_name",
+        "event_date",
+        "price_event_type",
+        "current_unit_price"
+    ])
 
+    # ⭐⭐⭐ 타입 강제 (핵심 안정화)
+    price_df["event_date"] = pd.to_datetime(price_df["event_date"], errors="coerce")
+    price_df["current_unit_price"] = pd.to_numeric(
+        price_df["current_unit_price"], errors="coerce"
+    ).round(0)
 
-    else:
-        price_df = pd.DataFrame(columns=[
-            "product_name","event_date","price_event_type","current_unit_price"
-        ])
 
     # =================================
     # 2. presence 이벤트 조회
     # =================================
     pres_res = supabase.table("product_presence_events").select("*").execute()
 
-    if pres_res.data:
-        pres_df = pd.DataFrame(pres_res.data or [])
+    pres_df = pd.DataFrame(pres_res.data or [])
 
-        # ⭐ 컬럼 강제 생성 (핵심)
-        pres_df = pres_df.reindex(columns=[
-            "product_name",
-            "event_date",
-            "event_type"
-        ])
+    pres_df = pres_df.reindex(columns=[
+        "product_name",
+        "event_date",
+        "event_type"
+    ])
 
-    else:
-        pres_df = pd.DataFrame(columns=[
-            "product_name","event_date","event_type"
-        ])
-
-
-    # =================================
-    # 3. 날짜 타입 변환 (항상 존재하므로 바로 변환 ⭐⭐⭐)
-    # =================================
-    price_df["event_date"] = pd.to_datetime(price_df["event_date"], errors="coerce")
     pres_df["event_date"] = pd.to_datetime(pres_df["event_date"], errors="coerce")
-    
-    
+
+
     # =================================
-    # 4. 제품 필터
+    # 3. 제품 필터
     # =================================
     keyword = "|".join(products)
-    
+
     price_df = price_df[price_df["product_name"].str.contains(keyword, na=False)]
     pres_df = pres_df[pres_df["product_name"].str.contains(keyword, na=False)]
-    
-    
+
+
     # =================================
-    # 5. 날짜 필터
+    # 4. 날짜 필터
     # =================================
     if len(date_range) == 2:
         start, end = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
-    
+
         price_df = price_df[
             (price_df["event_date"] >= start) &
             (price_df["event_date"] <= end)
         ]
-    
+
         pres_df = pres_df[
             (pres_df["event_date"] >= start) &
             (pres_df["event_date"] <= end)
         ]
 
-    # =================================
-    # 6. KPI 계산 (완전 안전)
-    # =================================
-    if "price_event_type" in price_df.columns:
-        discount_start = (price_df["price_event_type"] == "DISCOUNT_START").sum()
-        discount_end = (price_df["price_event_type"] == "DISCOUNT_END").sum()
-        normal_change = price_df["price_event_type"].isin(["NORMAL_UP","NORMAL_DOWN"]).sum()
-        sale_change = price_df["price_event_type"].isin(["SALE_UP","SALE_DOWN"]).sum()
-    else:
-        discount_start = discount_end = normal_change = sale_change = 0
 
-    if "event_type" in pres_df.columns:
-        new_cnt = (pres_df["event_type"] == "NEW").sum()
-        oos_cnt = (pres_df["event_type"] == "OUT_OF_STOCK").sum()
-        restock_cnt = (pres_df["event_type"] == "RESTOCK").sum()
-    else:
-        new_cnt = oos_cnt = restock_cnt = 0
+    # =================================
+    # 5. KPI 계산
+    # =================================
+    discount_start = (price_df["price_event_type"] == "DISCOUNT_START").sum()
+    discount_end = (price_df["price_event_type"] == "DISCOUNT_END").sum()
+    normal_change = price_df["price_event_type"].isin(["NORMAL_UP","NORMAL_DOWN"]).sum()
+    sale_change = price_df["price_event_type"].isin(["SALE_UP","SALE_DOWN"]).sum()
+
+    new_cnt = (pres_df["event_type"] == "NEW").sum()
+    oos_cnt = (pres_df["event_type"] == "OUT_OF_STOCK").sum()
+    restock_cnt = (pres_df["event_type"] == "RESTOCK").sum()
+
 
     # =================================
     # KPI 표시
@@ -170,8 +156,9 @@ if products:
 
     st.divider()
 
+
     # =================================
-    # 7. 단가 차트
+    # 6. 단가 차트
     # =================================
     st.subheader("📈 단가 추이 (원/개)")
 
@@ -180,38 +167,50 @@ if products:
     for p in products:
         sub = price_df[price_df["product_name"] == p]
 
-        if len(sub) == 0:
+        if sub.empty:
             continue
+
+        sub = sub.sort_values("event_date")
 
         fig.add_trace(go.Scatter(
             x=sub["event_date"],
             y=sub["current_unit_price"],
+            mode="lines+markers",
             name=p
         ))
 
+    fig.update_layout(
+        height=420,
+        yaxis_title="원/개",
+        hovermode="x unified"
+    )
+
     st.plotly_chart(fig, use_container_width=True)
 
+
     # =================================
-    # 8. 이벤트 히스토리
+    # 7. 이벤트 히스토리
     # =================================
     st.subheader("📜 이벤트 히스토리")
 
-    pres_df["price_event_type"] = pres_df.get("event_type")
+    pres_df["price_event_type"] = pres_df["event_type"]
     pres_df["current_unit_price"] = None
 
     merged = pd.concat([price_df, pres_df], ignore_index=True)
+    merged = merged.dropna(subset=["event_date"])
     merged = merged.sort_values("event_date")
 
     for _, r in merged.iterrows():
 
-        label = EVENT_LABEL.get(r["price_event_type"], r["price_event_type"])
+        label = EVENT_LABEL.get(r["price_event_type"], "-")
 
         unit = ""
         if pd.notna(r["current_unit_price"]):
             unit = f" | {format_price(r['current_unit_price'])}원/개"
 
-        st.write(f"{r['event_date'].date()} · {r['product_name']} · {label}{unit}")
+        st.write(
+            f"{r['event_date'].date()} · {r['product_name']} · {label}{unit}"
+        )
 
 else:
     st.info("상단에 제품명을 입력하세요.")
-
