@@ -1,37 +1,29 @@
 import streamlit as st
 import pandas as pd
+import plotly.graph_objects as go
+import plotly.express as px
+import re, io, os
+from datetime import datetime, timedelta
 from supabase import create_client
+from openai import OpenAI
 
 # =========================
-# Supabase 설정
+# Supabase
 # =========================
-SUPABASE_URL = "https://fgaxjjpktwksdoizerwh.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZnYXhqanBrdHdrc2RvaXplcndoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2ODcyNzM3MSwiZXhwIjoyMDg0MzAzMzcxfQ.bBSInJ9t08yA1Spw4HuOQnczUtVElzhO_QPSUBkMk1g"
+SUPABASE_URL = "YOUR_URL"
+SUPABASE_KEY = "YOUR_KEY"
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # =========================
-# 페이지 설정
+# GPT (fallback only)
 # =========================
-st.set_page_config(page_title="Capsule Price Intelligence", layout="wide")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-st.markdown("""
-<style>
-.stApp { background-color: #F7F8FA; }
-header { visibility: hidden; height: 0px; }
-.block-container { padding-top: 1rem; }
-.card {
-    background:#FFF;
-    border-radius:12px;
-    padding:14px 16px;
-    box-shadow:0 2px 8px rgba(0,0,0,.04);
-    margin-bottom:10px;
-    min-height:80px;
-}
-.kpi-label { font-size:12px; color:#6B7280; }
-.kpi-number { font-size:22px; font-weight:700; }
-.event-date { font-size:12px; color:#9CA3AF; }
-</style>
-""", unsafe_allow_html=True)
+# =========================
+# 기본 설정
+# =========================
+st.set_page_config(layout="wide")
+st.title("Capsule Price Intelligence")
 
 # =========================
 # 공통 함수
@@ -39,149 +31,259 @@ header { visibility: hidden; height: 0px; }
 def format_price(v):
     if v is None:
         return "-"
+    return f"{int(v):,}"
+
+def kpi(label, value, key):
+    clicked = st.session_state.get("event_filter") == key
+    if st.button(f"{label}\n{value}", key=key):
+        st.session_state["event_filter"] = None if clicked else key
+
+# =========================
+# GPT fallback 파서
+# =========================
+def gpt_parse_query(text):
+    prompt = f"""
+가격 조회 조건을 JSON으로만 반환.
+설명 금지.
+
+keys:
+products
+event_types
+start_date
+end_date
+
+문장:
+{text}
+"""
     try:
-        return f"{int(v):,}"
+        res = client.chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0,
+            max_tokens=100,
+            messages=[{"role":"user","content":prompt}]
+        )
+        import json
+        return json.loads(res.choices[0].message.content)
     except:
-        return "-"
-
-def kpi(label, value):
-    st.markdown(f"""
-    <div class="card">
-        <div class="kpi-label">{label}</div>
-        <div class="kpi-number">{value}</div>
-    </div>
-    """, unsafe_allow_html=True)
+        return {}
 
 # =========================
-# 타이틀
+# Regex + GPT 파서
 # =========================
-st.title("Capsule Price Intelligence")
-st.caption("제품 단위 가격 · 할인 · 정상가 · 품절 이벤트 분석")
-st.divider()
+def parse_query(text, df):
+
+    result = {}
+
+    if "할인" in text:
+        result["event_types"] = ["DISCOUNT_START", "DISCOUNT_END"]
+
+    if "정상가" in text:
+        result["event_types"] = ["NORMAL_UP", "NORMAL_DOWN"]
+
+    if "판매가" in text:
+        result["event_types"] = ["SALE_UP", "SALE_DOWN"]
+
+    if "지난달" in text:
+        today = datetime.today()
+        first = today.replace(day=1) - timedelta(days=1)
+        result["start_date"] = first.replace(day=1)
+        result["end_date"] = first
+
+    # 제품명 자동 매칭
+    found = [
+        p for p in df["product_name"].unique()
+        if p.lower() in text.lower()
+    ]
+    if found:
+        result["products"] = found
+
+    # fallback
+    if not result:
+        result.update(gpt_parse_query(text))
+
+    return result
 
 # =========================
-# 상단 입력
+# 상단 필터
 # =========================
-view_mode = st.radio("보기 기준", ["이벤트 기준", "제품 기준"], horizontal=True)
-product_name = st.text_input("제품명 입력 (부분 검색 가능)")
+col1, col2 = st.columns(2)
+
+with col1:
+    product_input = st.text_input("제품명 (쉼표로 여러 개 가능)")
+
+with col2:
+    date_range = st.date_input("기간 선택", value=[])
+
+query_text = st.text_input("💬 자연어 질문")
 
 # =========================
 # 데이터 조회
 # =========================
-if product_name:
+if product_input:
 
-    query = (
-        supabase.table("product_price_events")
-        .select(
-            "product_name,event_date,price_event_type,"
-            "prev_normal_price,current_normal_price,"
-            "prev_sale_price,current_sale_price"
-        )
-        .ilike("product_name", f"%{product_name}%")
-        .order("event_date")
-    )
+    products = [p.strip() for p in product_input.split(",")]
 
+    query = supabase.table("product_price_events_enriched").select("*")
+
+    for p in products:
+        query = query.ilike("product_name", f"%{p}%")
 
     res = query.execute()
-
-    if not res.data:
-        st.warning("데이터가 없습니다.")
-        st.stop()
-
     df = pd.DataFrame(res.data)
 
-    # 가격 변동 컬럼
-    df["가격변동"] = df.apply(
-        lambda r:
-        f"{format_price(r['prev_normal_price'])} → {format_price(r['current_normal_price'])}"
-        if r["price_event_type"] in ["NORMAL_UP","NORMAL_DOWN"]
-        else
-        f"{format_price(r['prev_sale_price'])} → {format_price(r['current_sale_price'])}"
-        if r["price_event_type"] in ["DISCOUNT_START","DISCOUNT_END"]
-        else "-",
-        axis=1
-    )
+    if df.empty:
+        st.warning("데이터 없음")
+        st.stop()
 
+    df["event_date"] = pd.to_datetime(df["event_date"])
+
+    # ----------------------
+    # 자연어 필터
+    # ----------------------
+    if query_text:
+        parsed = parse_query(query_text, df)
+
+        if "products" in parsed:
+            df = df[df["product_name"].isin(parsed["products"])]
+
+        if "event_types" in parsed:
+            df = df[df["price_event_type"].isin(parsed["event_types"])]
+
+        if "start_date" in parsed:
+            df = df[df["event_date"] >= pd.to_datetime(parsed["start_date"])]
+
+        if "end_date" in parsed:
+            df = df[df["event_date"] <= pd.to_datetime(parsed["end_date"])]
+
+    # ----------------------
+    # 기간 필터
+    # ----------------------
+    if len(date_range) == 2:
+        start, end = date_range
+        df = df[(df["event_date"] >= pd.to_datetime(start)) &
+                (df["event_date"] <= pd.to_datetime(end))]
 
     # =========================
-    # KPI 요약 (4칸)
+    # KPI
     # =========================
     c1, c2, c3, c4 = st.columns(4)
-    
+
     with c1:
-        kpi("할인 시작", (df["price_event_type"] == "DISCOUNT_START").sum())
-    
+        kpi("할인 시작", (df.price_event_type=="DISCOUNT_START").sum(), "DISCOUNT_START")
+
     with c2:
-        kpi("할인 종료", (df["price_event_type"] == "DISCOUNT_END").sum())
-    
+        kpi("할인 종료", (df.price_event_type=="DISCOUNT_END").sum(), "DISCOUNT_END")
+
     with c3:
         kpi("정상가 변동",
-            df["price_event_type"].isin(["NORMAL_UP", "NORMAL_DOWN"]).sum()
-        )
-    
+            df.price_event_type.isin(["NORMAL_UP","NORMAL_DOWN"]).sum(),
+            "NORMAL")
+
     with c4:
         kpi("판매가 변동",
-            df["price_event_type"].isin(["SALE_UP", "SALE_DOWN"]).sum()
-        )
+            df.price_event_type.isin(["SALE_UP","SALE_DOWN"]).sum(),
+            "SALE")
 
+    if st.session_state.get("event_filter"):
+        ef = st.session_state["event_filter"]
+
+        if ef == "NORMAL":
+            df = df[df.price_event_type.isin(["NORMAL_UP","NORMAL_DOWN"])]
+        elif ef == "SALE":
+            df = df[df.price_event_type.isin(["SALE_UP","SALE_DOWN"])]
+        else:
+            df = df[df.price_event_type == ef]
 
     st.divider()
 
     # =========================
-    # 메인 영역
+    # 📈 비교 차트 + 할인 shading
     # =========================
-    left, right = st.columns([3,2])
+    if st.toggle("📈 제품 비교 차트"):
 
-    # 🔹 이벤트 기준
-    if view_mode == "이벤트 기준":
-        with left:
-            st.subheader("🕒 이벤트 타임라인")
-            for _, r in df.iterrows():
-                st.markdown(f"""
-                <div class="card">
-                    <div class="event-date">{r['event_date']} · {r['product_name']}</div>
-                    <strong>{r['price_event_type']}</strong><br>
-                    <span style="color:#6B7280">{r['가격변동']}</span>
-                </div>
-                """, unsafe_allow_html=True)
+        fig = go.Figure()
+        colors = px.colors.qualitative.Set2
 
-    # 🔹 제품 기준
-    else:
-        with left:
-            st.subheader("📦 제품 히스토리")
-            for product, g in df.groupby("product_name"):
-                last = g.iloc[-1]
-                st.markdown(f"""
-                <div class="card">
-                    <h4>{product}</h4>
-                    최근 이벤트: <strong>{last['price_event_type']}</strong><br>
-                    날짜: {last['event_date']}
-                </div>
-                """, unsafe_allow_html=True)
+        for i,(product,g) in enumerate(df.groupby("product_name")):
 
-                for _, r in g.iterrows():
-                    st.markdown(f"""
-                    <div class="card" style="margin-left:12px;">
-                        <div class="event-date">{r['event_date']}</div>
-                        <strong>{r['price_event_type']}</strong><br>
-                        <span style="color:#6B7280">{r['가격변동']}</span>
-                    </div>
-                    """, unsafe_allow_html=True)
+            g = g.sort_values("event_date")
+            color = colors[i%len(colors)]
+
+            fig.add_trace(
+                go.Scatter(
+                    x=g["event_date"],
+                    y=g["current_unit_price"],
+                    mode="lines+markers",
+                    name=product,
+                    line=dict(color=color,width=3)
+                )
+            )
+
+            discount_start=None
+            for _,r in g.iterrows():
+
+                if r["price_event_type"]=="DISCOUNT_START":
+                    discount_start=r["event_date"]
+
+                if r["price_event_type"]=="DISCOUNT_END" and discount_start:
+                    fig.add_vrect(
+                        x0=discount_start,
+                        x1=r["event_date"],
+                        fillcolor=color,
+                        opacity=0.12,
+                        layer="below",
+                        line_width=0
+                    )
+                    discount_start=None
+
+        fig.update_layout(height=450, hovermode="x unified")
+        st.plotly_chart(fig, use_container_width=True)
+
+    st.divider()
 
     # =========================
-    # 질문 분석
+    # 📦 제품 히스토리
     # =========================
-    with right:
-        st.subheader("💬 가격 분석 질문")
-        q = st.text_area("질문 입력", height=90)
-        if st.button("분석 실행", use_container_width=True) and q:
-            st.success("질문 처리 로직 연결 위치")
+    st.subheader("제품 히스토리")
 
-else:
-    st.info("상단에 제품명을 입력하세요.")
+    for product,g in df.sort_values("event_date").groupby("product_name"):
+        st.markdown(f"### {product}")
+        for _,r in g.iterrows():
+            st.markdown(
+                f"- {r['event_date'].date()} | {r['price_event_type']} | {format_price(r['current_unit_price'])}원/개"
+            )
 
+# =========================
+# 📥 주차 리포트 다운로드
+# =========================
+st.divider()
 
+if st.button("📥 전체 제품 주차 리포트 Excel 다운로드"):
 
+    res = supabase.table("weekly_price_summary").select("*").execute()
+    df = pd.DataFrame(res.data)
 
+    df["행사여부"] = df["has_discount"].map({True:"행사",False:"-"})
+    df["행사기간"] = df.apply(
+        lambda r: f"{r['discount_start']} ~ {r['discount_end']}"
+        if r["has_discount"] else "-", axis=1
+    )
 
+    df = df.rename(columns={
+        "brand":"제조사",
+        "category1_raw":"카테고리1",
+        "category2_raw":"카테고리2",
+        "product_name":"제품명",
+        "normal_price":"정상가",
+        "week_start":"주차"
+    })
 
+    output = io.BytesIO()
+    df.to_excel(output, index=False)
+
+    st.download_button(
+        "엑셀 다운로드",
+        output.getvalue(),
+        "weekly_price_report.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
