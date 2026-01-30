@@ -105,13 +105,32 @@ if meta_df.empty:
 # =====================================================
 st.subheader("📦 조회할 제품 선택")
 
-selected_products = st.multiselect(
-    "제품 선택 (복수 선택 가능)",
-    options=meta_df["product_name"].tolist(),
-    default=[]
-)
+# 최초 1회 초기화
+if "selected_products" not in st.session_state:
+    st.session_state.selected_products = set()
 
-if not selected_products:
+def toggle_product(name):
+    if name in st.session_state.selected_products:
+        st.session_state.selected_products.remove(name)
+    else:
+        st.session_state.selected_products.add(name)
+
+
+# 체크박스 리스트
+for name in meta_df["product_name"]:
+    checked = name in st.session_state.selected_products
+    st.checkbox(
+        name,
+        value=checked,
+        key=f"chk_{name}",
+        on_change=toggle_product,
+        args=(name,)
+    )
+
+selected_products = list(st.session_state.selected_products)
+
+if len(selected_products) == 0:
+    st.info("제품을 선택하세요")
     st.stop()
 
 # =====================================================
@@ -193,4 +212,5 @@ for product, g in price_df.groupby("product_name"):
     for _, r in g.iterrows():
         price = format_price(r["current_unit_price"])
         st.write(f"{r['event_date'].date()} · {r['price_event_type']} | {price}원")
+
 
