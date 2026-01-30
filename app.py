@@ -140,7 +140,7 @@ if product_name:
                 st.markdown(f"""
                 <div class="card">
                     <div class="event-date">{r['event_date']} · {r['product_name']}</div>
-                    <strong>{r['event_type']}</strong><br>
+                    <strong>{r['price_event_type']}</strong><br>
                     <span style="color:#6B7280">{r['가격변동']}</span>
                 </div>
                 """, unsafe_allow_html=True)
@@ -154,7 +154,7 @@ if product_name:
                 st.markdown(f"""
                 <div class="card">
                     <h4>{product}</h4>
-                    최근 이벤트: <strong>{last['event_type']}</strong><br>
+                    최근 이벤트: <strong>{last['price_event_type']}</strong><br>
                     날짜: {last['event_date']}
                 </div>
                 """, unsafe_allow_html=True)
@@ -163,7 +163,7 @@ if product_name:
                     st.markdown(f"""
                     <div class="card" style="margin-left:12px;">
                         <div class="event-date">{r['event_date']}</div>
-                        <strong>{r['event_type']}</strong><br>
+                        <strong>{r['price_event_type']}</strong><br>
                         <span style="color:#6B7280">{r['가격변동']}</span>
                     </div>
                     """, unsafe_allow_html=True)
@@ -179,6 +179,7 @@ if product_name:
 
 else:
     st.info("상단에 제품명을 입력하세요.")
+
 
 
 
