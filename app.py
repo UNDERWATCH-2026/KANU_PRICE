@@ -71,15 +71,16 @@ product_name = st.text_input("제품명 입력 (부분 검색 가능)")
 if product_name:
 
     query = (
-        supabase.table("product_all_events")
+        supabase.table("product_price_events")
         .select(
-            "product_name,event_date,event_type,"
+            "product_name,event_date,price_event_type,"
             "prev_normal_price,current_normal_price,"
             "prev_sale_price,current_sale_price"
         )
         .ilike("product_name", f"%{product_name}%")
         .order("event_date")
     )
+
 
     res = query.execute()
 
@@ -169,5 +170,6 @@ if product_name:
 
 else:
     st.info("상단에 제품명을 입력하세요.")
+
 
 
