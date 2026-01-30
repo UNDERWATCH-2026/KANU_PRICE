@@ -34,7 +34,7 @@ def format_price(v):
 @st.cache_data(ttl=300)
 def load_price_events():
     res = supabase.table("product_price_events_enriched").select(
-        "product_name, brand, category1, category2, event_date, price_event_type, current_unit_price"
+        "product_name, event_date, price_event_type, current_unit_price"
     ).execute()
     return pd.DataFrame(res.data or [])
 
@@ -58,10 +58,11 @@ if price_all.empty:
 # 📦 제품 후보 (🔥 enriched 기준)
 # =====================================================
 meta_df = (
-    price_all[["product_name", "brand", "category1", "category2"]]
+    price_all[["product_name"]]
     .drop_duplicates()
     .copy()
 )
+
 
 meta_df["product_name"] = meta_df["product_name"].astype(str)
 
@@ -117,13 +118,9 @@ st.subheader("📦 조회할 제품 선택")
 
 selected_products = []
 
-groups = meta_df.groupby(["brand", "category1", "category2"])
-
-for (b, c1, c2), g in groups:
-    with st.expander(f"{b} / {c1} / {c2} ({len(g)})"):
-        for name in g["product_name"]:
-            if st.checkbox(name, key=name):
-                selected_products.append(name)
+for name in meta_df["product_name"]:
+    if st.checkbox(name, key=name):
+        selected_products.append(name)
 
 if not selected_products:
     st.stop()
@@ -217,3 +214,4 @@ for product, g in merged.groupby("product_name"):
     for _, r in g.iterrows():
         price = f" | {format_price(r['current_unit_price'])}원" if pd.notna(r["current_unit_price"]) else ""
         st.write(f"{r['event_date'].date()} · {r['price_event_type']}{price}")
+
