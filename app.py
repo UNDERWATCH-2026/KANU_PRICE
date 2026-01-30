@@ -78,8 +78,6 @@ with st.form("search_form", clear_on_submit=False):
         submitted = st.form_submit_button("조회하기", use_container_width=True)
 
 
-if not submitted:
-    st.stop()
 
 keywords = [p.strip() for p in product_input.split(",") if p.strip()]
 
@@ -107,15 +105,14 @@ if meta_df.empty:
 # =====================================================
 st.subheader("📦 조회할 제품 선택")
 
-selected_products = []
-
-for name in meta_df["product_name"]:
-    if st.checkbox(name, key=name):
-        selected_products.append(name)
+selected_products = st.multiselect(
+    "제품 선택 (복수 선택 가능)",
+    options=meta_df["product_name"].tolist(),
+    default=[]
+)
 
 if not selected_products:
     st.stop()
-
 
 # =====================================================
 # 📊 이벤트 필터링
@@ -196,3 +193,4 @@ for product, g in price_df.groupby("product_name"):
     for _, r in g.iterrows():
         price = format_price(r["current_unit_price"])
         st.write(f"{r['event_date'].date()} · {r['price_event_type']} | {price}원")
+
