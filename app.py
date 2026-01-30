@@ -107,15 +107,23 @@ if product_name:
     # KPI 요약 (4칸)
     # =========================
     c1, c2, c3, c4 = st.columns(4)
-
+    
     with c1:
-        kpi("할인 시작", (df.event_type == "할인 시작").sum())
+        kpi("할인 시작", (df["price_event_type"] == "DISCOUNT_START").sum())
+    
     with c2:
-        kpi("할인 종료", (df.event_type == "할인 종료").sum())
+        kpi("할인 종료", (df["price_event_type"] == "DISCOUNT_END").sum())
+    
     with c3:
-        kpi("정상가 변동", df.event_type.isin(["정상가 인상","정상가 인하"]).sum())
+        kpi("정상가 변동",
+            df["price_event_type"].isin(["NORMAL_UP", "NORMAL_DOWN"]).sum()
+        )
+    
     with c4:
-        kpi("품절", (df.event_type == "품절").sum())
+        kpi("판매가 변동",
+            df["price_event_type"].isin(["SALE_UP", "SALE_DOWN"]).sum()
+        )
+
 
     st.divider()
 
@@ -171,6 +179,7 @@ if product_name:
 
 else:
     st.info("상단에 제품명을 입력하세요.")
+
 
 
 
