@@ -88,18 +88,31 @@ if products:
     )
 
     pres_df = pd.DataFrame(pres_res.data)
-
-
+    
     # =========================
-    # 필터
+    # 날짜 필터 (안전 버전 ⭐⭐⭐)
     # =========================
-    price_df = price_df[price_df.product_name.str.contains("|".join(products))]
-    pres_df = pres_df[pres_df.product_name.str.contains("|".join(products))]
-
+    
     if len(date_range) == 2:
+    
         start, end = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
-        price_df = price_df[(price_df.event_date >= start) & (price_df.event_date <= end)]
-        pres_df = pres_df[(pres_df.event_date >= start) & (pres_df.event_date <= end)]
+    
+        # 날짜 컬럼 변환
+        if "event_date" in price_df.columns:
+            price_df["event_date"] = pd.to_datetime(price_df["event_date"])
+    
+            price_df = price_df[
+                (price_df["event_date"] >= start) &
+                (price_df["event_date"] <= end)
+            ]
+    
+        if "event_date" in pres_df.columns:
+            pres_df["event_date"] = pd.to_datetime(pres_df["event_date"])
+    
+            pres_df = pres_df[
+                (pres_df["event_date"] >= start) &
+                (pres_df["event_date"] <= end)
+            ]
 
 
     # =========================
@@ -202,4 +215,5 @@ if products:
             unit = f" | {format_price(r['current_unit_price'])}원/개"
 
         st.write(f"{r['event_date']} · {r['product_name']} · {label}{unit}")
+
 
