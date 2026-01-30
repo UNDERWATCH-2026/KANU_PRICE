@@ -94,13 +94,14 @@ if product_name:
     df["가격변동"] = df.apply(
         lambda r:
         f"{format_price(r['prev_normal_price'])} → {format_price(r['current_normal_price'])}"
-        if r["event_type"] in ["정상가 인상","정상가 인하"]
+        if r["price_event_type"] in ["NORMAL_UP","NORMAL_DOWN"]
         else
         f"{format_price(r['prev_sale_price'])} → {format_price(r['current_sale_price'])}"
-        if r["event_type"] in ["할인 시작","할인 종료"]
+        if r["price_event_type"] in ["DISCOUNT_START","DISCOUNT_END"]
         else "-",
         axis=1
     )
+
 
     # =========================
     # KPI 요약 (4칸)
@@ -170,6 +171,7 @@ if product_name:
 
 else:
     st.info("상단에 제품명을 입력하세요.")
+
 
 
 
