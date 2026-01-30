@@ -161,31 +161,53 @@ if products:
     # 6. 단가 차트
     # =================================
     st.subheader("📈 단가 추이 (원/개)")
-
+    
     fig = go.Figure()
-
-    for p in products:
-        sub = price_df[price_df["product_name"] == p]
-
-        if sub.empty:
+    
+    # ⭐⭐⭐ 타입 강제 변환 (핵심)
+    price_df["event_date"] = pd.to_datetime(price_df["event_date"], errors="coerce")
+    price_df["current_unit_price"] = pd.to_numeric(price_df["current_unit_price"], errors="coerce")
+    
+    price_df = price_df.dropna(subset=["event_date","current_unit_price"])
+    
+    colors = ["#2563eb", "#dc2626", "#16a34a", "#f59e0b", "#7c3aed"]
+    
+    for i, p in enumerate(products):
+    
+        # ⭐ 부분검색
+        sub = price_df[price_df["product_name"].str.contains(p, na=False)].copy()
+    
+        if len(sub) == 0:
             continue
-
+    
         sub = sub.sort_values("event_date")
-
+    
         fig.add_trace(go.Scatter(
             x=sub["event_date"],
             y=sub["current_unit_price"],
-            mode="lines+markers",
-            name=p
+            name=p,                      # ← 범례 표시
+            mode="lines+markers",        # ← 선 + 점
+            line=dict(width=3, color=colors[i % len(colors)]),
+            marker=dict(size=6)
         ))
-
+    
+    # ⭐⭐⭐ 축 강제 설정 (가장 중요)
     fig.update_layout(
         height=420,
-        yaxis_title="원/개",
-        hovermode="x unified"
+        xaxis=dict(
+            title="날짜",
+            type="date",                # ← 날짜 축 강제
+            dtick="D1"                  # ← daily 표시
+        ),
+        yaxis=dict(
+            title="원/개",
+            tickformat=","
+        ),
+        legend_title="제품"
     )
-
+    
     st.plotly_chart(fig, use_container_width=True)
+    
 
 
     # =================================
@@ -197,20 +219,22 @@ if products:
     pres_df["current_unit_price"] = None
 
     merged = pd.concat([price_df, pres_df], ignore_index=True)
-    merged = merged.dropna(subset=["event_date"])
-    merged = merged.sort_values("event_date")
+    
+    for product, g in merged.groupby("product_name"):
+        st.markdown(f"### 📦 {product}")
+    
+        g = g.sort_values("event_date")
+    
+        for _, r in g.iterrows():
+            label = EVENT_LABEL.get(r["price_event_type"], r["price_event_type"])
+    
+            unit = ""
+            if pd.notna(r["current_unit_price"]):
+                unit = f" | {format_price(r['current_unit_price'])}원/개"
+    
+            st.write(f"{r['event_date'].date()} · {label}{unit}")
 
-    for _, r in merged.iterrows():
-
-        label = EVENT_LABEL.get(r["price_event_type"], "-")
-
-        unit = ""
-        if pd.notna(r["current_unit_price"]):
-            unit = f" | {format_price(r['current_unit_price'])}원/개"
-
-        st.write(
-            f"{r['event_date'].date()} · {r['product_name']} · {label}{unit}"
-        )
 
 else:
     st.info("상단에 제품명을 입력하세요.")
+
