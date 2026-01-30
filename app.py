@@ -42,6 +42,26 @@ def format_price(v):
 def kpi(label, value):
     st.metric(label, int(value))
 
+# =========================
+# KPI 카드 (아이콘 포함 + 클릭 필터)
+# =========================
+def kpi_card(label, value, icon, key):
+
+    selected = st.session_state.get("kpi_filter")
+
+    active = selected == key
+
+    bg = "#E3F2FD" if active else "#F7F7F7"
+
+    if st.button(
+        f"{icon}  {label}\n{int(value)}",
+        key=key,
+        use_container_width=True
+    ):
+        if active:
+            st.session_state["kpi_filter"] = None
+        else:
+            st.session_state["kpi_filter"] = key
 
 # =========================
 # 입력 영역
@@ -142,39 +162,76 @@ if products:
 
 
     # =================================
-    # KPI 표시
+    # ⭐ KPI 카드 + 클릭 필터 (최종 안정판)
     # =================================
-    cols = st.columns(7)
-
-    with cols[0]: kpi("할인 시작", discount_start)
-    with cols[1]: kpi("할인 종료", discount_end)
-    with cols[2]: kpi("정상가 변동", normal_change)
-    with cols[3]: kpi("할인가 변동", sale_change)
-    with cols[4]: kpi("신제품 출시", new_cnt)
-    with cols[5]: kpi("품절", oos_cnt)
-    with cols[6]: kpi("재입고", restock_cnt)
-
     st.divider()
-
+    
+    CARD_INFO = [
+        ("🟦 할인 시작", "DISCOUNT_START", discount_start),
+        ("⬜ 할인 종료", "DISCOUNT_END", discount_end),
+        ("📈 정상가 변동", ["NORMAL_UP","NORMAL_DOWN"], normal_change),
+        ("💸 할인가 변동", ["SALE_UP","SALE_DOWN"], sale_change),
+        ("⭐ 신제품", "NEW", new_cnt),
+        ("❌ 품절", "OUT_OF_STOCK", oos_cnt),
+        ("🔄 재입고", "RESTOCK", restock_cnt),
+    ]
+    
+    if "event_filter" not in st.session_state:
+        st.session_state.event_filter = None
+    
+    
+    def kpi_card(label, code, count):
+        active = st.session_state.event_filter == code
+    
+        bg = "#E3F2FD" if active else "#F6F6F6"
+        border = "#1976D2" if active else "#DDDDDD"
+    
+        if st.button(
+            f"{label}\n{count}",
+            use_container_width=True,
+            key=str(code)
+        ):
+            if active:
+                st.session_state.event_filter = None
+            else:
+                st.session_state.event_filter = code
+    
+    
+    cols = st.columns(len(CARD_INFO))
+    
+    for i, (label, code, count) in enumerate(CARD_INFO):
+        with cols[i]:
+            kpi_card(label, code, count)
+    
+    
+    # =================================
+    # ⭐ 실제 데이터 필터 적용 (핵심)
+    # =================================
+    f = st.session_state.event_filter
+    
+    if f:
+    
+        # presence 이벤트
+        if f in ["NEW","OUT_OF_STOCK","RESTOCK"]:
+            pres_df = pres_df[pres_df["event_type"] == f]
+    
+        # 가격 이벤트
+        else:
+            if isinstance(f, list):
+                price_df = price_df[price_df["price_event_type"].isin(f)]
+            else:
+                price_df = price_df[price_df["price_event_type"] == f]
+    
 
     # =================================
-    # 6. 단가 차트
+    # 7. 단가 차트 + 할인 shading
     # =================================
     st.subheader("📈 단가 추이 (원/개)")
     
     fig = go.Figure()
     
-    # ⭐⭐⭐ 타입 강제 변환 (핵심)
-    price_df["event_date"] = pd.to_datetime(price_df["event_date"], errors="coerce")
-    price_df["current_unit_price"] = pd.to_numeric(price_df["current_unit_price"], errors="coerce")
+    for p in products:
     
-    price_df = price_df.dropna(subset=["event_date","current_unit_price"])
-    
-    colors = ["#2563eb", "#dc2626", "#16a34a", "#f59e0b", "#7c3aed"]
-    
-    for i, p in enumerate(products):
-    
-        # ⭐ 부분검색
         sub = price_df[price_df["product_name"].str.contains(p, na=False)].copy()
     
         if len(sub) == 0:
@@ -182,22 +239,62 @@ if products:
     
         sub = sub.sort_values("event_date")
     
+        # ---------------------------
+        # 가격 선 그래프
+        # ---------------------------
         fig.add_trace(go.Scatter(
             x=sub["event_date"],
             y=sub["current_unit_price"],
-            name=p,                      # ← 범례 표시
-            mode="lines+markers",        # ← 선 + 점
-            line=dict(width=3, color=colors[i % len(colors)]),
-            marker=dict(size=6)
+            mode="lines+markers",
+            name=sub["product_name"].iloc[0]
         ))
     
-    # ⭐⭐⭐ 축 강제 설정 (가장 중요)
+        # ---------------------------
+        # ⭐ 할인 기간 shading 계산
+        # ---------------------------
+        discount_start = None
+    
+        for _, r in sub.iterrows():
+    
+            et = r["price_event_type"]
+            d = r["event_date"]
+    
+            if et == "DISCOUNT_START":
+                discount_start = d
+    
+            elif et == "DISCOUNT_END" and discount_start:
+    
+                fig.add_vrect(
+                    x0=discount_start,
+                    x1=d,
+                    fillcolor="lightblue",
+                    opacity=0.25,
+                    layer="below",
+                    line_width=0
+                )
+                discount_start = None
+    
+        # 할인 종료 없이 끝난 경우
+        if discount_start:
+            fig.add_vrect(
+                x0=discount_start,
+                x1=sub["event_date"].max(),
+                fillcolor="lightblue",
+                opacity=0.25,
+                layer="below",
+                line_width=0
+            )
+    
+    
+    # ---------------------------
+    # ⭐ 축 강제 설정 (중요)
+    # ---------------------------
     fig.update_layout(
         height=420,
         xaxis=dict(
             title="날짜",
-            type="date",                # ← 날짜 축 강제
-            dtick="D1"                  # ← daily 표시
+            type="date",
+            dtick="D1"
         ),
         yaxis=dict(
             title="원/개",
@@ -208,7 +305,6 @@ if products:
     
     st.plotly_chart(fig, use_container_width=True)
     
-
 
     # =================================
     # 7. 이벤트 히스토리
@@ -237,4 +333,5 @@ if products:
 
 else:
     st.info("상단에 제품명을 입력하세요.")
+
 
