@@ -10,14 +10,23 @@ from openai import OpenAI
 # =========================
 # Supabase
 # =========================
-SUPABASE_URL = "YOUR_URL"
-SUPABASE_KEY = "YOUR_KEY"
+import os
+from supabase import create_client
+
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # =========================
 # GPT (fallback only)
 # =========================
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+from openai import OpenAI
+
+client = None
+
+if "OPENAI_API_KEY" in st.secrets:
+    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 # =========================
 # 기본 설정
@@ -287,3 +296,4 @@ if st.button("📥 전체 제품 주차 리포트 Excel 다운로드"):
         "weekly_price_report.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
