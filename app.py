@@ -7,7 +7,7 @@ from supabase import create_client
 # 🔧 기본 설정
 # =====================================================
 st.set_page_config(layout="wide")
-st.title("Capsule Price Intelligence")
+st.title("☕ Capsule Price Intelligence")
 
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
@@ -22,7 +22,6 @@ def safe_str(x):
         return ""
     return str(x)
 
-
 def format_price(v):
     if pd.isna(v):
         return "-"
@@ -30,37 +29,47 @@ def format_price(v):
 
 
 # =====================================================
-# 📌 이벤트 매핑 + 아이콘
+# 🚀 Supabase fetch (캐시 = 속도 핵심)
 # =====================================================
-EVENT_LABEL = {
-    "DISCOUNT_START": "할인 시작",
-    "DISCOUNT_END": "할인 종료",
-    "NORMAL_UP": "정상가 인상",
-    "NORMAL_DOWN": "정상가 인하",
-    "SALE_UP": "할인가 인상",
-    "SALE_DOWN": "할인가 인하",
-    "NEW": "신제품 출시",
-    "OUT_OF_STOCK": "품절",
-    "RESTOCK": "재입고"
-}
+@st.cache_data(ttl=300)
+def load_price_events():
+    res = supabase.table("product_price_events_enriched").select(
+        "product_name, brand, category1, category2, event_date, price_event_type, current_unit_price"
+    ).execute()
+    return pd.DataFrame(res.data or [])
 
-EVENT_ICON = {
-    "DISCOUNT_START": "💙",
-    "DISCOUNT_END": "💙",
-    "NORMAL_UP": "📈",
-    "NORMAL_DOWN": "📉",
-    "SALE_UP": "📈",
-    "SALE_DOWN": "📉",
-    "NEW": "🆕",
-    "OUT_OF_STOCK": "⛔",
-    "RESTOCK": "🔄"
-}
+@st.cache_data(ttl=300)
+def load_presence_events():
+    res = supabase.table("product_presence_events").select(
+        "product_name, event_date, event_type"
+    ).execute()
+    return pd.DataFrame(res.data or [])
+
+
+price_all = load_price_events()
+presence_all = load_presence_events()
+
+if price_all.empty:
+    st.warning("아직 가격 이벤트 데이터가 없습니다.")
+    st.stop()
 
 
 # =====================================================
-# 🔍 검색 FORM (버튼 + 엔터 지원)
+# 📦 제품 후보 (🔥 enriched 기준)
 # =====================================================
-with st.form("search_form"):
+meta_df = (
+    price_all[["product_name", "brand", "category1", "category2"]]
+    .drop_duplicates()
+    .copy()
+)
+
+meta_df["product_name"] = meta_df["product_name"].astype(str)
+
+
+# =====================================================
+# 🔍 검색 FORM (Enter + 버튼 동일)
+# =====================================================
+with st.form("search_form", clear_on_submit=False):
 
     c1, c2, c3 = st.columns([4, 2, 1])
 
@@ -76,6 +85,7 @@ with st.form("search_form"):
     with c3:
         submitted = st.form_submit_button("조회하기", use_container_width=True)
 
+
 if not submitted:
     st.stop()
 
@@ -87,24 +97,22 @@ if not keywords:
 
 
 # =====================================================
-# 📦 제품 메타 조회 → 후보 선택
+# 🔎 후보 필터
 # =====================================================
-meta_res = supabase.table("filter_products").select("*").execute()
-meta_df = pd.DataFrame(meta_res.data or [])
-
-meta_df["product_name"] = meta_df["product_name"].astype(str)
-
 mask = meta_df["product_name"].apply(
     lambda x: any(k.lower() in safe_str(x).lower() for k in keywords)
 )
 
 meta_df = meta_df[mask]
 
-if len(meta_df) == 0:
+if meta_df.empty:
     st.warning("검색 결과 없음")
     st.stop()
 
 
+# =====================================================
+# 📦 제품 선택
+# =====================================================
 st.subheader("📦 조회할 제품 선택")
 
 selected_products = []
@@ -122,35 +130,14 @@ if not selected_products:
 
 
 # =====================================================
-# 📊 가격 이벤트 조회
+# 📊 이벤트 필터링
 # =====================================================
-price_res = supabase.table("product_price_events_enriched").select("*").execute()
-price_df = pd.DataFrame(price_res.data or [])
-
-price_df = price_df.reindex(columns=[
-    "product_name", "event_date", "price_event_type", "current_unit_price"
-])
+price_df = price_all[price_all["product_name"].isin(selected_products)].copy()
+pres_df = presence_all[presence_all["product_name"].isin(selected_products)].copy()
 
 price_df["event_date"] = pd.to_datetime(price_df["event_date"])
-price_df["current_unit_price"] = pd.to_numeric(price_df["current_unit_price"], errors="coerce")
-
-price_df = price_df[price_df["product_name"].isin(selected_products)]
-
-
-# =====================================================
-# 📊 presence 이벤트
-# =====================================================
-pres_res = supabase.table("product_presence_events").select("*").execute()
-pres_df = pd.DataFrame(pres_res.data or [])
-
-pres_df = pres_df.reindex(columns=["product_name", "event_date", "event_type"])
 pres_df["event_date"] = pd.to_datetime(pres_df["event_date"])
-pres_df = pres_df[pres_df["product_name"].isin(selected_products)]
 
-
-# =====================================================
-# 📅 날짜 필터
-# =====================================================
 if len(date_range) == 2:
     s, e = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
     price_df = price_df[(price_df.event_date >= s) & (price_df.event_date <= e)]
@@ -158,7 +145,7 @@ if len(date_range) == 2:
 
 
 # =====================================================
-# 📌 KPI 카드
+# 📌 KPI
 # =====================================================
 st.divider()
 
@@ -177,7 +164,7 @@ with cols[6]: kpi("재입고", (pres_df.event_type=="RESTOCK").sum(), "🔄")
 
 
 # =====================================================
-# 📈 단가 차트 + 할인 shading
+# 📈 가격 차트
 # =====================================================
 st.subheader("📈 단가 추이 (원/개)")
 
@@ -187,7 +174,7 @@ for name in selected_products:
 
     sub = price_df[price_df.product_name == name].sort_values("event_date")
 
-    if len(sub) == 0:
+    if sub.empty:
         continue
 
     fig.add_trace(go.Scatter(
@@ -203,36 +190,30 @@ for name in selected_products:
         if r["price_event_type"] == "DISCOUNT_START":
             start = r["event_date"]
         elif r["price_event_type"] == "DISCOUNT_END" and start:
-            fig.add_vrect(x0=start, x1=r["event_date"], fillcolor="lightblue", opacity=0.25)
+            fig.add_vrect(
+                x0=start, x1=r["event_date"],
+                fillcolor="lightblue", opacity=0.25
+            )
             start = None
 
-fig.update_layout(
-    height=450,
-    xaxis=dict(type="date", dtick="D1"),
-    yaxis=dict(title="원/개", tickformat=","),
-    legend_title="제품"
-)
-
+fig.update_layout(height=450)
 st.plotly_chart(fig, use_container_width=True)
 
 
 # =====================================================
-# 📜 이벤트 히스토리 (제품별 카드)
+# 📜 이벤트 히스토리
 # =====================================================
 st.subheader("📜 이벤트 히스토리")
 
 pres_df["price_event_type"] = pres_df["event_type"]
 pres_df["current_unit_price"] = None
 
-merged = pd.concat([price_df, pres_df])
+merged = pd.concat([price_df, pres_df]).sort_values("event_date")
 
 for product, g in merged.groupby("product_name"):
 
     st.markdown(f"### 📦 {product}")
-    g = g.sort_values("event_date")
 
     for _, r in g.iterrows():
-        icon = EVENT_ICON.get(r["price_event_type"], "•")
-        label = EVENT_LABEL.get(r["price_event_type"], r["price_event_type"])
-        price = f" | {format_price(r['current_unit_price'])}원/개" if pd.notna(r["current_unit_price"]) else ""
-        st.write(f"{icon} {r['event_date'].date()} · {label}{price}")
+        price = f" | {format_price(r['current_unit_price'])}원" if pd.notna(r["current_unit_price"]) else ""
+        st.write(f"{r['event_date'].date()} · {r['price_event_type']}{price}")
