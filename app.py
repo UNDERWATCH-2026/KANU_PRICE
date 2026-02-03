@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from supabase import create_client
-import re
 
 # =====================================================
 # 🔧 기본 설정
@@ -25,29 +24,7 @@ def safe_str(x):
 def format_price(v):
     if pd.isna(v):
         return "-"
-    try:
-        return f"{int(float(v)):,}"
-    except Exception:
-        return safe_str(v)
-
-def highlight_keywords(text: str, keywords: list[str]) -> str:
-    """
-    product_name 표시용 하이라이트 (데이터 로직에는 영향 없음)
-    """
-    if not text or not keywords:
-        return safe_str(text)
-
-    ks = [k.strip() for k in keywords if k and k.strip()]
-    if not ks:
-        return safe_str(text)
-
-    escaped = [re.escape(k) for k in ks]
-    pattern = re.compile(rf"({'|'.join(escaped)})", re.IGNORECASE)
-
-    return pattern.sub(
-        r"<span style='background-color:#FFF3B0; font-weight:700; padding:0 2px; border-radius:3px;'>\1</span>",
-        safe_str(text),
-    )
+    return f"{int(float(v)):,}"
 
 # =====================================================
 # 🧠 세션 초기화
@@ -56,7 +33,7 @@ if "selected_products" not in st.session_state:
     st.session_state.selected_products = set()
 
 # =====================================================
-# 🚀 가격 이벤트만 사용 (🔥 핵심 단일 소스)
+# 🚀 데이터 로드
 # =====================================================
 @st.cache_data(ttl=300)
 def load_price_events():
@@ -65,204 +42,178 @@ def load_price_events():
     ).execute()
     return pd.DataFrame(res.data or [])
 
+@st.cache_data(ttl=300)
+def load_filter_products():
+    res = supabase.table("filter_products").select(
+        "brand, category1_raw, category2_raw, product_name, "
+        "product_name_norm, intensity, capsule_weight_g, capsule_count, "
+        "brew_type, brew_type_kr"
+    ).execute()
+    return pd.DataFrame(res.data or [])
+
 price_all = load_price_events()
+meta_all = load_filter_products()
 
-if price_all.empty:
-    st.warning("가격 이벤트 데이터가 없습니다.")
+if price_all.empty or meta_all.empty:
+    st.warning("필수 데이터가 없습니다.")
     st.stop()
 
 # =====================================================
-# 📦 제품 후보 생성 (이벤트가 존재하는 제품만)
+# 🗑️ 전체 초기화
 # =====================================================
-meta_df = price_all[["product_name"]].drop_duplicates().copy()
-meta_df["product_name"] = meta_df["product_name"].astype(str)
+if st.button("🗑️ 전체 삭제"):
+    st.session_state.selected_products = set()
+    st.rerun()
 
 # =====================================================
-# 🗑️ 전체 삭제 (검색/선택 초기화)
+# 🔍 조회 조건 UI
 # =====================================================
-top_c1, top_c2 = st.columns([1, 9])
-with top_c1:
-    if st.button("🗑️ 전체 삭제", use_container_width=True):
-        st.session_state.base_keywords = ""
-        st.session_state.refine_keywords = ""
-        st.session_state.selected_products = set()
-        # 체크박스 키는 제품명 기반이라 rerun으로 충분
-        st.rerun()
+st.subheader("🔍 조회 조건")
 
-with top_c2:
-    st.caption("※ 1차 검색으로 후보를 만든 뒤, 체크박스로 선택하고, 2차 검색으로 선택된 상품 내에서만 추가 필터링합니다.")
+c1, c2, c3, c4 = st.columns(4)
 
-# =====================================================
-# 🔍 검색 FORM (Enter 지원) - 2단 검색
-#   1) base_keywords: 후보 생성
-#   2) refine_keywords: 선택된 상품 내 추가 필터
-# =====================================================
-with st.form("search_form", clear_on_submit=False):
-    c1, c2, c3, c4 = st.columns([4, 4, 2, 1])
+with c1:
+    brand = st.selectbox(
+        "브랜드",
+        ["(전체)"] + sorted(meta_all["brand"].dropna().unique().tolist())
+    )
 
-    with c1:
-        base_input = st.text_input(
-            "1차 검색 (후보 생성) · 쉼표 가능",
-            placeholder="예: 스노우, 쥬시",
-            key="base_keywords",
+with c2:
+    brew = st.selectbox(
+        "추출 타입 (brew)",
+        ["(전체)"] + sorted(
+            meta_all["brew_type_kr"]
+            .dropna()
+            .unique()
+            .tolist()
         )
+    )
 
-    with c2:
-        refine_input = st.text_input(
-            "2차 검색 (선택된 상품 내 추가 필터) · 쉼표 가능",
-            placeholder="예: 도쿄",
-            key="refine_keywords",
-        )
+with c3:
+    cat1_candidates = meta_all["category1_raw"].dropna().unique()
+    category1 = st.selectbox(
+        "카테고리 1",
+        ["(전체)"] + sorted(cat1_candidates.tolist())
+    )
 
-    with c3:
-        date_range = st.date_input("기간 선택", [], key="date_range")
+with c4:
+    if category1 != "(전체)":
+        cat2_candidates = meta_all[
+            meta_all["category1_raw"] == category1
+        ]["category2_raw"].dropna().unique()
+    else:
+        cat2_candidates = meta_all["category2_raw"].dropna().unique()
 
-    with c4:
-        submitted = st.form_submit_button("조회하기", use_container_width=True)
-
-# 제출 전에는 화면을 더 진행하지 않음 (초기 로딩 stop)
-if not submitted:
-    st.stop()
-
-base_keywords = [p.strip() for p in safe_str(st.session_state.base_keywords).split(",") if p.strip()]
-refine_keywords = [p.strip() for p in safe_str(st.session_state.refine_keywords).split(",") if p.strip()]
-
-if not base_keywords:
-    st.info("1차 검색 키워드를 입력하세요.")
-    st.stop()
+    category2 = st.selectbox(
+        "카테고리 2",
+        ["(전체)"] + sorted(cat2_candidates.tolist())
+    )
 
 # =====================================================
-# 🔎 1차 후보 필터 (product_name 포함 검색)
+# 🔎 후보 풀 생성
+#   - brand OR brew_type
+#   - category는 AND
 # =====================================================
-mask = meta_df["product_name"].apply(
-    lambda x: any(k.lower() in safe_str(x).lower() for k in base_keywords)
-)
-candidates_df = meta_df[mask].copy()
+mask_or = pd.Series(False, index=meta_all.index)
+
+if brand != "(전체)":
+    mask_or |= meta_all["brand"] == brand
+
+if brew != "(전체)":
+    mask_or |= (
+        meta_all["brew_type_kr"].str.contains(brew, na=False)
+        | meta_all["brew_type"].str.contains(brew, na=False)
+    )
+
+# OR 조건이 하나도 없으면 전체 허용
+if brand == "(전체)" and brew == "(전체)":
+    mask_or |= True
+
+mask_and = pd.Series(True, index=meta_all.index)
+
+if category1 != "(전체)":
+    mask_and &= meta_all["category1_raw"] == category1
+
+if category2 != "(전체)":
+    mask_and &= meta_all["category2_raw"] == category2
+
+candidates_df = meta_all[mask_or & mask_and]
 
 if candidates_df.empty:
-    st.warning("1차 검색 결과 없음 (후보가 없습니다).")
+    st.warning("조건에 맞는 제품이 없습니다.")
     st.stop()
 
 # =====================================================
-# 📦 제품 선택 (체크박스 + 키워드 하이라이트)
+# 📦 제품 선택
 # =====================================================
-st.subheader("📦 조회할 제품 선택")
+st.subheader("📦 비교할 제품 선택")
 
-def toggle_product(name: str):
+def toggle_product(name):
     if name in st.session_state.selected_products:
         st.session_state.selected_products.remove(name)
     else:
         st.session_state.selected_products.add(name)
 
-# 체크박스는 라벨 스타일링이 어려워, 좌/우 컬럼으로 분리해서 우측에 하이라이트 표시
-for name in candidates_df["product_name"]:
-    checked = name in st.session_state.selected_products
-    highlighted = highlight_keywords(name, base_keywords)
-
-    col_chk, col_txt = st.columns([0.06, 0.94], vertical_alignment="center")
-    with col_chk:
-        st.checkbox(
-            "",
-            value=checked,
-            key=f"chk_{name}",
-            on_change=toggle_product,
-            args=(name,),
-        )
-    with col_txt:
-        st.markdown(highlighted, unsafe_allow_html=True)
+for name in sorted(candidates_df["product_name"].unique()):
+    st.checkbox(
+        name,
+        value=name in st.session_state.selected_products,
+        key=f"chk_{name}",
+        on_change=toggle_product,
+        args=(name,)
+    )
 
 selected_products = list(st.session_state.selected_products)
 
-if len(selected_products) == 0:
+if not selected_products:
     st.info("제품을 선택하세요.")
     st.stop()
 
 # =====================================================
-# 🔎 2차 추가 필터 (선택된 상품 내에서만)
+# 📊 이벤트 데이터 필터
 # =====================================================
-if refine_keywords:
-    filtered_selected = [
-        p for p in selected_products
-        if any(k.lower() in safe_str(p).lower() for k in refine_keywords)
-    ]
-else:
-    filtered_selected = selected_products
+price_df = price_all[
+    price_all["product_name"].isin(selected_products)
+].copy()
 
-if len(filtered_selected) == 0:
-    st.warning("2차 검색 조건으로 남는 선택 상품이 없습니다. (2차 검색어를 지우거나 다시 선택하세요.)")
-    st.stop()
-
-# 현재 적용 필터 요약
-active_filters = [f"1차: {', '.join(base_keywords)}"]
-if refine_keywords:
-    active_filters.append(f"2차: {', '.join(refine_keywords)}")
-st.caption("적용 중인 필터 · " + " / ".join(active_filters))
+price_df["event_date"] = pd.to_datetime(price_df["event_date"])
 
 # =====================================================
-# 📊 이벤트 필터링
-# =====================================================
-price_df = price_all[price_all["product_name"].isin(filtered_selected)].copy()
-price_df["event_date"] = pd.to_datetime(price_df["event_date"], errors="coerce")
-
-if len(date_range) == 2:
-    s, e = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
-    price_df = price_df[(price_df.event_date >= s) & (price_df.event_date <= e)]
-
-if price_df.empty:
-    st.warning("선택/기간 조건에서 이벤트 데이터가 없습니다.")
-    st.stop()
-
-# =====================================================
-# 📌 KPI (가격 이벤트 전용)
+# 📌 KPI
 # =====================================================
 st.divider()
 
-def kpi(label, value, icon):
-    st.metric(f"{icon} {label}", int(value))
-
 cols = st.columns(4)
-
 with cols[0]:
-    kpi("할인 시작", (price_df.price_event_type == "DISCOUNT_START").sum(), "💙")
+    st.metric("할인 시작", (price_df.price_event_type=="DISCOUNT_START").sum())
 with cols[1]:
-    kpi("할인 종료", (price_df.price_event_type == "DISCOUNT_END").sum(), "💙")
+    st.metric("할인 종료", (price_df.price_event_type=="DISCOUNT_END").sum())
 with cols[2]:
-    kpi("정상가 변동", price_df.price_event_type.isin(["NORMAL_UP", "NORMAL_DOWN"]).sum(), "📈")
+    st.metric(
+        "정상가 변동",
+        price_df.price_event_type.isin(["NORMAL_UP","NORMAL_DOWN"]).sum()
+    )
 with cols[3]:
-    kpi("할인가 변동", price_df.price_event_type.isin(["SALE_UP", "SALE_DOWN"]).sum(), "📉")
+    st.metric(
+        "할인가 변동",
+        price_df.price_event_type.isin(["SALE_UP","SALE_DOWN"]).sum()
+    )
 
 # =====================================================
 # 📈 가격 차트
 # =====================================================
-st.subheader("📈 단가 추이 (원/개)")
+st.subheader("📈 단가 추이")
 
 fig = go.Figure()
 
-for name in filtered_selected:
+for name in selected_products:
     sub = price_df[price_df.product_name == name].sort_values("event_date")
-    if sub.empty:
-        continue
-
     fig.add_trace(go.Scatter(
-        x=sub["event_date"],
-        y=sub["current_unit_price"],
+        x=sub.event_date,
+        y=sub.current_unit_price,
         mode="lines+markers",
         name=name
     ))
-
-    # 할인 구간 음영
-    start = None
-    for _, r in sub.iterrows():
-        if r["price_event_type"] == "DISCOUNT_START":
-            start = r["event_date"]
-        elif r["price_event_type"] == "DISCOUNT_END" and start is not None:
-            fig.add_vrect(
-                x0=start, x1=r["event_date"],
-                fillcolor="lightblue",
-                opacity=0.25,
-                line_width=0
-            )
-            start = None
 
 fig.update_layout(height=450)
 st.plotly_chart(fig, use_container_width=True)
@@ -274,10 +225,8 @@ st.subheader("📜 이벤트 히스토리")
 
 for product, g in price_df.groupby("product_name"):
     st.markdown(f"### 📦 {product}")
-    g = g.sort_values("event_date")
-
-    for _, r in g.iterrows():
-        price = format_price(r["current_unit_price"])
-        dt = r["event_date"]
-        dt_str = dt.date() if pd.notna(dt) else "-"
-        st.write(f"{dt_str} · {r['price_event_type']} | {price}원")
+    for _, r in g.sort_values("event_date").iterrows():
+        st.write(
+            f"{r.event_date.date()} · {r.price_event_type} | "
+            f"{format_price(r.current_unit_price)}원"
+        )
