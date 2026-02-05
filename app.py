@@ -47,17 +47,38 @@ def load_events(product_key: str):
 # =========================
 # 3️⃣ 검색 필터 함수
 # =========================
-def filter_products(df: pd.DataFrame, query: str):
+def filter_products(df: pd.DataFrame, query: str, mode: str):
     if not query:
         return df
 
     q = query.lower()
-    return df[
-        df["product_name"].str.lower().str.contains(q)
-        | df["brand"].str.lower().str.contains(q)
-        | df["category1"].str.lower().str.contains(q)
-        | df["category2"].str.lower().str.contains(q)
-    ]
+
+    if mode == "제품명":
+        return df[df["product_name"].str.lower().str.contains(q)]
+
+    elif mode == "브랜드":
+        return df[df["brand"].str.lower().str.contains(q)]
+
+    elif mode == "카테고리":
+        return df[
+            df["category1"].str.lower().str.contains(q)
+            | df["category2"].str.lower().str.contains(q)
+        ]
+
+    elif mode == "Brew type":
+        # brew_type 컬럼이 있을 경우만
+        if "brew_type" in df.columns:
+            return df[df["brew_type"].str.lower().str.contains(q)]
+        else:
+            return df.iloc[0:0]  # 빈 결과
+
+    else:  # 전체
+        return df[
+            df["product_name"].str.lower().str.contains(q)
+            | df["brand"].str.lower().str.contains(q)
+            | df["category1"].str.lower().str.contains(q)
+            | df["category2"].str.lower().str.contains(q)
+        ]
 
 
 # =========================
@@ -70,18 +91,42 @@ df_all = load_product_summary()
 # --- 검색 영역 ---
 st.subheader("🔍 제품 검색")
 
+search_mode = st.radio(
+    "검색 기준 선택",
+    options=[
+        "전체",
+        "제품명",
+        "브랜드",
+        "카테고리",
+        "Brew type"
+    ],
+    horizontal=True
+)
+
+
 query = st.text_input(
     "제품명 / 브랜드 / 카테고리 검색",
     placeholder="예: 카누 다크, 바리스타, 디카페인"
 )
 
-df_filtered = filter_products(df_all, query)
+df_filtered = filter_products(df_all, query, search_mode)
 
+
+# 🔹 자동완성 라벨 동적 변경
+select_label = {
+    "전체": "제품 선택",
+    "제품명": "제품명 선택",
+    "브랜드": "브랜드 기준 제품 선택",
+    "카테고리": "카테고리 기준 제품 선택",
+    "Brew type": "Brew type 기준 제품 선택"
+}[search_mode]
+
+# 🔹 자동완성
 selected_product_name = st.selectbox(
-    "조회할 제품 선택",
+    select_label,
     options=df_filtered["product_name"].tolist(),
     index=None,
-    placeholder="검색 후 제품을 선택하세요"
+    placeholder="검색 후 선택하세요"
 )
 
 # =========================
@@ -150,4 +195,5 @@ if selected_product_name:
 
 else:
     st.info("⬆️ 상단에서 제품을 검색하고 선택하세요.")
+
 
