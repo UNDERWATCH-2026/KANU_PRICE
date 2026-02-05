@@ -19,23 +19,29 @@ SUPABASE_KEY = st.secrets["SUPABASE_ANON_KEY"]
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # =========================
-# 2️⃣ 데이터 로딩 함수
+# 2️⃣ 데이터 로딩
 # =========================
 @st.cache_data(ttl=300)
 def load_product_summary():
-    res = supabase.table("product_price_summary").select(
-        "product_key, brand, category1, category2, product_name, "
-        "current_price, is_discount, "
-        "first_seen_date, last_seen_date, event_count, "
-        "product_event_status, is_new_product"
-    ).execute()
+    res = (
+        supabase
+        .table("product_price_summary")
+        .select(
+            "product_key, brand, category1, category2, product_name, "
+            "current_price, is_discount, "
+            "first_seen_date, last_seen_date, event_count, "
+            "product_event_status, is_new_product"
+        )
+        .execute()
+    )
     return pd.DataFrame(res.data)
 
 
 @st.cache_data(ttl=300)
 def load_events(product_key: str):
     res = (
-        supabase.table("product_all_events")
+        supabase
+        .table("product_all_events")
         .select("event_date, event_type, price")
         .eq("product_key", product_key)
         .order("event_date", desc=True)
@@ -43,9 +49,8 @@ def load_events(product_key: str):
     )
     return pd.DataFrame(res.data)
 
-
 # =========================
-# 3️⃣ 검색 필터 함수
+# 3️⃣ 검색 필터 (🔥 핵심)
 # =========================
 def filter_products(df: pd.DataFrame, query: str, mode: str):
     if not query:
@@ -53,33 +58,25 @@ def filter_products(df: pd.DataFrame, query: str, mode: str):
 
     q = query.lower()
 
-    if mode == "제품명":
-        return df[df["product_name"].str.lower().str.contains(q)]
+    column_map = {
+        "제품명": "product_name",
+        "브랜드": "brand",
+        "카테고리1": "category1",
+        "카테고리2": "category2",
+        "Brew type": "brew_type",  # 없으면 자동으로 빈 결과
+    }
 
-    elif mode == "브랜드":
-        return df[df["brand"].str.lower().str.contains(q)]
+    col = column_map.get(mode)
 
-    elif mode == "카테고리":
-        return df[
-            df["category1"].str.lower().str.contains(q)
-            | df["category2"].str.lower().str.contains(q)
-        ]
+    if col not in df.columns:
+        return df.iloc[0:0]
 
-    elif mode == "Brew type":
-        # brew_type 컬럼이 있을 경우만
-        if "brew_type" in df.columns:
-            return df[df["brew_type"].str.lower().str.contains(q)]
-        else:
-            return df.iloc[0:0]  # 빈 결과
-
-    else:  # 전체
-        return df[
-            df["product_name"].str.lower().str.contains(q)
-            | df["brand"].str.lower().str.contains(q)
-            | df["category1"].str.lower().str.contains(q)
-            | df["category2"].str.lower().str.contains(q)
-        ]
-
+    return df[
+        df[col]
+        .astype(str)
+        .str.lower()
+        .str.contains(q)
+    ]
 
 # =========================
 # 4️⃣ 메인 UI
@@ -93,40 +90,22 @@ st.subheader("🔍 제품 검색")
 
 search_mode = st.radio(
     "검색 기준 선택",
-    options=[
-        "전체",
-        "제품명",
-        "브랜드",
-        "카테고리",
-        "Brew type"
-    ],
+    ["제품명", "브랜드", "카테고리1", "카테고리2", "Brew type"],
     horizontal=True
 )
 
-
 query = st.text_input(
-    "제품명 / 브랜드 / 카테고리 검색",
-    placeholder="예: 카누 다크, 바리스타, 디카페인"
+    "검색 키워드 입력",
+    placeholder="예: 카누 / 캡슐 / 다크 / 디카페인"
 )
 
 df_filtered = filter_products(df_all, query, search_mode)
 
-
-# 🔹 자동완성 라벨 동적 변경
-select_label = {
-    "전체": "제품 선택",
-    "제품명": "제품명 선택",
-    "브랜드": "브랜드 기준 제품 선택",
-    "카테고리": "카테고리 기준 제품 선택",
-    "Brew type": "Brew type 기준 제품 선택"
-}[search_mode]
-
-# 🔹 자동완성
 selected_product_name = st.selectbox(
-    select_label,
+    "제품 선택",
     options=df_filtered["product_name"].tolist(),
     index=None,
-    placeholder="검색 후 선택하세요"
+    placeholder="검색 결과 중 제품을 선택하세요"
 )
 
 # =========================
@@ -159,7 +138,7 @@ if selected_product_name:
         st.caption(f"마지막 관측일\n{product['last_seen_date']}")
 
     # =========================
-    # 6️⃣ 상태 메시지 (핵심 UX)
+    # 6️⃣ 상태 메시지
     # =========================
     if product["product_event_status"] == "NO_EVENT_STABLE":
         st.info(
@@ -180,13 +159,12 @@ if selected_product_name:
         df_events = load_events(product["product_key"])
 
         if not df_events.empty:
-            df_events_display = df_events.copy()
-            df_events_display["event_date"] = pd.to_datetime(
-                df_events_display["event_date"]
+            df_events["event_date"] = pd.to_datetime(
+                df_events["event_date"]
             ).dt.date
 
             st.dataframe(
-                df_events_display,
+                df_events,
                 use_container_width=True,
                 hide_index=True
             )
@@ -194,6 +172,4 @@ if selected_product_name:
             st.caption("이벤트 데이터가 없습니다.")
 
 else:
-    st.info("⬆️ 상단에서 제품을 검색하고 선택하세요.")
-
-
+    st.info("⬆️ 검색 기준을 선택하고 키워드를 입력하세요.")
