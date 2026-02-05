@@ -310,23 +310,23 @@ for product_name in selected_products:
 
     # 1️⃣ 개당 가격 (소수점 1자리)
     with col1:
-        if "current_unit_price" in product.index:
-            price = product["current_unit_price"]
+        price = product.get("current_unit_price")
+
+        if price is not None and pd.notna(price):
             st.metric("개당 가격", f"{float(price):,.1f}원")
         else:
-            st.metric("개당 가격", "컬럼 없음")
-
+            st.metric("개당 가격", "–")
 
     # 2️⃣ 할인 여부
     with col2:
-        if bool(product["is_discount"]):
+        if bool(product.get("is_discount", False)):
             st.success("✅ 할인 중")
         else:
             st.info("정상가")
 
     # 3️⃣ 신제품 / 관측 시작일
     with col3:
-        if bool(product["is_new_product"]):
+        if bool(product.get("is_new_product", False)):
             st.warning("🆕 신제품")
         else:
             st.caption(f"관측 시작일\n{product['first_seen_date']}")
@@ -351,12 +351,17 @@ for product_name in selected_products:
             df_events = load_events(product["product_key"])
 
             if not df_events.empty:
-                df_events["event_date"] = pd.to_datetime(df_events["event_date"]).dt.date
-                st.dataframe(df_events, use_container_width=True, hide_index=True)
+                df_events["event_date"] = pd.to_datetime(
+                    df_events["event_date"]
+                ).dt.date
+
+                st.dataframe(
+                    df_events,
+                    use_container_width=True,
+                    hide_index=True
+                )
             else:
                 st.caption("이벤트 데이터가 없습니다.")
 
     st.divider()
-
-
 
