@@ -67,7 +67,10 @@ if "keyword_searches" not in st.session_state:
     st.session_state.keyword_searches = []
 
 if "active_mode" not in st.session_state:
-    st.session_state.active_mode = None
+    st.session_state.active_mode = "키워드 검색"
+
+if "show_results" not in st.session_state:
+    st.session_state.show_results = False
 
 # =========================
 # 5️⃣ 메인 UI
@@ -81,8 +84,7 @@ st.subheader("🔎 조회 기준")
 search_mode = st.radio(
     "검색 방식 선택",
     ["키워드 검색", "필터 선택 (브랜드/카테고리)"],
-    horizontal=True,
-    key="search_mode_radio"
+    horizontal=True
 )
 
 st.caption("※ 조회 기준을 변경하면 현재 선택된 제품/검색 상태가 초기화됩니다.")
@@ -92,12 +94,13 @@ if search_mode != st.session_state.active_mode:
     st.session_state.active_mode = search_mode
     st.session_state.selected_products = set()
     st.session_state.keyword_searches = []
+    st.session_state.show_results = False
     st.rerun()
 
 st.divider()
 
 # =========================
-# 데이터 로딩 (라디오 버튼 뒤로 이동)
+# 데이터 로딩
 # =========================
 df_all = load_product_summary()
 if df_all.empty:
@@ -112,6 +115,7 @@ with col_delete:
     if st.button("🗑️ 전체 삭제", use_container_width=True):
         st.session_state.selected_products = set()
         st.session_state.keyword_searches = []
+        st.session_state.show_results = False
         st.rerun()
 
 st.divider()
@@ -131,7 +135,6 @@ if search_mode == "키워드 검색":
         keyword_input = st.text_input(
             "제품명 키워드 입력",
             placeholder="예: 쥬시, 스노우, 도쿄",
-            key="keyword_input",
             label_visibility="collapsed"
         )
     
@@ -146,6 +149,7 @@ if search_mode == "키워드 검색":
         if st.button("🧹 검색어 비우기", use_container_width=True):
             st.session_state.keyword_searches = []
             st.session_state.selected_products = set()
+            st.session_state.show_results = False
             st.rerun()
     
     # 현재 검색어 표시
@@ -280,7 +284,7 @@ with col_query:
     if st.button("📊 조회하기", type="primary", use_container_width=True):
         st.session_state.show_results = True
 
-if not st.session_state.get("show_results", False):
+if not st.session_state.show_results:
     st.info("위에서 제품을 선택하고 '조회하기' 버튼을 클릭하세요.")
     st.stop()
 
@@ -335,4 +339,3 @@ for product_name in selected_products:
                 st.caption("이벤트 데이터가 없습니다.")
     
     st.divider()
-
