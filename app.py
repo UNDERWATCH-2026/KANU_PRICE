@@ -348,7 +348,8 @@ for product_name in selected_products:
     # =========================
     if int(product["event_count"]) > 0:
         with st.expander(f"📅 이벤트 히스토리 ({product['event_count']}건)"):
-            df_events = load_events(product["product_id"])  # 🔑 product_key → product_id
+            df_events = load_events(product["product_key"])
+
             if not df_events.empty:
                 df_events["event_date"] = pd.to_datetime(df_events["event_date"]).dt.date
                 st.dataframe(df_events, use_container_width=True, hide_index=True)
@@ -356,5 +357,6 @@ for product_name in selected_products:
                 st.caption("이벤트 데이터가 없습니다.")
 
     st.divider()
+
 
 
