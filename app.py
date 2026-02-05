@@ -310,11 +310,12 @@ for product_name in selected_products:
 
     # 1️⃣ 개당 가격 (소수점 1자리)
     with col1:
-        price = product["current_unit_price"]
-        if price is not None:
+        if "current_unit_price" in product.index:
+            price = product["current_unit_price"]
             st.metric("개당 가격", f"{float(price):,.1f}원")
         else:
-            st.metric("개당 가격", "-")
+            st.metric("개당 가격", "컬럼 없음")
+
 
     # 2️⃣ 할인 여부
     with col2:
@@ -355,4 +356,5 @@ for product_name in selected_products:
                 st.caption("이벤트 데이터가 없습니다.")
 
     st.divider()
+
 
