@@ -301,6 +301,65 @@ if not st.session_state.show_results:
 st.divider()
 st.subheader(f"📊 조회 결과 ({len(selected_products)}개 제품)")
 
+# =========================
+# 1️⃣ 개당 가격 타임라인 비교 차트 (모든 제품)
+# =========================
+import altair as alt
+
+# 타임라인용 데이터 생성
+timeline_rows = []
+
+for product_name in selected_products:
+    product_row = df_all[df_all["product_name"] == product_name].iloc[0]
+    product_key = product_row["product_key"]
+
+    df_events = load_events(product_key)
+    if df_events.empty:
+        continue
+
+    # 개당 가격 계산 (event price / capsule_count)
+    # ※ capsule_count는 이미 VIEW에서 반영되어 unit_price로 내려온다고 가정
+    if "unit_price" not in df_events.columns:
+        continue
+
+    df_events_tmp = df_events.copy()
+    df_events_tmp["product_name"] = product_name
+    df_events_tmp["event_date"] = pd.to_datetime(df_events_tmp["event_date"])
+    df_events_tmp["unit_price"] = df_events_tmp["unit_price"].astype(float)
+
+    timeline_rows.append(
+        df_events_tmp[["product_name", "event_date", "unit_price"]]
+    )
+
+if timeline_rows:
+    df_timeline = pd.concat(timeline_rows, ignore_index=True)
+
+    chart = (
+        alt.Chart(df_timeline)
+        .mark_line(point=True)
+        .encode(
+            x=alt.X("event_date:T", title="날짜"),
+            y=alt.Y("unit_price:Q", title="개당 가격 (원)"),
+            color=alt.Color("product_name:N", title="제품"),
+            tooltip=[
+                alt.Tooltip("product_name:N", title="제품"),
+                alt.Tooltip("event_date:T", title="날짜"),
+                alt.Tooltip("unit_price:Q", title="개당 가격", format=",.1f")
+            ]
+        )
+        .properties(height=420)
+        .interactive()
+    )
+
+    st.altair_chart(chart, use_container_width=True)
+else:
+    st.info("비교 가능한 가격 이벤트 데이터가 없습니다.")
+
+st.divider()
+
+# =========================
+# 2️⃣ 제품별 카드 상세 정보
+# =========================
 for product_name in selected_products:
     product = df_all[df_all["product_name"] == product_name].iloc[0]
 
@@ -308,30 +367,31 @@ for product_name in selected_products:
 
     col1, col2, col3, col4 = st.columns(4)
 
-    # 1️⃣ 개당 가격 (소수점 1자리)
+    # ① 개당 가격 (소수점 1자리)
     with col1:
-        price = product.get("current_unit_price")
-
-        if price is not None and pd.notna(price):
-            st.metric("개당 가격", f"{float(price):,.1f}원")
+        if "current_unit_price" in product.index and pd.notna(product["current_unit_price"]):
+            st.metric(
+                "개당 가격",
+                f"{float(product['current_unit_price']):,.1f}원"
+            )
         else:
-            st.metric("개당 가격", "–")
+            st.metric("개당 가격", "-")
 
-    # 2️⃣ 할인 여부
+    # ② 할인 여부
     with col2:
-        if bool(product.get("is_discount", False)):
+        if bool(product["is_discount"]):
             st.success("✅ 할인 중")
         else:
             st.info("정상가")
 
-    # 3️⃣ 신제품 / 관측 시작일
+    # ③ 신제품 / 관측 시작일
     with col3:
-        if bool(product.get("is_new_product", False)):
+        if bool(product["is_new_product"]):
             st.warning("🆕 신제품")
         else:
             st.caption(f"관측 시작일\n{product['first_seen_date']}")
 
-    # 4️⃣ 마지막 관측일
+    # ④ 마지막 관측일
     with col4:
         st.caption(f"마지막 관측일\n{product['last_seen_date']}")
 
@@ -344,22 +404,15 @@ for product_name in selected_products:
         st.success(f"📈 가격 이벤트 {product['event_count']}건 발생")
 
     # =========================
-    # 이벤트 타임라인
+    # 이벤트 타임라인 (표)
     # =========================
     if int(product["event_count"]) > 0:
         with st.expander(f"📅 이벤트 히스토리 ({product['event_count']}건)"):
             df_events = load_events(product["product_key"])
 
             if not df_events.empty:
-                df_events["event_date"] = pd.to_datetime(
-                    df_events["event_date"]
-                ).dt.date
-
-                st.dataframe(
-                    df_events,
-                    use_container_width=True,
-                    hide_index=True
-                )
+                df_events["event_date"] = pd.to_datetime(df_events["event_date"]).dt.date
+                st.dataframe(df_events, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 데이터가 없습니다.")
 
