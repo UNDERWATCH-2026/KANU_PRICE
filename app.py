@@ -303,46 +303,56 @@ st.subheader(f"📊 조회 결과 ({len(selected_products)}개 제품)")
 
 for product_name in selected_products:
     product = df_all[df_all["product_name"] == product_name].iloc[0]
-    
+
     st.markdown(f"### {product['product_name']}")
-    
+
     col1, col2, col3, col4 = st.columns(4)
-    
+
+    # 1️⃣ 개당 가격 (소수점 1자리)
     with col1:
-        try:
-            st.metric("현재 가격", f"{int(product['current_price']):,}원")
-        except Exception:
-            st.metric("현재 가격", f"{product['current_price']}")
-    
+        price = product["current_unit_price"]
+        if price is not None:
+            st.metric("개당 가격", f"{float(price):,.1f}원")
+        else:
+            st.metric("개당 가격", "-")
+
+    # 2️⃣ 할인 여부
     with col2:
         if bool(product["is_discount"]):
             st.success("✅ 할인 중")
         else:
             st.info("정상가")
-    
+
+    # 3️⃣ 신제품 / 관측 시작일
     with col3:
         if bool(product["is_new_product"]):
             st.warning("🆕 신제품")
         else:
             st.caption(f"관측 시작일\n{product['first_seen_date']}")
-    
+
+    # 4️⃣ 마지막 관측일
     with col4:
         st.caption(f"마지막 관측일\n{product['last_seen_date']}")
-    
+
+    # =========================
     # 상태 메시지
+    # =========================
     if product["product_event_status"] == "NO_EVENT_STABLE":
         st.info(f"📊 가격 변동 없음 ({product['first_seen_date']} 이후)")
     else:
         st.success(f"📈 가격 이벤트 {product['event_count']}건 발생")
-    
+
+    # =========================
     # 이벤트 타임라인
+    # =========================
     if int(product["event_count"]) > 0:
         with st.expander(f"📅 이벤트 히스토리 ({product['event_count']}건)"):
-            df_events = load_events(product["product_key"])
+            df_events = load_events(product["product_id"])  # 🔑 product_key → product_id
             if not df_events.empty:
                 df_events["event_date"] = pd.to_datetime(df_events["event_date"]).dt.date
                 st.dataframe(df_events, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 데이터가 없습니다.")
-    
+
     st.divider()
+
