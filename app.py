@@ -108,9 +108,13 @@ if df_all.empty:
     st.stop()
 
 # =========================
-# 상단 버튼: 전체 삭제
+# 상단 버튼: 조회하기 + 전체 삭제
 # =========================
-col_delete = st.columns([10, 1])[1]
+col_query, col_delete = st.columns([1, 1])
+with col_query:
+    if st.button("📊 조회하기", type="primary", use_container_width=True):
+        st.session_state.show_results = True
+
 with col_delete:
     if st.button("🗑️ 전체 삭제", use_container_width=True):
         st.session_state.selected_products = set()
@@ -256,17 +260,27 @@ def toggle_product(product_name):
     else:
         st.session_state.selected_products.add(product_name)
 
-# 제품명 목록 (선택된 제품 유지)
-for product_name in sorted(candidates_df["product_name"].unique().tolist()):
-    is_checked = product_name in st.session_state.selected_products
-    
-    st.checkbox(
-        product_name,
-        value=is_checked,
-        key=f"chk_{product_name}",
-        on_change=toggle_product,
-        args=(product_name,)
-    )
+# 제품명 목록 (선택된 제품 유지) - 가로로 5개씩 배열
+product_list = sorted(candidates_df["product_name"].unique().tolist())
+cols_per_row = 5
+num_rows = (len(product_list) + cols_per_row - 1) // cols_per_row
+
+for row_idx in range(num_rows):
+    cols = st.columns(cols_per_row)
+    for col_idx in range(cols_per_row):
+        product_idx = row_idx * cols_per_row + col_idx
+        if product_idx < len(product_list):
+            product_name = product_list[product_idx]
+            is_checked = product_name in st.session_state.selected_products
+            
+            with cols[col_idx]:
+                st.checkbox(
+                    product_name,
+                    value=is_checked,
+                    key=f"chk_{product_name}",
+                    on_change=toggle_product,
+                    args=(product_name,)
+                )
 
 selected_products = list(st.session_state.selected_products)
 
@@ -275,15 +289,8 @@ if not selected_products:
     st.stop()
 
 # =========================
-# 9️⃣ 조회하기 버튼
+# 9️⃣ 결과 조회 안내
 # =========================
-st.divider()
-
-col_query = st.columns([10, 1])[1]
-with col_query:
-    if st.button("📊 조회하기", type="primary", use_container_width=True):
-        st.session_state.show_results = True
-
 if not st.session_state.show_results:
     st.info("위에서 제품을 선택하고 '조회하기' 버튼을 클릭하세요.")
     st.stop()
