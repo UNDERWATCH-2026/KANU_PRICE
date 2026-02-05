@@ -13,8 +13,8 @@ st.set_page_config(
 # =========================
 # 1️⃣ Supabase 설정
 # =========================
-SUPABASE_URL = "https://YOUR_PROJECT_ID.supabase.co"
-SUPABASE_KEY = "YOUR_SERVICE_OR_ANON_KEY"
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_ANON_KEY"]
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -150,3 +150,4 @@ if selected_product_name:
 
 else:
     st.info("⬆️ 상단에서 제품을 검색하고 선택하세요.")
+
