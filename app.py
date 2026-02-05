@@ -74,25 +74,8 @@ if "active_mode" not in st.session_state:
 # =========================
 st.title("☕ Capsule Price Intelligence")
 
-df_all = load_product_summary()
-if df_all.empty:
-    st.error("product_price_summary에서 데이터를 불러오지 못했습니다.")
-    st.stop()
-
 # =========================
-# 상단 버튼: 전체 삭제
-# =========================
-col_delete = st.columns([10, 1])[1]
-with col_delete:
-    if st.button("🗑️ 전체 삭제", use_container_width=True):
-        st.session_state.selected_products = set()
-        st.session_state.keyword_searches = []
-        st.rerun()
-
-st.divider()
-
-# =========================
-# 검색 모드 선택
+# 검색 모드 선택 (⚠️ 항상 가장 먼저 렌더링)
 # =========================
 st.subheader("🔎 조회 기준")
 search_mode = st.radio(
@@ -110,6 +93,28 @@ if search_mode != st.session_state.active_mode:
     st.session_state.selected_products = set()
     st.session_state.keyword_searches = []
     st.rerun()
+
+st.divider()
+
+# =========================
+# 데이터 로딩 (라디오 버튼 뒤로 이동)
+# =========================
+df_all = load_product_summary()
+if df_all.empty:
+    st.warning("아직 집계된 제품 데이터가 없습니다. 데이터 수집/집계 이후 이용 가능합니다.")
+    st.stop()
+
+# =========================
+# 상단 버튼: 전체 삭제
+# =========================
+col_delete = st.columns([10, 1])[1]
+with col_delete:
+    if st.button("🗑️ 전체 삭제", use_container_width=True):
+        st.session_state.selected_products = set()
+        st.session_state.keyword_searches = []
+        st.rerun()
+
+st.divider()
 
 # =========================
 # 6️⃣ 조회 조건 UI
@@ -330,3 +335,4 @@ for product_name in selected_products:
                 st.caption("이벤트 데이터가 없습니다.")
     
     st.divider()
+
