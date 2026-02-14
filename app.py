@@ -193,7 +193,7 @@ if search_mode == "키워드 검색":
         )
 
     with col_add:
-        if st.button("🔍 검색 추가", use_container_width=True):
+        if st.button("🔍 검색어 추가", use_container_width=True):
             kw = keyword_input.strip()
             if kw:
                 mask = _norm_series(df_all["product_name"]).str.contains(kw, case=False)
@@ -205,7 +205,7 @@ if search_mode == "키워드 검색":
                 st.rerun()
 
     with col_reset:
-        if st.button("🧹 전체 초기화", use_container_width=True):
+        if st.button("🧹 검색 초기화", use_container_width=True):
             st.session_state.keyword_results = {}
             st.session_state.selected_products = set()
             st.session_state.show_results = False
@@ -921,6 +921,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
 
