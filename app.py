@@ -392,58 +392,52 @@ for pname in selected_products:
     # 이벤트 히스토리
     with st.expander("📅 이벤트 히스토리"):
 
-    df_price = load_events(p["product_url"])
-    df_life = load_lifecycle_events(p["product_url"])
-
-    frames = []
-
-    if not df_price.empty:
-        df_price["event_type"] = df_price["event_type"]
-        frames.append(
-            df_price[["date", "event_type"]]
-        )
-
-    if not df_life.empty:
-        df_life = df_life[df_life["lifecycle_event"].notna()]
-        df_life = df_life.rename(columns={"lifecycle_event": "event_type"})
-        frames.append(
-            df_life[["date", "event_type"]]
-        )
-
-    if frames:
-        df_all_events = pd.concat(frames)
-        df_all_events["date"] = pd.to_datetime(df_all_events["date"]).dt.date
-        df_all_events = df_all_events.sort_values("date", ascending=False)
+        df_price = load_events(p["product_url"])
+        df_life = load_lifecycle_events(p["product_url"])
     
-        # 🔥 아이콘 매핑
-        icon_map = {
-            "DISCOUNT": "💸 할인",
-            "NORMAL": "💰 정상가",
-            "NEW_PRODUCT": "🆕 신제품",
-            "OUT_OF_STOCK": "❌ 품절",
-            "RESTOCK": "🔄 복원",
-        }
+        frames = []
     
-        df_all_events["event_type"] = (
-            df_all_events["event_type"]
-            .map(icon_map)
-            .fillna(df_all_events["event_type"])
-        )
+        if not df_price.empty:
+            frames.append(
+                df_price[["date", "event_type"]]
+            )
     
-        # 🔥 컬럼명 변경 (여기에 넣음)
-        df_all_events = df_all_events.rename(columns={
-            "event_type": "이벤트",
-            "date": "날짜"
-        })
+        if not df_life.empty:
+            df_life = df_life[df_life["lifecycle_event"].notna()]
+            df_life = df_life.rename(columns={"lifecycle_event": "event_type"})
+            frames.append(
+                df_life[["date", "event_type"]]
+            )
     
-        st.dataframe(
-            df_all_events,
-            use_container_width=True,
-            hide_index=True
-        )
+        if frames:
+            df_all_events = pd.concat(frames)
+            df_all_events["date"] = pd.to_datetime(df_all_events["date"]).dt.date
+            df_all_events = df_all_events.sort_values("date", ascending=False)
+    
+            icon_map = {
+                "DISCOUNT": "💸 할인",
+                "NORMAL": "💰 정상가",
+                "NEW_PRODUCT": "🆕 신제품",
+                "OUT_OF_STOCK": "❌ 품절",
+                "RESTOCK": "🔄 복원",
+            }
+    
+            df_all_events["event_type"] = (
+                df_all_events["event_type"]
+                .map(icon_map)
+                .fillna(df_all_events["event_type"])
+            )
+    
+            df_all_events = df_all_events.rename(columns={
+                "date": "날짜",
+                "event_type": "이벤트"
+            })
+    
+            st.dataframe(df_all_events, use_container_width=True, hide_index=True)
+    
+        else:
+            st.caption("이벤트 없음")
 
-    else:
-        st.caption("이벤트 없음")
 divider()
 
 
@@ -634,6 +628,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
 
