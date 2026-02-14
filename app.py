@@ -202,12 +202,19 @@ if search_mode == "키워드 검색":
 
             with col_delete:
                 if st.button("검색 결과 삭제", key=f"del_{kw}"):
-                    del st.session_state.keyword_results[kw]
+
+                    df_kw = st.session_state.keyword_results[kw]
+                    remove_list = df_kw["product_name"].tolist()
+                
+                    # 선택된 제품 중 해당 키워드 결과에 해당하는 것만 제거
                     st.session_state.selected_products = {
                         p for p in st.session_state.selected_products
-                        if p not in result_df["product_name"].tolist()
+                        if p not in remove_list
                     }
+                
+                    del st.session_state.keyword_results[kw]
                     st.rerun()
+
 
             df_kw = st.session_state.keyword_results[kw]
             product_list = sorted(df_kw["product_name"].unique().tolist())
@@ -590,6 +597,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
 
