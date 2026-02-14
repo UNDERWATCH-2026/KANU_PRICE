@@ -276,24 +276,64 @@ else:
 
     candidates_df = df2 if sel_cat2 == "(전체)" else df2[df2["category2"] == sel_cat2]
 
+# 필터 결과에서 제품 선택
+if search_mode == "필터 선택 (브랜드/카테고리)":
+
+    st.subheader("📦 비교할 제품 선택")
+
+    product_list = sorted(candidates_df["product_name"].unique().tolist())
+
+    for pname in product_list:
+        st.checkbox(
+            pname,
+            value=pname in st.session_state.selected_products,
+            key=f"chk_filter_{pname}",
+            on_change=toggle_product,
+            args=(pname,),
+        )
 
 
 # =========================
 # 8️⃣ 결과 표시
 # =========================
+
+
 selected_products = list(st.session_state.selected_products)
+
+if not selected_products:
+    st.info("제품을 선택하세요.")
+    st.stop()
 
 if not st.session_state.show_results:
     st.info("제품을 선택한 뒤 ‘조회하기’를 클릭하세요.")
     st.stop()
 
-if not selected_products:
-    st.warning("선택된 제품이 없습니다.")
-    st.stop()
-
-
 st.divider()
 st.subheader(f"📊 조회 결과 ({len(selected_products)}개 제품)")
+
+# 🔥 반드시 여기에서 초기화
+timeline_rows = []
+lifecycle_rows = []
+
+for pname in selected_products:
+    row = df_all[df_all["product_name"] == pname].iloc[0]
+
+    # 가격 이벤트
+    df_price = load_events(row["product_url"])
+    if not df_price.empty:
+        tmp = df_price.copy()
+        tmp["product_name"] = pname
+        tmp["event_date"] = pd.to_datetime(tmp["date"])
+        tmp["unit_price"] = tmp["unit_price"].astype(float)
+        timeline_rows.append(tmp[["product_name", "event_date", "unit_price"]])
+
+    # lifecycle 이벤트
+    df_life = load_lifecycle_events(row["product_url"])
+    if not df_life.empty:
+        tmp2 = df_life.copy()
+        tmp2["product_name"] = pname
+        tmp2["event_date"] = pd.to_datetime(tmp2["date"])
+        lifecycle_rows.append(tmp2[["product_name", "event_date", "lifecycle_event"]])
 
 # =========================
 # 8-1️⃣ 개당 가격 타임라인 비교 차트
@@ -438,7 +478,7 @@ for pname in selected_products:
         else:
             st.caption("이벤트 없음")
 
-divider()
+st.divider()
 
 
 # =========================
@@ -628,6 +668,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
 
