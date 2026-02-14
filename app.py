@@ -267,20 +267,32 @@ for pname in selected_products:
     st.markdown(f"### {p['product_name']}")
 
     c1, c2, c3, c4 = st.columns(4)
+
     with c1:
         st.metric("개당 가격", f"{float(p['current_unit_price']):,.1f}원")
+
     with c2:
-        st.success("할인 중") if p["is_discount"] else st.info("정상가")
+        if p["is_discount"]:
+            st.success("할인 중")
+        else:
+            st.info("정상가")
+
     with c3:
-        st.warning("🆕 신제품") if p["is_new_product"] else st.caption(f"관측 시작일\n{p['first_seen_date']}")
+        if p["is_new_product"]:
+            st.warning("🆕 신제품")
+        else:
+            st.caption(f"관측 시작일\n{p['first_seen_date']}")
+
     with c4:
         st.caption(f"마지막 관측일\n{p['last_seen_date']}")
 
+    # 이벤트 상태
     if p["product_event_status"] == "NO_EVENT_STABLE":
         st.info("📊 가격 변동 없음")
     else:
         st.success(f"📈 가격 이벤트 {p['event_count']}건")
 
+    # 이벤트 히스토리
     with st.expander("📅 이벤트 히스토리"):
         df_ev = load_events(p["product_url"])
         if not df_ev.empty:
@@ -290,3 +302,4 @@ for pname in selected_products:
             st.caption("이벤트 없음")
 
     st.divider()
+
