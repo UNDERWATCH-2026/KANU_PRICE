@@ -175,49 +175,45 @@ if search_mode == "키워드 검색":
 else:
     col1, col2, col3, col4 = st.columns(4)
 
-    # 🔹 1️⃣ 브랜드
+    # 1️⃣ 브랜드
     with col1:
         brands = options_from(df_all, "brand")
         sel_brand = st.selectbox("브랜드", ["(전체)"] + brands)
 
-    # 🔹 2️⃣ 카테고리1
+    # 2️⃣ 카테고리1
     with col2:
         cat1s = options_from(df_all, "category1")
         sel_cat1 = st.selectbox("카테고리1", ["(전체)"] + cat1s)
 
-    # 🔹 3️⃣ 카테고리2
+    # 3️⃣ 카테고리2
     with col3:
         cat2s = options_from(df_all, "category2")
         sel_cat2 = st.selectbox("카테고리2", ["(전체)"] + cat2s)
 
-    # 🔹 4️⃣ Brew Type (df_all 기준)
+    # 4️⃣ Brew Type (항상 df_all 기준)
     with col4:
         brew_types = options_from(df_all, "brew_type_kr")
         sel_brew = st.selectbox("Brew Type", ["(전체)"] + brew_types)
 
-    # =========================
-    # 🔥 OR 기반 필터 로직
-    # =========================
-
-    mask = pd.Series(False, index=df_all.index)
+    # -------------------------
+    # 필터 적용 (AND 기본)
+    # -------------------------
+    filtered = df_all.copy()
 
     if sel_brand != "(전체)":
-        mask |= df_all["brand"] == sel_brand
+        filtered = filtered[filtered["brand"] == sel_brand]
 
     if sel_cat1 != "(전체)":
-        mask |= df_all["category1"] == sel_cat1
+        filtered = filtered[filtered["category1"] == sel_cat1]
 
     if sel_cat2 != "(전체)":
-        mask |= df_all["category2"] == sel_cat2
+        filtered = filtered[filtered["category2"] == sel_cat2]
 
     if sel_brew != "(전체)":
-        mask |= df_all["brew_type_kr"] == sel_brew
+        filtered = filtered[filtered["brew_type_kr"] == sel_brew]
 
-    # 아무것도 선택 안 한 경우 전체 보여줌
-    if not mask.any():
-        candidates_df = df_all.copy()
-    else:
-        candidates_df = df_all[mask]
+    candidates_df = filtered
+
 
 
 
@@ -422,6 +418,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, "UNKNOWN", True)  # 🔥 여기
         st.success(answer)
+
 
 
 
