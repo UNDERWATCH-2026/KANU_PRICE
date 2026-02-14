@@ -281,16 +281,19 @@ if search_mode == "필터 선택 (브랜드/카테고리)":
 
     st.subheader("📦 비교할 제품 선택")
 
-    product_list = sorted(candidates_df["product_name"].unique().tolist())
+    with st.expander("목록 펼치기 / 접기", expanded=False):
+    
+        product_list = sorted(candidates_df["product_name"].unique().tolist())
+    
+        for pname in product_list:
+            st.checkbox(
+                pname,
+                value=pname in st.session_state.selected_products,
+                key=f"chk_filter_{pname}",
+                on_change=toggle_product,
+                args=(pname,),
+            )
 
-    for pname in product_list:
-        st.checkbox(
-            pname,
-            value=pname in st.session_state.selected_products,
-            key=f"chk_filter_{pname}",
-            on_change=toggle_product,
-            args=(pname,),
-        )
 
 
 # =========================
@@ -446,7 +449,7 @@ for pname in selected_products:
 
     with c2:
         if p["is_discount"]:
-            st.success("할인 중")
+            st.success("현재(마지막 관측일 기준) 할인 중")
         else:
             st.info("정상가")
 
@@ -568,6 +571,10 @@ def classify_intent(q: str):
     if "복원" in q:
         return "RESTORE"
 
+    if "정상가" in q and "변동" in q:
+        return "NORMAL_CHANGE"
+
+
     return "UNKNOWN"
 
 
@@ -639,12 +646,77 @@ def execute_rule(intent, question, df_summary):
     # 4️⃣ 최저가 제품
     # ---------------------------------
     if intent == "PRICE_MIN":
-        df = df_work.sort_values("current_unit_price")
-        if df.empty:
-            return None
 
-        top = df.iloc[0]
-        return f"가장 저렴한 제품은 '{top['product_name']}'이며 {float(top['current_unit_price']):,.1f}원입니다."
+        # 1️⃣ 전체 이벤트 기준 최저가 계산
+        res = (
+            supabase.table("product_all_events")
+            .select("product_url, unit_price, date")
+            .execute()
+        )
+    
+        if not res.data:
+            return None
+    
+        df = pd.DataFrame(res.data)
+        df["unit_price"] = df["unit_price"].astype(float)
+    
+        min_price = df["unit_price"].min()
+    
+        df_min = df[df["unit_price"] == min_price]
+    
+        if df_min.empty:
+            return None
+    
+        results = []
+    
+        for _, row in df_min.iterrows():
+    
+            product_url = row["product_url"]
+            price_date = row["date"]
+    
+            product_row = df_summary[
+                df_summary["product_url"] == product_url
+            ]
+    
+            if product_row.empty:
+                continue
+    
+            pname = product_row.iloc[0]["product_name"]
+    
+            # 2️⃣ 할인기간 조회
+            res_discount = (
+                supabase.table("discount_periods")
+                .select("discount_start_date, discount_end_date, sale_price")
+                .eq("product_name", pname)
+                .execute()
+            )
+    
+            discount_info = None
+    
+            if res_discount.data:
+                df_discount = pd.DataFrame(res_discount.data)
+    
+                # 최저가와 일치하는 할인 구간 찾기
+                df_match = df_discount[
+                    df_discount["sale_price"] == min_price
+                ]
+    
+                if not df_match.empty:
+                    start = df_match.iloc[0]["discount_start_date"]
+                    end = df_match.iloc[0]["discount_end_date"]
+                    discount_info = f"할인기간: {start} ~ {end}"
+    
+            if discount_info:
+                results.append(
+                    f"- {pname} / {min_price:,.1f}원\n  {discount_info}"
+                )
+            else:
+                results.append(
+                    f"- {pname} / {min_price:,.1f}원 (정상가 기준)"
+                )
+    
+        return "최저가 제품 목록:\n" + "\n".join(results)
+
 
     # ---------------------------------
     # 5️⃣ 최고가 제품
@@ -766,9 +838,53 @@ def execute_rule(intent, question, df_summary):
             f"변동폭은 {top_value:,.1f}원입니다."
         )
 
+
+    
+    # ---------------------------------
+    # 10️⃣ 정상가 변동 
+    # ---------------------------------
+
+    if intent == "NORMAL_CHANGE":
+
+    start_date = extract_period(question)
+
+    query = supabase.table("product_normal_price_events").select("*")
+
+    if start_date:
+        query = query.gte("date", start_date.strftime("%Y-%m-%d"))
+
+    res = query.order("date", desc=True).execute()
+
+    if not res.data:
+        return "해당 기간 내 정상가 변동이 없습니다."
+
+    df = pd.DataFrame(res.data)
+
+    results = []
+
+    for _, row in df.iterrows():
+
+        product_row = df_summary[
+            df_summary["product_url"] == row["product_url"]
+        ]
+
+        if product_row.empty:
+            continue
+
+        pname = product_row.iloc[0]["product_name"]
+
+        results.append(
+            f"- {pname} / {row['prev_price']:,.0f}원 → "
+            f"{row['date']}에 {row['normal_price']:,.0f}원 "
+            f"({row['price_diff']:+,.0f}원)"
+        )
+
+    return "기간 내 정상가 변동 제품 목록:\n" + "\n".join(results)
+    
     # ---------------------------------
     # 10️⃣ Rule 미적용 → LLM fallback
     # ---------------------------------
+    
     return None
 
 # -------------------------
@@ -817,6 +933,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
 
