@@ -338,7 +338,9 @@ for pname in selected_products:
 # =========================
 # 8-1️⃣ 개당 가격 타임라인 비교 차트
 # =========================
+
 if timeline_rows:
+
     df_timeline = pd.concat(timeline_rows, ignore_index=True)
 
     base_line = (
@@ -358,35 +360,69 @@ if timeline_rows:
 
     layers = [base_line]
 
-    # 🔥 lifecycle 마커 추가
+    # ---------------------------------
+    # 🔥 lifecycle 이벤트 마커 + 텍스트
+    # ---------------------------------
     if lifecycle_rows:
+
         df_life_all = pd.concat(lifecycle_rows, ignore_index=True)
 
-        icon_color = {
-            "NEW_PRODUCT": "green",
-            "OUT_OF_STOCK": "red",
-            "RESTOCK": "orange",
+        icon_config = {
+            "NEW_PRODUCT": {"color": "green", "label": "NEW"},
+            "OUT_OF_STOCK": {"color": "red", "label": "품절"},
+            "RESTOCK": {"color": "orange", "label": "복원"},
         }
 
-        for event_type, color in icon_color.items():
-            df_filtered = df_life_all[df_life_all["lifecycle_event"] == event_type]
+        for event_type, cfg in icon_config.items():
 
-            if not df_filtered.empty:
-                layer = (
-                    alt.Chart(df_filtered)
-                    .mark_point(size=200, shape="triangle-up", color=color)
-                    .encode(
-                        x="event_date:T",
-                        tooltip=[
-                            alt.Tooltip("product_name:N", title="제품"),
-                            alt.Tooltip("event_date:T", title="날짜"),
-                            alt.Tooltip("lifecycle_event:N", title="이벤트"),
-                        ],
-                    )
+            df_filtered = df_life_all[
+                df_life_all["lifecycle_event"] == event_type
+            ]
+
+            if df_filtered.empty:
+                continue
+
+            # 1️⃣ 마커
+            point_layer = (
+                alt.Chart(df_filtered)
+                .mark_point(
+                    size=200,
+                    shape="triangle-up",
+                    color=cfg["color"],
                 )
-                layers.append(layer)
+                .encode(
+                    x="event_date:T",
+                    tooltip=[
+                        alt.Tooltip("product_name:N", title="제품"),
+                        alt.Tooltip("event_date:T", title="날짜"),
+                        alt.Tooltip("lifecycle_event:N", title="이벤트"),
+                    ],
+                )
+            )
 
-    chart = alt.layer(*layers).properties(height=420).interactive()
+            # 2️⃣ 텍스트 라벨
+            text_layer = (
+                alt.Chart(df_filtered)
+                .mark_text(
+                    dy=-15,
+                    fontSize=11,
+                    fontWeight="bold",
+                    color=cfg["color"],
+                )
+                .encode(
+                    x="event_date:T",
+                    text=alt.value(cfg["label"]),
+                )
+            )
+
+            layers.append(point_layer)
+            layers.append(text_layer)
+
+    chart = (
+        alt.layer(*layers)
+        .properties(height=420)
+        .interactive()
+    )
 
     st.altair_chart(chart, use_container_width=True)
 
@@ -415,10 +451,17 @@ for pname in selected_products:
             st.info("정상가")
 
     with c3:
-        if p["is_new_product"]:
+        df_life = load_lifecycle_events(p["product_url"])
+        has_new = (
+            not df_life.empty and
+            (df_life["lifecycle_event"] == "NEW_PRODUCT").any()
+        )
+    
+        if has_new:
             st.warning("🆕 신제품")
         else:
             st.caption(f"관측 시작일\n{p['first_seen_date']}")
+
 
     with c4:
         st.caption(f"마지막 관측일\n{p['last_seen_date']}")
@@ -513,11 +556,17 @@ def classify_intent(q: str):
     if "비싼" in q or "최고가" in q:
         return "PRICE_MAX"
 
-    if "오른" in q or "상승" in q:
+    if any(word in q for word in ["오른", "상승", "올랐", "증가"]):
         return "PRICE_UP"
 
     if "변동" in q or "많이 바뀐" in q:
         return "VOLATILITY"
+
+    if "품절" in q:
+        return "OUT"
+
+    if "복원" in q:
+        return "RESTORE"
 
     return "UNKNOWN"
 
@@ -564,30 +613,124 @@ def execute_rule(intent, question, df_summary):
 
     df_work = df_summary.copy()
 
-    # Brew Type 조건 반영
+    # ---------------------------------
+    # 1️⃣ Brew Type 조건 반영
+    # ---------------------------------
     brew_condition = extract_brew_type(question, df_summary)
     if brew_condition:
         df_work = df_work[df_work["brew_type_kr"] == brew_condition]
 
+    # ---------------------------------
+    # 2️⃣ 기간 조건 추출
+    # ---------------------------------
     start_date = extract_period(question)
 
-    # 1️⃣ 현재 할인
+    # ---------------------------------
+    # 3️⃣ 현재 할인 제품
+    # ---------------------------------
     if intent == "DISCOUNT" and not start_date:
         df = df_work[df_work["is_discount"] == True]
         if df.empty:
             return None
+
         return "현재 할인 중 제품:\n- " + "\n- ".join(df["product_name"].tolist())
 
-    # 2️⃣ 최저가
+    # ---------------------------------
+    # 4️⃣ 최저가 제품
+    # ---------------------------------
     if intent == "PRICE_MIN":
         df = df_work.sort_values("current_unit_price")
         if df.empty:
             return None
+
         top = df.iloc[0]
         return f"가장 저렴한 제품은 '{top['product_name']}'이며 {float(top['current_unit_price']):,.1f}원입니다."
 
-    # 3️⃣ 변동성 (기간 포함)
+    # ---------------------------------
+    # 5️⃣ 최고가 제품
+    # ---------------------------------
+    if intent == "PRICE_MAX":
+        df = df_work.sort_values("current_unit_price", ascending=False)
+        if df.empty:
+            return None
+
+        top = df.iloc[0]
+        return f"가장 비싼 제품은 '{top['product_name']}'이며 {float(top['current_unit_price']):,.1f}원입니다."
+
+    # ---------------------------------
+    # 6️⃣ 최근 신제품
+    # ---------------------------------
+    if intent == "NEW":
+
+        res = (
+            supabase.table("product_lifecycle_events")
+            .select("product_url")
+            .eq("lifecycle_event", "NEW_PRODUCT")
+            .execute()
+        )
+
+        if not res.data:
+            return None
+
+        urls = [r["product_url"] for r in res.data]
+        df = df_work[df_work["product_url"].isin(urls)]
+
+        if df.empty:
+            return None
+
+        return "최근 신제품:\n- " + "\n- ".join(df["product_name"].tolist())
+
+    # ---------------------------------
+    # 7️⃣ 최근 품절 제품
+    # ---------------------------------
+    if intent == "OUT":
+
+        res = (
+            supabase.table("product_lifecycle_events")
+            .select("product_url")
+            .eq("lifecycle_event", "OUT_OF_STOCK")
+            .execute()
+        )
+
+        if not res.data:
+            return None
+
+        urls = [r["product_url"] for r in res.data]
+        df = df_work[df_work["product_url"].isin(urls)]
+
+        if df.empty:
+            return None
+
+        return "최근 품절 제품:\n- " + "\n- ".join(df["product_name"].tolist())
+
+    # ---------------------------------
+    # 8️⃣ 최근 복원 제품
+    # ---------------------------------
+    if intent == "RESTORE":
+
+        res = (
+            supabase.table("product_lifecycle_events")
+            .select("product_url")
+            .eq("lifecycle_event", "RESTOCK")
+            .execute()
+        )
+
+        if not res.data:
+            return None
+
+        urls = [r["product_url"] for r in res.data]
+        df = df_work[df_work["product_url"].isin(urls)]
+
+        if df.empty:
+            return None
+
+        return "최근 복원된 제품:\n- " + "\n- ".join(df["product_name"].tolist())
+
+    # ---------------------------------
+    # 9️⃣ 가격 변동폭 (기간 포함)
+    # ---------------------------------
     if intent == "VOLATILITY" and start_date:
+
         res = (
             supabase.table("product_all_events")
             .select("product_url, unit_price, date")
@@ -613,14 +756,20 @@ def execute_rule(intent, question, df_summary):
         top_url = volatility.index[0]
         top_value = volatility.iloc[0]
 
-        row = df_summary[df_summary["product_url"] == top_url]
+        row = df_work[df_work["product_url"] == top_url]
         if row.empty:
             return None
 
-        return f"최근 기간 가격 변동 폭이 가장 큰 제품은 '{row.iloc[0]['product_name']}'이며 변동폭은 {top_value:,.1f}원입니다."
+        return (
+            f"최근 기간 가격 변동 폭이 가장 큰 제품은 "
+            f"'{row.iloc[0]['product_name']}'이며 "
+            f"변동폭은 {top_value:,.1f}원입니다."
+        )
 
+    # ---------------------------------
+    # 10️⃣ Rule 미적용 → LLM fallback
+    # ---------------------------------
     return None
-
 
 # -------------------------
 # 5️⃣ LLM fallback
@@ -668,6 +817,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
 
