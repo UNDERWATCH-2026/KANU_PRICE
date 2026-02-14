@@ -175,30 +175,50 @@ if search_mode == "키워드 검색":
 else:
     col1, col2, col3, col4 = st.columns(4)
 
-    # 1️⃣ 브랜드
+    # 🔹 1️⃣ 브랜드
     with col1:
         brands = options_from(df_all, "brand")
         sel_brand = st.selectbox("브랜드", ["(전체)"] + brands)
-    df1 = df_all if sel_brand == "(전체)" else df_all[df_all["brand"] == sel_brand]
 
-    # 2️⃣ 카테고리1
+    # 🔹 2️⃣ 카테고리1
     with col2:
-        cat1s = options_from(df1, "category1")
+        cat1s = options_from(df_all, "category1")
         sel_cat1 = st.selectbox("카테고리1", ["(전체)"] + cat1s)
-    df2 = df1 if sel_cat1 == "(전체)" else df1[df1["category1"] == sel_cat1]
 
-    # 3️⃣ 카테고리2
+    # 🔹 3️⃣ 카테고리2
     with col3:
-        cat2s = options_from(df2, "category2")
+        cat2s = options_from(df_all, "category2")
         sel_cat2 = st.selectbox("카테고리2", ["(전체)"] + cat2s)
-    df3 = df2 if sel_cat2 == "(전체)" else df2[df2["category2"] == sel_cat2]
 
-    # 4️⃣ Brew Type (한글 기준 UI 노출)
+    # 🔹 4️⃣ Brew Type (df_all 기준)
     with col4:
-        brew_types = options_from(df3, "brew_type_kr")
+        brew_types = options_from(df_all, "brew_type_kr")
         sel_brew = st.selectbox("Brew Type", ["(전체)"] + brew_types)
 
-    candidates_df = df3 if sel_brew == "(전체)" else df3[df3["brew_type_kr"] == sel_brew]
+    # =========================
+    # 🔥 OR 기반 필터 로직
+    # =========================
+
+    mask = pd.Series(False, index=df_all.index)
+
+    if sel_brand != "(전체)":
+        mask |= df_all["brand"] == sel_brand
+
+    if sel_cat1 != "(전체)":
+        mask |= df_all["category1"] == sel_cat1
+
+    if sel_cat2 != "(전체)":
+        mask |= df_all["category2"] == sel_cat2
+
+    if sel_brew != "(전체)":
+        mask |= df_all["brew_type_kr"] == sel_brew
+
+    # 아무것도 선택 안 한 경우 전체 보여줌
+    if not mask.any():
+        candidates_df = df_all.copy()
+    else:
+        candidates_df = df_all[mask]
+
 
 
 # =========================
@@ -402,6 +422,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, "UNKNOWN", True)  # 🔥 여기
         st.success(answer)
+
 
 
 
