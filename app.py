@@ -176,11 +176,8 @@ else:
 
     st.markdown("### 🔍 조회 조건")
 
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3 = st.columns(3)
 
-    # -------------------------
-    # 1️⃣ 제품 필터 영역
-    # -------------------------
     with col1:
         brands = options_from(df_all, "brand")
         sel_brand = st.selectbox("브랜드", ["(전체)"] + brands)
@@ -197,23 +194,7 @@ else:
         cat2s = options_from(df2, "category2")
         sel_cat2 = st.selectbox("카테고리2", ["(전체)"] + cat2s)
 
-    product_filtered = df2 if sel_cat2 == "(전체)" else df2[df2["category2"] == sel_cat2]
-
-
-    # -------------------------
-    # 2️⃣ 전략 조건 영역 (같은 줄이지만 논리적으로 분리)
-    # -------------------------
-    with col4:
-        brew_types = options_from(df_all, "brew_type_kr")
-        sel_brew = st.selectbox("Brew Type", ["(전체)"] + brew_types)
-
-    if sel_brew != "(전체)":
-        candidates_df = product_filtered[
-            product_filtered["brew_type_kr"] == sel_brew
-        ]
-    else:
-        candidates_df = product_filtered
-
+    candidates_df = df2 if sel_cat2 == "(전체)" else df2[df2["category2"] == sel_cat2]
 
 # =========================
 # 7️⃣ 제품 선택
@@ -339,87 +320,192 @@ for pname in selected_products:
 
 
 # =========================
-# 9️⃣ 자연어 질문 (Rule Engine 1차)
+# 9️⃣ 자연어 질문 (Rule → LLM fallback)
 # =========================
 st.divider()
 st.subheader("🤖 가격 인사이트 질문")
 
 question = st.text_input(
     "자연어로 질문하세요",
-    placeholder="예: 최근 할인 많이 한 제품은?",
+    placeholder="예: 에스프레소 중 최저가 / 최근 3개월 변동폭 큰 제품",
 )
 
-def rule_based_answer(q: str, df_summary: pd.DataFrame):
+from datetime import datetime, timedelta
+
+
+# -------------------------
+# 1️⃣ 의도 분류
+# -------------------------
+def classify_intent(q: str):
     q = q.lower()
 
-    # 1️⃣ 지금 할인 중
-    if "할인" in q and "지금" in q:
-        df = df_summary[df_summary["is_discount"] == True]
+    if "할인" in q:
+        return "DISCOUNT"
+
+    if "신제품" in q:
+        return "NEW"
+
+    if "가장 싼" in q or "최저가" in q:
+        return "PRICE_MIN"
+
+    if "비싼" in q or "최고가" in q:
+        return "PRICE_MAX"
+
+    if "오른" in q or "상승" in q:
+        return "PRICE_UP"
+
+    if "변동" in q or "많이 바뀐" in q:
+        return "VOLATILITY"
+
+    return "UNKNOWN"
+
+
+# -------------------------
+# 2️⃣ 기간 추출
+# -------------------------
+def extract_period(q: str):
+    today = datetime.today()
+
+    if "최근 7일" in q:
+        return today - timedelta(days=7)
+
+    if "최근 한달" in q or "최근 30일" in q:
+        return today - timedelta(days=30)
+
+    if "최근 3개월" in q:
+        return today - timedelta(days=90)
+
+    if "최근 1년" in q:
+        return today - timedelta(days=365)
+
+    return None
+
+
+# -------------------------
+# 3️⃣ Brew Type 추출
+# -------------------------
+def extract_brew_type(q: str, df_all: pd.DataFrame):
+    q = q.lower()
+    brew_list = df_all["brew_type_kr"].dropna().unique().tolist()
+
+    for brew in brew_list:
+        if brew and brew.lower() in q:
+            return brew
+
+    return None
+
+
+# -------------------------
+# 4️⃣ Rule 실행
+# -------------------------
+def execute_rule(intent, question, df_summary):
+
+    df_work = df_summary.copy()
+
+    # Brew Type 조건 반영
+    brew_condition = extract_brew_type(question, df_summary)
+    if brew_condition:
+        df_work = df_work[df_work["brew_type_kr"] == brew_condition]
+
+    start_date = extract_period(question)
+
+    # 1️⃣ 현재 할인
+    if intent == "DISCOUNT" and not start_date:
+        df = df_work[df_work["is_discount"] == True]
         if df.empty:
-            return "현재 할인 중인 제품이 없습니다."
+            return None
         return "현재 할인 중 제품:\n- " + "\n- ".join(df["product_name"].tolist())
 
-    # 2️⃣ 신제품
-    if "신제품" in q:
-        df = df_summary[df_summary["is_new_product"] == True]
+    # 2️⃣ 최저가
+    if intent == "PRICE_MIN":
+        df = df_work.sort_values("current_unit_price")
         if df.empty:
-            return "현재 신제품으로 분류된 제품이 없습니다."
-        return "신제품:\n- " + "\n- ".join(df["product_name"].tolist())
-
-    # 3️⃣ 가장 싼 제품
-    if "가장 싼" in q or "최저가" in q:
-        df = df_summary.sort_values("current_unit_price")
-        if df.empty:
-            return "가격 정보가 없습니다."
+            return None
         top = df.iloc[0]
         return f"가장 저렴한 제품은 '{top['product_name']}'이며 {float(top['current_unit_price']):,.1f}원입니다."
 
-    # 4️⃣ 가격 가장 많이 오른 제품
-    if "가격" in q and "오른" in q:
+    # 3️⃣ 변동성 (기간 포함)
+    if intent == "VOLATILITY" and start_date:
         res = (
             supabase.table("product_all_events")
-            .select("product_url")
-            .eq("event_type", "PRICE_UP")
+            .select("product_url, unit_price, date")
+            .gte("date", start_date.strftime("%Y-%m-%d"))
             .execute()
         )
+
         if not res.data:
-            return "가격 상승 이벤트가 없습니다."
-        df_up = pd.DataFrame(res.data)
-        count = df_up["product_url"].value_counts()
-        top_url = count.index[0]
+            return None
+
+        df = pd.DataFrame(res.data)
+        df["unit_price"] = df["unit_price"].astype(float)
+
+        volatility = (
+            df.groupby("product_url")["unit_price"]
+            .agg(lambda x: x.max() - x.min())
+            .sort_values(ascending=False)
+        )
+
+        if volatility.empty:
+            return None
+
+        top_url = volatility.index[0]
+        top_value = volatility.iloc[0]
 
         row = df_summary[df_summary["product_url"] == top_url]
         if row.empty:
-            return "데이터 매칭 실패"
-        return f"가격 상승 이벤트가 가장 많은 제품은 '{row.iloc[0]['product_name']}'입니다."
+            return None
 
-    return None  # rule로 처리 못함
+        return f"최근 기간 가격 변동 폭이 가장 큰 제품은 '{row.iloc[0]['product_name']}'이며 변동폭은 {top_value:,.1f}원입니다."
+
+    return None
 
 
+# -------------------------
+# 5️⃣ LLM fallback
+# -------------------------
+def llm_fallback(question: str, df_summary: pd.DataFrame):
+    context = df_summary[
+        ["product_name", "current_unit_price", "is_discount", "is_new_product", "brew_type_kr"]
+    ].to_dict(orient="records")
+
+    prompt = f"""
+    당신은 커피 캡슐 가격 분석 전문가입니다.
+    아래 데이터 기반으로 질문에 답하세요.
+
+    데이터:
+    {context}
+
+    질문:
+    {question}
+    """
+
+    from openai import OpenAI
+    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.2,
+    )
+
+    return response.choices[0].message.content
+
+
+# -------------------------
+# 6️⃣ 오케스트레이션
+# -------------------------
 if question:
-    q_type = classify_question(question)
+    intent = classify_intent(question)
+    answer = execute_rule(intent, question, df_all)
 
-    if q_type != "UNKNOWN":
-        answer = execute_rule(q_type, question, df_all)
-
-        if answer:
-            save_question_log(question, q_type, False)  # 🔥 여기
-            st.success(answer)
-        else:
-            with st.spinner("AI 분석 중..."):
-                answer = llm_fallback(question, df_all)
-            save_question_log(question, q_type, True)   # 🔥 여기
-            st.success(answer)
-
-    else:
-        with st.spinner("AI 분석 중..."):
-            answer = llm_fallback(question, df_all)
-        save_question_log(question, "UNKNOWN", True)  # 🔥 여기
+    if answer:
+        save_question_log(question, intent, False)
         st.success(answer)
-
-
-
-
+    else:
+        with st.spinner("분석 중..."):
+            answer = llm_fallback(question, df_all)
+        save_question_log(question, intent, True)
+        st.success(answer)
 
 
 
