@@ -303,3 +303,69 @@ for pname in selected_products:
 
     st.divider()
 
+
+# =========================
+# 9️⃣ 자연어 질문 (Rule Engine 1차)
+# =========================
+st.divider()
+st.subheader("🤖 가격 인사이트 질문")
+
+question = st.text_input(
+    "자연어로 질문하세요",
+    placeholder="예: 최근 할인 많이 한 제품은?",
+)
+
+def rule_based_answer(q: str, df_summary: pd.DataFrame):
+    q = q.lower()
+
+    # 1️⃣ 지금 할인 중
+    if "할인" in q and "지금" in q:
+        df = df_summary[df_summary["is_discount"] == True]
+        if df.empty:
+            return "현재 할인 중인 제품이 없습니다."
+        return "현재 할인 중 제품:\n- " + "\n- ".join(df["product_name"].tolist())
+
+    # 2️⃣ 신제품
+    if "신제품" in q:
+        df = df_summary[df_summary["is_new_product"] == True]
+        if df.empty:
+            return "현재 신제품으로 분류된 제품이 없습니다."
+        return "신제품:\n- " + "\n- ".join(df["product_name"].tolist())
+
+    # 3️⃣ 가장 싼 제품
+    if "가장 싼" in q or "최저가" in q:
+        df = df_summary.sort_values("current_unit_price")
+        if df.empty:
+            return "가격 정보가 없습니다."
+        top = df.iloc[0]
+        return f"가장 저렴한 제품은 '{top['product_name']}'이며 {float(top['current_unit_price']):,.1f}원입니다."
+
+    # 4️⃣ 가격 가장 많이 오른 제품
+    if "가격" in q and "오른" in q:
+        res = (
+            supabase.table("product_all_events")
+            .select("product_url")
+            .eq("event_type", "PRICE_UP")
+            .execute()
+        )
+        if not res.data:
+            return "가격 상승 이벤트가 없습니다."
+        df_up = pd.DataFrame(res.data)
+        count = df_up["product_url"].value_counts()
+        top_url = count.index[0]
+
+        row = df_summary[df_summary["product_url"] == top_url]
+        if row.empty:
+            return "데이터 매칭 실패"
+        return f"가격 상승 이벤트가 가장 많은 제품은 '{row.iloc[0]['product_name']}'입니다."
+
+    return None  # rule로 처리 못함
+
+
+if question:
+    answer = rule_based_answer(question, df_all)
+
+    if answer:
+        st.success(answer)
+    else:
+        st.warning("Rule 엔진으로 처리 불가 → LLM fallback 필요")
