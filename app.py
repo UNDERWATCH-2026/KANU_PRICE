@@ -49,6 +49,17 @@ def load_events(product_url: str):
     )
     return pd.DataFrame(res.data)
 
+@st.cache_data(ttl=300)
+def load_lifecycle_events(product_url: str):
+    res = (
+        supabase.table("product_lifecycle_events")
+        .select("date, lifecycle_event")
+        .eq("product_url", product_url)
+        .order("date", desc=True)
+        .execute()
+    )
+    return pd.DataFrame(res.data)
+
 # =========================
 # 2-1️⃣ 질문 로그 저장
 # =========================
@@ -287,24 +298,10 @@ st.subheader(f"📊 조회 결과 ({len(selected_products)}개 제품)")
 # =========================
 # 8-1️⃣ 개당 가격 타임라인 비교 차트
 # =========================
-timeline_rows = []
-
-for pname in selected_products:
-    row = df_all[df_all["product_name"] == pname].iloc[0]
-    df_ev = load_events(row["product_url"])
-    if df_ev.empty:
-        continue
-
-    tmp = df_ev.copy()
-    tmp["product_name"] = pname
-    tmp["event_date"] = pd.to_datetime(tmp["date"])
-    tmp["unit_price"] = tmp["unit_price"].astype(float)
-
-    timeline_rows.append(tmp[["product_name", "event_date", "unit_price"]])
-
 if timeline_rows:
     df_timeline = pd.concat(timeline_rows, ignore_index=True)
-    chart = (
+
+    base_line = (
         alt.Chart(df_timeline)
         .mark_line(point=True)
         .encode(
@@ -317,12 +314,45 @@ if timeline_rows:
                 alt.Tooltip("unit_price:Q", title="개당 가격", format=",.1f"),
             ],
         )
-        .properties(height=420)
-        .interactive()
     )
+
+    layers = [base_line]
+
+    # 🔥 lifecycle 마커 추가
+    if lifecycle_rows:
+        df_life_all = pd.concat(lifecycle_rows, ignore_index=True)
+
+        icon_color = {
+            "NEW_PRODUCT": "green",
+            "OUT_OF_STOCK": "red",
+            "RESTOCK": "orange",
+        }
+
+        for event_type, color in icon_color.items():
+            df_filtered = df_life_all[df_life_all["lifecycle_event"] == event_type]
+
+            if not df_filtered.empty:
+                layer = (
+                    alt.Chart(df_filtered)
+                    .mark_point(size=200, shape="triangle-up", color=color)
+                    .encode(
+                        x="event_date:T",
+                        tooltip=[
+                            alt.Tooltip("product_name:N", title="제품"),
+                            alt.Tooltip("event_date:T", title="날짜"),
+                            alt.Tooltip("lifecycle_event:N", title="이벤트"),
+                        ],
+                    )
+                )
+                layers.append(layer)
+
+    chart = alt.layer(*layers).properties(height=420).interactive()
+
     st.altair_chart(chart, use_container_width=True)
+
 else:
     st.info("비교 가능한 이벤트 데이터가 없습니다.")
+
 
 st.divider()
 
@@ -361,14 +391,60 @@ for pname in selected_products:
 
     # 이벤트 히스토리
     with st.expander("📅 이벤트 히스토리"):
-        df_ev = load_events(p["product_url"])
-        if not df_ev.empty:
-            df_ev["date"] = pd.to_datetime(df_ev["date"]).dt.date
-            st.dataframe(df_ev, use_container_width=True, hide_index=True)
-        else:
-            st.caption("이벤트 없음")
 
-    st.divider()
+    df_price = load_events(p["product_url"])
+    df_life = load_lifecycle_events(p["product_url"])
+
+    frames = []
+
+    if not df_price.empty:
+        df_price["event_type"] = df_price["event_type"]
+        frames.append(
+            df_price[["date", "event_type"]]
+        )
+
+    if not df_life.empty:
+        df_life = df_life[df_life["lifecycle_event"].notna()]
+        df_life = df_life.rename(columns={"lifecycle_event": "event_type"})
+        frames.append(
+            df_life[["date", "event_type"]]
+        )
+
+    if frames:
+        df_all_events = pd.concat(frames)
+        df_all_events["date"] = pd.to_datetime(df_all_events["date"]).dt.date
+        df_all_events = df_all_events.sort_values("date", ascending=False)
+    
+        # 🔥 아이콘 매핑
+        icon_map = {
+            "DISCOUNT": "💸 할인",
+            "NORMAL": "💰 정상가",
+            "NEW_PRODUCT": "🆕 신제품",
+            "OUT_OF_STOCK": "❌ 품절",
+            "RESTOCK": "🔄 복원",
+        }
+    
+        df_all_events["event_type"] = (
+            df_all_events["event_type"]
+            .map(icon_map)
+            .fillna(df_all_events["event_type"])
+        )
+    
+        # 🔥 컬럼명 변경 (여기에 넣음)
+        df_all_events = df_all_events.rename(columns={
+            "event_type": "이벤트",
+            "date": "날짜"
+        })
+    
+        st.dataframe(
+            df_all_events,
+            use_container_width=True,
+            hide_index=True
+        )
+
+    else:
+        st.caption("이벤트 없음")
+divider()
 
 
 # =========================
@@ -558,6 +634,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
 
