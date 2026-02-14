@@ -643,79 +643,54 @@ def execute_rule(intent, question, df_summary):
         return "현재 할인 중 제품:\n- " + "\n- ".join(df["product_name"].tolist())
 
     # ---------------------------------
-    # 4️⃣ 최저가 제품
+    # 4️⃣ 최저가 + 기간 묶기
     # ---------------------------------
     if intent == "PRICE_MIN":
-
-        # 1️⃣ 전체 이벤트 기준 최저가 계산
-        res = (
-            supabase.table("product_all_events")
-            .select("product_url, unit_price, date")
-            .execute()
-        )
     
-        if not res.data:
-            return None
-    
-        df = pd.DataFrame(res.data)
-        df["unit_price"] = df["unit_price"].astype(float)
-    
-        min_price = df["unit_price"].min()
-    
-        df_min = df[df["unit_price"] == min_price]
+        # 1. 전체 중 최저가 계산
+        min_price = df_work["current_unit_price"].min()
+        df_min = df_work[df_work["current_unit_price"] == min_price]
     
         if df_min.empty:
             return None
     
-        results = []
+        output_lines = []
     
         for _, row in df_min.iterrows():
     
-            product_url = row["product_url"]
-            price_date = row["date"]
-    
-            product_row = df_summary[
-                df_summary["product_url"] == product_url
-            ]
-    
-            if product_row.empty:
-                continue
-    
-            pname = product_row.iloc[0]["product_name"]
-    
-            # 2️⃣ 할인기간 조회
-            res_discount = (
-                supabase.table("discount_periods")
-                .select("discount_start_date, discount_end_date, sale_price")
-                .eq("product_name", pname)
+            # 2. 해당 제품의 과거 가격 이벤트 불러오기
+            res = (
+                supabase.table("product_all_events")
+                .select("date, unit_price")
+                .eq("product_url", row["product_url"])
                 .execute()
             )
     
-            discount_info = None
+            if not res.data:
+                continue
     
-            if res_discount.data:
-                df_discount = pd.DataFrame(res_discount.data)
+            df_hist = pd.DataFrame(res.data)
+            df_hist["date"] = pd.to_datetime(df_hist["date"])
+            df_hist["unit_price"] = df_hist["unit_price"].astype(float)
     
-                # 최저가와 일치하는 할인 구간 찾기
-                df_match = df_discount[
-                    df_discount["sale_price"] == min_price
-                ]
+            # 3. 최저가 기록한 날짜만 필터
+            df_low = df_hist[df_hist["unit_price"] == min_price]
     
-                if not df_match.empty:
-                    start = df_match.iloc[0]["discount_start_date"]
-                    end = df_match.iloc[0]["discount_end_date"]
-                    discount_info = f"할인기간: {start} ~ {end}"
+            if df_low.empty:
+                continue
     
-            if discount_info:
-                results.append(
-                    f"- {pname} / {min_price:,.1f}원\n  {discount_info}"
-                )
-            else:
-                results.append(
-                    f"- {pname} / {min_price:,.1f}원 (정상가 기준)"
-                )
+            start_date = df_low["date"].min().date()
+            end_date = df_low["date"].max().date()
     
-        return "최저가 제품 목록:\n" + "\n".join(results)
+            output_lines.append(
+                f"- {row['product_name']} / {min_price:,.1f}원\n"
+                f"  최저가 기간: {start_date} ~ {end_date}"
+            )
+    
+        if not output_lines:
+            return None
+    
+        return "최저가 제품 목록:\n\n" + "\n\n".join(output_lines)
 
 
     # ---------------------------------
@@ -933,6 +908,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
 
