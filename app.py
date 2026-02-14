@@ -33,6 +33,7 @@ def load_product_summary():
         "event_count",
         "product_event_status",
         "is_new_product",
+        "brew_type_kr",  # 🔥 추가
     ]
     res = supabase.table("product_price_summary_enriched").select(", ".join(cols)).execute()
     return pd.DataFrame(res.data)
@@ -189,6 +190,9 @@ if search_mode == "키워드 검색":
     # -------------------------
     # 🔥 키워드별 결과 출력
     # -------------------------
+
+    st.subheader("📦 비교할 제품 선택")
+
     if st.session_state.keyword_results:
 
         all_candidates = []
@@ -261,64 +265,21 @@ else:
 
     candidates_df = df2 if sel_cat2 == "(전체)" else df2[df2["category2"] == sel_cat2]
 
-# =========================
-# 7️⃣ 제품 선택
-# =========================
 
-
-# 조회 버튼을 누르기 전에는 제품 선택 영역을 렌더링하지 않음
-if not st.session_state.show_results:
-    st.info("조건을 설정한 뒤 '조회하기'를 눌러주세요.")
-    st.stop()
-
-# candidates_df 방어
-if candidates_df is None or candidates_df.empty:
-    st.warning("조건에 맞는 제품이 없습니다.")
-    st.stop()
-
-if "product_name" not in candidates_df.columns:
-    st.error("제품 데이터 구조 오류 (product_name 컬럼 없음)")
-    st.stop()
-
-
-st.subheader("📦 비교할 제품 선택")
-
-
-
-
-# 제품 리스트 생성
-product_list = sorted(
-    candidates_df["product_name"].dropna().unique().tolist()
-)
-
-if not product_list:
-    st.warning("선택 가능한 제품이 없습니다.")
-    st.stop()
-
-
-# 체크박스 출력
-for pname in product_list:
-    st.checkbox(
-        pname,
-        value=pname in st.session_state.selected_products,
-        key=f"chk_{pname}",
-        on_change=toggle_product,
-        args=(pname,),
-    )
-
-
-selected_products = list(st.session_state.selected_products)
-
-if not selected_products:
-    st.info("제품을 선택하세요.")
-    st.stop()
 
 # =========================
 # 8️⃣ 결과 표시
 # =========================
+selected_products = list(st.session_state.selected_products)
+
 if not st.session_state.show_results:
     st.info("제품을 선택한 뒤 ‘조회하기’를 클릭하세요.")
     st.stop()
+
+if not selected_products:
+    st.warning("선택된 제품이 없습니다.")
+    st.stop()
+
 
 st.divider()
 st.subheader(f"📊 조회 결과 ({len(selected_products)}개 제품)")
@@ -597,6 +558,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
 
