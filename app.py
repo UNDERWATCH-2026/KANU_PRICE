@@ -76,6 +76,19 @@ def options_from(df: pd.DataFrame, col: str):
     return sorted(list(dict.fromkeys(vals)))
 
 # =========================
+# 🔧 제품 선택 토글 함수 (전역으로 이동)
+# =========================
+def toggle_product(pname):
+    if "selected_products" not in st.session_state:
+        st.session_state.selected_products = set()
+
+    if pname in st.session_state.selected_products:
+        st.session_state.selected_products.remove(pname)
+    else:
+        st.session_state.selected_products.add(pname)
+
+
+# =========================
 # 4️⃣ 세션 상태
 # =========================
 if "selected_products" not in st.session_state:
@@ -264,12 +277,6 @@ if "product_name" not in candidates_df.columns:
 st.subheader("📦 비교할 제품 선택")
 
 
-# 선택 토글 함수
-def toggle_product(pname):
-    if pname in st.session_state.selected_products:
-        st.session_state.selected_products.remove(pname)
-    else:
-        st.session_state.selected_products.add(pname)
 
 
 # 제품 리스트 생성
@@ -583,6 +590,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
 
