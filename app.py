@@ -846,9 +846,9 @@ def execute_rule(intent, question, df_summary):
 
     if intent == "NORMAL_CHANGE":
 
-    start_date = extract_period(question)
+        start_date = extract_period(question)
 
-    query = supabase.table("product_normal_price_events").select("*")
+        query = supabase.table("product_normal_price_events").select("*")
 
     if start_date:
         query = query.gte("date", start_date.strftime("%Y-%m-%d"))
@@ -933,6 +933,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
 
