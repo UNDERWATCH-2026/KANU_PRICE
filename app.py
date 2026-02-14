@@ -35,7 +35,7 @@ def load_product_summary():
         "is_new_product",
         "brew_type_kr",  # 🔥 추가
     ]
-    res = supabase.table("product_price_summary_enriched").select(", ".join(cols)).execute()
+    res = supabase.table("product_price_summary").select(", ".join(cols)).execute()
     return pd.DataFrame(res.data)
 
 @st.cache_data(ttl=300)
@@ -668,6 +668,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
 
