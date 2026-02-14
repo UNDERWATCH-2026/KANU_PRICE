@@ -80,8 +80,8 @@ def options_from(df: pd.DataFrame, col: str):
 # =========================
 if "selected_products" not in st.session_state:
     st.session_state.selected_products = set()
-if "keyword_searches" not in st.session_state:
-    st.session_state.keyword_searches = []
+if "keyword_results" not in st.session_state:
+    st.session_state.keyword_results = {}
 if "active_mode" not in st.session_state:
     st.session_state.active_mode = "키워드 검색"
 if "show_results" not in st.session_state:
@@ -141,35 +141,80 @@ st.divider()
 st.subheader("🔍 조회 조건")
 candidates_df = pd.DataFrame()
 
+
 # --- A) 키워드 검색 ---
 if search_mode == "키워드 검색":
+
     col_input, col_add, col_reset = st.columns([6, 2, 2])
+
     with col_input:
         keyword_input = st.text_input(
             "제품명 키워드 입력",
-            placeholder="예: 다크, 디카페인",
+            placeholder="예: 스노우, 쥬시",
             label_visibility="collapsed"
         )
+
     with col_add:
         if st.button("🔍 검색 추가", use_container_width=True):
             kw = keyword_input.strip()
-            if kw and kw not in st.session_state.keyword_searches:
-                st.session_state.keyword_searches.append(kw)
+            if kw:
+                mask = _norm_series(df_all["product_name"]).str.contains(kw, case=False)
+                result_df = df_all[mask].copy()
+
+                if not result_df.empty:
+                    st.session_state.keyword_results[kw] = result_df
+
                 st.rerun()
+
     with col_reset:
-        if st.button("🧹 초기화", use_container_width=True):
-            st.session_state.keyword_searches = []
+        if st.button("🧹 전체 초기화", use_container_width=True):
+            st.session_state.keyword_results = {}
             st.session_state.selected_products = set()
             st.session_state.show_results = False
             st.rerun()
 
-    if st.session_state.keyword_searches:
-        mask = pd.Series(False, index=df_all.index)
-        for kw in st.session_state.keyword_searches:
-            mask |= _norm_series(df_all["product_name"]).str.contains(kw, case=False)
-        candidates_df = df_all[mask].copy()
+    # -------------------------
+    # 🔥 키워드별 결과 출력
+    # -------------------------
+    if st.session_state.keyword_results:
+
+        all_candidates = []
+
+        # 최근 검색이 위
+        for kw in reversed(list(st.session_state.keyword_results.keys())):
+
+            st.markdown(f"#### 🔎 '{kw}' 검색 결과")
+
+            col_title, col_delete = st.columns([8, 2])
+
+            with col_delete:
+                if st.button("검색 결과 삭제", key=f"del_{kw}"):
+                    del st.session_state.keyword_results[kw]
+                    st.session_state.selected_products = {
+                        p for p in st.session_state.selected_products
+                        if p not in result_df["product_name"].tolist()
+                    }
+                    st.rerun()
+
+            df_kw = st.session_state.keyword_results[kw]
+            product_list = sorted(df_kw["product_name"].unique().tolist())
+
+            for pname in product_list:
+                st.checkbox(
+                    pname,
+                    value=pname in st.session_state.selected_products,
+                    key=f"chk_{kw}_{pname}",
+                    on_change=toggle_product,
+                    args=(pname,),
+                )
+
+            all_candidates.append(df_kw)
+
+        candidates_df = pd.concat(all_candidates).drop_duplicates()
+
     else:
         st.info("제품명 키워드를 추가하세요.")
+        candidates_df = pd.DataFrame()
 
 # --- B) 필터 선택 ---
 else:
@@ -538,6 +583,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
 
