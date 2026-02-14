@@ -166,7 +166,7 @@ with col_clear:
         st.session_state.show_results = False
 
         # (선택) 키워드 입력값도 초기화하고 싶으면
-        # st.session_state.keyword_input = ""
+        st.session_state.keyword_input = ""
 
         st.rerun()
 
@@ -921,6 +921,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
 
