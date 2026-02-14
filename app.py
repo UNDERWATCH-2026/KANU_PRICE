@@ -49,6 +49,20 @@ def load_events(product_url: str):
     return pd.DataFrame(res.data)
 
 # =========================
+# 2-1️⃣ 질문 로그 저장
+# =========================
+def save_question_log(question: str, q_type: str, used_llm: bool):
+    try:
+        supabase.table("question_logs").insert({
+            "question_text": question,
+            "question_type": q_type,
+            "used_llm": used_llm
+        }).execute()
+    except Exception as e:
+        print("로그 저장 실패:", e)
+
+
+# =========================
 # 3️⃣ 유틸
 # =========================
 def _norm_series(s: pd.Series) -> pd.Series:
@@ -363,9 +377,23 @@ def rule_based_answer(q: str, df_summary: pd.DataFrame):
 
 
 if question:
-    answer = rule_based_answer(question, df_all)
+    q_type = classify_question(question)
 
-    if answer:
-        st.success(answer)
+    if q_type != "UNKNOWN":
+        answer = execute_rule(q_type, question, df_all)
+
+        if answer:
+            save_question_log(question, q_type, False)  # 🔥 여기
+            st.success(answer)
+        else:
+            with st.spinner("AI 분석 중..."):
+                answer = llm_fallback(question, df_all)
+            save_question_log(question, q_type, True)   # 🔥 여기
+            st.success(answer)
+
     else:
-        st.warning("Rule 엔진으로 처리 불가 → LLM fallback 필요")
+        with st.spinner("AI 분석 중..."):
+            answer = llm_fallback(question, df_all)
+        save_question_log(question, "UNKNOWN", True)  # 🔥 여기
+        st.success(answer)
+
