@@ -174,13 +174,13 @@ if search_mode == "키워드 검색":
 # --- B) 필터 선택 ---
 else:
 
-    # =========================
-    # 🔵 1️⃣ 제품 필터 영역
-    # =========================
-    st.markdown("### 📦 제품 필터")
+    st.markdown("### 🔍 조회 조건")
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
 
+    # -------------------------
+    # 1️⃣ 제품 필터 영역
+    # -------------------------
     with col1:
         brands = options_from(df_all, "brand")
         sel_brand = st.selectbox("브랜드", ["(전체)"] + brands)
@@ -200,28 +200,19 @@ else:
     product_filtered = df2 if sel_cat2 == "(전체)" else df2[df2["category2"] == sel_cat2]
 
 
-    st.divider()
-
-
-    # =========================
-    # 🔵 2️⃣ 전략 조건 영역
-    # =========================
-    st.markdown("### 🎯 전략 조건")
-
-    col4 = st.columns(1)[0]
-
+    # -------------------------
+    # 2️⃣ 전략 조건 영역 (같은 줄이지만 논리적으로 분리)
+    # -------------------------
     with col4:
         brew_types = options_from(df_all, "brew_type_kr")
         sel_brew = st.selectbox("Brew Type", ["(전체)"] + brew_types)
 
     if sel_brew != "(전체)":
-        strategy_filtered = product_filtered[
+        candidates_df = product_filtered[
             product_filtered["brew_type_kr"] == sel_brew
         ]
     else:
-        strategy_filtered = product_filtered
-
-    candidates_df = strategy_filtered
+        candidates_df = product_filtered
 
 
 # =========================
@@ -425,6 +416,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, "UNKNOWN", True)  # 🔥 여기
         st.success(answer)
+
 
 
 
