@@ -498,7 +498,7 @@ for pname in selected_products:
     
         if not df_price.empty:
             frames.append(
-                df_price[["date", "event_type"]]
+                df_price[["date", "unit_price", "event_type"]]
             )
     
         if not df_life.empty:
@@ -529,6 +529,7 @@ for pname in selected_products:
     
             df_all_events = df_all_events.rename(columns={
                 "date": "날짜",
+                "unit_price": "개당 가격",
                 "event_type": "이벤트"
             })
     
@@ -921,6 +922,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
 
