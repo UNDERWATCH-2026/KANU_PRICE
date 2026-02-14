@@ -490,7 +490,7 @@ for pname in selected_products:
 
     # 이벤트 히스토리
     with st.expander("📅 이벤트 히스토리"):
-
+    
         df_price = load_events(p["product_url"])
         df_life = load_lifecycle_events(p["product_url"])
     
@@ -504,12 +504,15 @@ for pname in selected_products:
         if not df_life.empty:
             df_life = df_life[df_life["lifecycle_event"].notna()]
             df_life = df_life.rename(columns={"lifecycle_event": "event_type"})
+            df_life["unit_price"] = None   # 🔥 lifecycle에는 가격 없으므로 명시적으로 추가
             frames.append(
-                df_life[["date", "event_type"]]
+                df_life[["date", "unit_price", "event_type"]]
             )
     
         if frames:
-            df_all_events = pd.concat(frames)
+    
+            df_all_events = pd.concat(frames, ignore_index=True)
+    
             df_all_events["date"] = pd.to_datetime(df_all_events["date"]).dt.date
             df_all_events = df_all_events.sort_values("date", ascending=False)
     
@@ -533,10 +536,24 @@ for pname in selected_products:
                 "event_type": "이벤트"
             })
     
-            st.dataframe(df_all_events, use_container_width=True, hide_index=True)
+            # 🔥 숫자 안전 처리
+            if "개당 가격" in df_all_events.columns:
+                df_all_events["개당 가격"] = (
+                    pd.to_numeric(df_all_events["개당 가격"], errors="coerce")
+                    .round(1)
+                )
+    
+            st.dataframe(
+                df_all_events.style.format({
+                    "개당 가격": "{:.1f}"
+                }),
+                use_container_width=True,
+                hide_index=True
+            )
     
         else:
             st.caption("이벤트 없음")
+
 
 st.divider()
 
@@ -833,42 +850,49 @@ def execute_rule(intent, question, df_summary):
     # 10️⃣ 정상가 변동 
     # ---------------------------------
 
+    # ---------------------------------
+# 10️⃣ 정상가 변동
+# ---------------------------------
     if intent == "NORMAL_CHANGE":
-
+    
         start_date = extract_period(question)
-
+    
         query = supabase.table("product_normal_price_events").select("*")
+    
+        if start_date:
+            query = query.gte("date", start_date.strftime("%Y-%m-%d"))
+    
+        res = query.order("date", desc=True).execute()
+    
+        if not res.data:
+            return "해당 기간 내 정상가 변동이 없습니다."
+    
+        df = pd.DataFrame(res.data)
+    
+        results = []
+    
+        for _, row in df.iterrows():
+    
+            product_row = df_summary[
+                df_summary["product_url"] == row["product_url"]
+            ]
+    
+            if product_row.empty:
+                continue
+    
+            pname = product_row.iloc[0]["product_name"]
+    
+            results.append(
+                f"- {pname} / {float(row['prev_price']):,.0f}원 → "
+                f"{row['date']}에 {float(row['normal_price']):,.0f}원 "
+                f"({float(row['price_diff']):+,.0f}원)"
+            )
+    
+        if not results:
+            return "해당 기간 내 정상가 변동이 없습니다."
+    
+        return "기간 내 정상가 변동 제품 목록:\n" + "\n".join(results)
 
-    if start_date:
-        query = query.gte("date", start_date.strftime("%Y-%m-%d"))
-
-    res = query.order("date", desc=True).execute()
-
-    if not res.data:
-        return "해당 기간 내 정상가 변동이 없습니다."
-
-    df = pd.DataFrame(res.data)
-
-    results = []
-
-    for _, row in df.iterrows():
-
-        product_row = df_summary[
-            df_summary["product_url"] == row["product_url"]
-        ]
-
-        if product_row.empty:
-            continue
-
-        pname = product_row.iloc[0]["product_name"]
-
-        results.append(
-            f"- {pname} / {row['prev_price']:,.0f}원 → "
-            f"{row['date']}에 {row['normal_price']:,.0f}원 "
-            f"({row['price_diff']:+,.0f}원)"
-        )
-
-    return "기간 내 정상가 변동 제품 목록:\n" + "\n".join(results)
     
     # ---------------------------------
     # 10️⃣ Rule 미적용 → LLM fallback
@@ -922,6 +946,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
 
