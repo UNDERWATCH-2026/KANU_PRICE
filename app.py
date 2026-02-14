@@ -174,7 +174,7 @@ if search_mode == "키워드 검색":
 # --- B) 필터 선택 ---
 else:
 
-    st.markdown("### 🔍 조회 조건")
+
 
     col1, col2, col3 = st.columns(3)
 
@@ -199,25 +199,57 @@ else:
 # =========================
 # 7️⃣ 제품 선택
 # =========================
+
+
+# 조회 버튼을 누르기 전에는 제품 선택 영역을 렌더링하지 않음
+if not st.session_state.show_results:
+    st.info("조건을 설정한 뒤 '조회하기'를 눌러주세요.")
+    st.stop()
+
+# candidates_df 방어
+if candidates_df is None or candidates_df.empty:
+    st.warning("조건에 맞는 제품이 없습니다.")
+    st.stop()
+
+if "product_name" not in candidates_df.columns:
+    st.error("제품 데이터 구조 오류 (product_name 컬럼 없음)")
+    st.stop()
+
+
 st.subheader("📦 비교할 제품 선택")
 
+
+# 선택 토글 함수
 def toggle_product(pname):
     if pname in st.session_state.selected_products:
         st.session_state.selected_products.remove(pname)
     else:
         st.session_state.selected_products.add(pname)
 
-product_list = sorted(candidates_df["product_name"].unique().tolist())
+
+# 제품 리스트 생성
+product_list = sorted(
+    candidates_df["product_name"].dropna().unique().tolist()
+)
+
+if not product_list:
+    st.warning("선택 가능한 제품이 없습니다.")
+    st.stop()
+
+
+# 체크박스 출력
 for pname in product_list:
     st.checkbox(
         pname,
         value=pname in st.session_state.selected_products,
         key=f"chk_{pname}",
         on_change=toggle_product,
-        args=(pname,)
+        args=(pname,),
     )
 
+
 selected_products = list(st.session_state.selected_products)
+
 if not selected_products:
     st.info("제품을 선택하세요.")
     st.stop()
@@ -506,6 +538,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
 
