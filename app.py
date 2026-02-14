@@ -148,15 +148,28 @@ if df_all.empty:
 # 상단 버튼
 # -------------------------
 col_query, col_clear = st.columns([1, 1])
+
 with col_query:
     if st.button("📊 조회하기", type="primary", use_container_width=True):
         st.session_state.show_results = True
+
 with col_clear:
     if st.button("🗑️ 전체 삭제", use_container_width=True):
+
+        # 선택 제품 초기화
         st.session_state.selected_products = set()
-        st.session_state.keyword_searches = []
+
+        # 🔥 검색 결과 완전 초기화
+        st.session_state.keyword_results = {}
+
+        # 조회 상태 초기화
         st.session_state.show_results = False
+
+        # (선택) 키워드 입력값도 초기화하고 싶으면
+        # st.session_state.keyword_input = ""
+
         st.rerun()
+
 
 st.divider()
 
@@ -908,6 +921,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
 
