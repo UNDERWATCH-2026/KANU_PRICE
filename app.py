@@ -75,29 +75,103 @@ def save_question_log(question: str, q_type: str, used_llm: bool):
         print("로그 저장 실패:", e)
 
 # =========================
-# 3️⃣ 유틸
+# 3️⃣ 유틸 (제품명 보정 포함)
 # =========================
+
+import re
+
+def clean_product_name(s: str) -> str:
+    """
+    깨진 한글(�) 및 자주 발생하는 인코딩 오류 패턴 보정
+    """
+    if s is None:
+        return ""
+
+    s = str(s)
+
+    # 제어문자 제거
+    s = re.sub(r"[\x00-\x1f\x7f-\x9f]", "", s).strip()
+
+    # 🔥 자주 깨지는 패턴 사전
+    fix_map = {
+        "본���직영": "본사직영",
+        "본��직영": "본사직영",
+        "본�직영": "본사직영",
+
+        "바닐���향": "바닐라향",
+        "바닐��향": "바닐라향",
+
+        "네스프���": "네스프레소",
+        "스타���스": "스타벅스",
+    }
+
+    for bad, good in fix_map.items():
+        if bad in s:
+            s = s.replace(bad, good)
+
+    # 🔥 패턴 기반 보정
+    s = re.sub(r"바닐.*?향", "바닐라향", s)
+    s = re.sub(r"본.*?직영", "본사직영", s)
+
+    # 연속된 깨진 문자 제거
+    s = re.sub(r"�{1,}", "", s)
+
+    # 공백 정리
+    s = re.sub(r"\s{2,}", " ", s).strip()
+
+    return s
+
+def detect_encoding_issues(df: pd.DataFrame):
+    """
+    제품명에 깨진 문자(�) 포함 여부 감지
+    """
+    if "product_name_raw" not in df.columns:
+        return pd.DataFrame()
+
+    mask = df["product_name_raw"].str.contains("�", na=False)
+    return df[mask][["product_url", "product_name_raw"]]
+
+
+
 def _norm_series(s: pd.Series) -> pd.Series:
+    """
+    검색 시 None/NaN 안전 처리 + 문자열 변환
+    """
     return s.fillna("").astype(str)
 
+
 def options_from(df: pd.DataFrame, col: str):
+    """
+    필터 selectbox용 고유 값 추출
+    """
     if col not in df.columns:
         return []
+
     vals = df[col].dropna().astype(str)
     vals = [v.strip() for v in vals.tolist() if v.strip()]
     return sorted(list(dict.fromkeys(vals)))
 
+
 # =========================
-# 🔧 제품 선택 토글 함수
+# 🔧 제품 선택 토글 함수 (안정화)
 # =========================
 def toggle_product(pname):
+    """
+    제품 선택/해제 토글
+    """
+
     if "selected_products" not in st.session_state:
         st.session_state.selected_products = set()
+
+    # pname이 None이거나 빈값이면 방어
+    if not pname:
+        return
 
     if pname in st.session_state.selected_products:
         st.session_state.selected_products.remove(pname)
     else:
         st.session_state.selected_products.add(pname)
+
 
 # =========================
 # 4️⃣ 세션 상태
@@ -142,9 +216,31 @@ st.divider()
 # 데이터 로딩
 # -------------------------
 df_all = load_product_summary()
+
+# 🔥 제품명 깨짐 보정 적용
+df_all["product_name_raw"] = df_all["product_name"]
+df_all["product_name"] = df_all["product_name"].apply(clean_product_name)
+
+# 🔥 깨진 문자열 자동 감지
+encoding_issues = detect_encoding_issues(df_all)
+
+if not encoding_issues.empty:
+
+    st.warning(f"⚠ 깨진 제품명 {len(encoding_issues)}건 감지됨")
+
+    # Supabase에 로그 저장 (중복 방지용 try)
+    try:
+        supabase.table("product_name_encoding_issues").insert(
+            encoding_issues.to_dict(orient="records")
+        ).execute()
+    except Exception:
+        pass
+
+
 if df_all.empty:
     st.warning("아직 집계된 제품 데이터가 없습니다.")
     st.stop()
+
 
 # -------------------------
 # 상단 버튼
@@ -348,7 +444,7 @@ for pname in selected_products:
                     restore_date = min(restore_after)
         
                     # 🔥 품절~복원 사이 가격 제거
-                    mask = (tmp["event_date"] >= out_date) & (tmp["event_date"] <= restore_date)
+                    mask = (tmp["event_date"] > out_date) & (tmp["event_date"] < restore_date)
                     tmp.loc[mask, "unit_price"] = None
         
         timeline_rows.append(tmp[["product_name", "event_date", "unit_price"]])
@@ -366,20 +462,40 @@ for pname in selected_products:
 # 8-1️⃣ 개당 가격 타임라인 비교 차트
 # =========================
 if timeline_rows:
+
     df_timeline = pd.concat(timeline_rows, ignore_index=True)
 
-    # 🔥 정렬 추가 (중요)
+    # 1️⃣ 정렬 (필수)
     df_timeline = df_timeline.sort_values(
         ["product_name", "event_date"]
     )
 
+    # 2️⃣ 숫자 강제 변환
+    df_timeline["unit_price"] = pd.to_numeric(
+        df_timeline["unit_price"], errors="coerce"
+    )
+
+    # 3️⃣ segment 컬럼 생성 (끊김 완전 분리용)
+    df_timeline["segment"] = (
+        df_timeline["unit_price"].isna()
+        .groupby(df_timeline["product_name"])
+        .cumsum()
+    )
+
+    # 4️⃣ NaN 제거 (끊긴 구간은 차트에서 제외)
+    df_chart = df_timeline.dropna(subset=["unit_price"])
+
+    # =========================
+    # 📈 가격 선 차트
+    # =========================
     base_line = (
-        alt.Chart(df_timeline)
-        .mark_line(point=True, interpolate="linear")
+        alt.Chart(df_chart)
+        .mark_line(point=True)
         .encode(
             x=alt.X("event_date:T", title="날짜"),
             y=alt.Y("unit_price:Q", title="개당 가격 (원)"),
             color=alt.Color("product_name:N", title="제품"),
+            detail="segment:N",  # 🔥 이게 핵심 (선 완전 분리)
             tooltip=[
                 alt.Tooltip("product_name:N", title="제품"),
                 alt.Tooltip("event_date:T", title="날짜"),
@@ -390,7 +506,11 @@ if timeline_rows:
 
     layers = [base_line]
 
+    # =========================
+    # 🔔 Lifecycle 아이콘 추가
+    # =========================
     if lifecycle_rows:
+
         df_life_all = pd.concat(lifecycle_rows, ignore_index=True)
 
         icon_config = {
@@ -400,15 +520,40 @@ if timeline_rows:
         }
 
         for event_type, cfg in icon_config.items():
-            df_filtered = df_life_all[df_life_all["lifecycle_event"] == event_type]
+
+            df_filtered = df_life_all[
+                df_life_all["lifecycle_event"] == event_type
+            ]
+
             if df_filtered.empty:
                 continue
 
+            # 아이콘 위치를 가격선에 맞추기 위해 join
+            df_filtered = df_filtered.merge(
+                df_timeline[["product_name", "event_date", "unit_price"]],
+                on=["product_name", "event_date"],
+                how="left"
+            )
+            
+            # (선택) 디버깅용 — 필요할 때만
+            # if st.checkbox("디버그: lifecycle merge 보기"):
+            #     st.dataframe(df_filtered[["product_name","event_date","unit_price"]])
+            
+            # 🔥 중요: unit_price 없는 lifecycle 제거 (가격선에 정확히 붙이기 위함)
+            df_filtered = df_filtered.dropna(subset=["unit_price"])
+
+            
+
             point_layer = (
-                alt.Chart(df_filtered)
-                .mark_point(size=200, shape="triangle-up", color=cfg["color"])
+               alt.Chart(df_filtered)
+                .mark_point(
+                    size=150,
+                    shape="triangle-up",
+                    color=cfg["color"]
+                )
                 .encode(
                     x="event_date:T",
+                    y="unit_price:Q",   # 🔥 반드시 추가
                     tooltip=[
                         alt.Tooltip("product_name:N", title="제품"),
                         alt.Tooltip("event_date:T", title="날짜"),
@@ -419,21 +564,34 @@ if timeline_rows:
 
             text_layer = (
                 alt.Chart(df_filtered)
-                .mark_text(dy=-15, fontSize=11, fontWeight="bold", color=cfg["color"])
+                .mark_text(
+                    dy=12,   # 🔥 아래로 12px 이동
+                    fontSize=11,
+                    fontWeight="bold",
+                    color=cfg["color"]
+                )
                 .encode(
                     x="event_date:T",
+                    y="unit_price:Q",   # 🔥 반드시 동일하게
                     text=alt.value(cfg["label"]),
                 )
             )
 
+
             layers.append(point_layer)
             layers.append(text_layer)
 
-    chart = alt.layer(*layers).properties(height=420).interactive()
+    chart = (
+        alt.layer(*layers)
+        .properties(height=420)
+        .interactive()
+    )
+
     st.altair_chart(chart, use_container_width=True)
 
 else:
     st.info("비교 가능한 이벤트 데이터가 없습니다.")
+
 
 st.divider()
 
@@ -581,7 +739,7 @@ def classify_intent(q: str):
         return "PRICE_MIN"
     if "비싼" in q or "최고가" in q:
         return "PRICE_MAX"
-    if any(word in q for word in ["오른", "상승", "올랐", "증가"]):
+    if any(word in q for word in ["상승", "증가"]) and "않" not in q:
         return "PRICE_UP"
     if "변동" in q or "많이 바뀐" in q:
         return "VOLATILITY"
@@ -790,7 +948,7 @@ def execute_rule(intent, question, df_summary):
     return None
 
 def llm_fallback(question: str, df_summary: pd.DataFrame):
-    context = df_summary[
+    context = df_summary.head(50)[
         ["product_name", "current_unit_price", "is_discount", "is_new_product", "brew_type_kr"]
     ].to_dict(orient="records")
 
@@ -828,4 +986,5 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
