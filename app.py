@@ -626,12 +626,29 @@ for pname in selected_products:
     with c1:
         st.metric("개당 가격", f"{float(p['current_unit_price']):,.1f}원")
 
-    with c2:
-        if p["is_discount"]:
-            st.success("현재(마지막 관측일 기준) 할인 중")
-        else:
-            st.info("정상가")
 
+    with c2:
+
+        res = supabase.rpc(
+            "get_discount_periods_in_range",
+            {
+                "p_product_url": p["product_url"],
+                "p_date_from": str(date_from),
+                "p_date_to": str(date_to),
+            }
+        ).execute()
+    
+        discount_data = res.data if res.data else []
+    
+        if discount_data:
+            for d in discount_data:
+                st.success(
+                    f"{d['discount_start_date']} ~ {d['discount_end_date']} "
+                    f"({d['discount_days']}일, {round(float(d['discount_rate']),1)}%)"
+                )
+        else:
+            st.info("해당 기간 내 할인 없음")
+    
 
     with c3:
         df_life = load_lifecycle_events(p["product_url"])
@@ -1005,6 +1022,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
 
