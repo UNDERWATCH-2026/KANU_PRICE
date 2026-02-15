@@ -765,6 +765,7 @@ for pname in selected_products:
         for _, row_d in discount_periods.iterrows():
             display_rows.append({
                 "날짜": f"{row_d['start_date'].date()} ~ {row_d['end_date'].date()}",
+                "날짜_정렬용": row_d['start_date'],  # 🔥 정렬용 컬럼 추가
                 "개당 가격": round(float(row_d["unit_price"]), 1) if pd.notna(row_d["unit_price"]) else None,
                 "이벤트": "💸 할인 기간"
             })
@@ -778,7 +779,8 @@ for pname in selected_products:
         df_lifecycle_only = df_all_events[df_all_events["event_type"].isin(icon_map.keys())]
         for _, row_l in df_lifecycle_only.iterrows():
             display_rows.append({
-                "날짜": row_l["date"].date(),
+                "날짜": str(row_l["date"].date()),
+                "날짜_정렬용": row_l["date"],  # 🔥 정렬용 컬럼 추가
                 "개당 가격": None,
                 "이벤트": icon_map.get(row_l["event_type"], row_l["event_type"])
             })
@@ -788,7 +790,10 @@ for pname in selected_products:
             continue
 
         df_display = pd.DataFrame(display_rows)
-        df_display = df_display.sort_values("날짜", ascending=False)
+        
+        # 🔥 정렬용 컬럼으로 정렬 후 제거
+        df_display = df_display.sort_values("날짜_정렬용", ascending=False)
+        df_display = df_display.drop(columns=["날짜_정렬용"])
 
         # 🔥 None 값 처리 - 포맷팅 전에 "-"로 변경
         df_display["개당 가격"] = df_display["개당 가격"].apply(
