@@ -280,6 +280,7 @@ with col_clear:
 
 st.divider()
 
+
 # =========================
 # 6️⃣ 조회 조건
 # =========================
@@ -289,9 +290,8 @@ candidates_df = pd.DataFrame()
 # --- A) 키워드 검색 ---
 if search_mode == "키워드 검색":
 
-    col_input, col_add, col_reset = st.columns([6, 2, 2])
+    col_input, col_reset = st.columns([8, 2])
 
-    # ✅ Enter로도 "검색어 추가"가 되도록 form으로 감쌈
     with col_input:
         with st.form("kw_add_form", clear_on_submit=False):
             keyword_input = st.text_input(
@@ -301,7 +301,11 @@ if search_mode == "키워드 검색":
                 label_visibility="collapsed",
                 key="keyword_input"
             )
-            submitted_add = st.form_submit_button("🔍 검색어 추가", use_container_width=True)
+
+            submitted_add = st.form_submit_button(
+                "🔍 검색어 추가",
+                use_container_width=True
+            )
 
         if submitted_add:
             kw = st.session_state.keyword_input.strip()
@@ -310,18 +314,7 @@ if search_mode == "키워드 검색":
                 result_df = df_all[mask].copy()
                 if not result_df.empty:
                     st.session_state.keyword_results[kw] = result_df
-            st.session_state.keyword_input = ""  # 입력창 비우기
-            st.rerun()
 
-    # 버튼은 유지(원하면 눌러도 됨) — Enter 없이 클릭 추가용
-    with col_add:
-        if st.button("➕ 클릭 추가", use_container_width=True):
-            kw = st.session_state.keyword_input.strip()
-            if kw:
-                mask = _norm_series(df_all["product_name"]).str.contains(kw, case=False)
-                result_df = df_all[mask].copy()
-                if not result_df.empty:
-                    st.session_state.keyword_results[kw] = result_df
             st.session_state.keyword_input = ""
             st.rerun()
 
@@ -332,6 +325,7 @@ if search_mode == "키워드 검색":
             st.session_state.show_results = False
             st.session_state.keyword_input = ""
             st.rerun()
+
 
     # -------------------------
     # 키워드별 결과 출력
@@ -1027,6 +1021,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
 
