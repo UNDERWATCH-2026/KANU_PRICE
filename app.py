@@ -424,6 +424,10 @@ for pname in selected_products:
         tmp["event_date"] = pd.to_datetime(tmp["date"])
         tmp["unit_price"] = tmp["unit_price"].astype(float)
         
+        # 🔥 할인 여부 추가
+        tmp["is_discount"] = tmp["event_type"] == "DISCOUNT"
+        tmp["price_status"] = tmp["is_discount"].map({True: "💸 할인 중", False: "정상가"})
+        
         # 🔥 lifecycle 데이터 불러오기
         df_life = load_lifecycle_events(row["product_url"])
         
@@ -440,11 +444,11 @@ for pname in selected_products:
                 if restore_after:
                     restore_date = min(restore_after)
         
-                    # 🔥 품절~복원 사이 가격 제거
+                    # 🔥 품절~복원 사이 가격 제거 (price_status는 유지)
                     mask = (tmp["event_date"] > out_date) & (tmp["event_date"] < restore_date)
                     tmp.loc[mask, "unit_price"] = None
         
-        timeline_rows.append(tmp[["product_name", "event_date", "unit_price"]])
+        timeline_rows.append(tmp[["product_name", "event_date", "unit_price", "price_status"]])
         
 
     # lifecycle 이벤트
@@ -495,8 +499,9 @@ if timeline_rows:
             detail="segment:N",  # 🔥 이게 핵심 (선 완전 분리)
             tooltip=[
                 alt.Tooltip("product_name:N", title="제품"),
-                alt.Tooltip("event_date:T", title="날짜"),
+                alt.Tooltip("event_date:T", title="날짜", format="%Y-%m-%d"),
                 alt.Tooltip("unit_price:Q", title="개당 가격", format=",.1f"),
+                alt.Tooltip("price_status:N", title="상태"),  # 🔥 할인 여부 추가
             ],
         )
     )
