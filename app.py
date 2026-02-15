@@ -183,7 +183,7 @@ def toggle_product(pname):
 
 
 # =========================
-# 4️⃣ 세션 상태
+# 4️⃣ 세션 상태 초기화
 # =========================
 if "selected_products" not in st.session_state:
     st.session_state.selected_products = set()
@@ -193,8 +193,8 @@ if "active_mode" not in st.session_state:
     st.session_state.active_mode = "키워드 검색"
 if "show_results" not in st.session_state:
     st.session_state.show_results = False
-if "keyword_input" not in st.session_state:
-    st.session_state.keyword_input = ""  # 🔥 Enter용 상태값
+if "search_keyword" not in st.session_state:
+    st.session_state.search_keyword = ""
 
 # =========================
 # 5️⃣ 메인 UI
@@ -216,7 +216,7 @@ if search_mode != st.session_state.active_mode:
     st.session_state.selected_products = set()
     st.session_state.keyword_results = {}
     st.session_state.show_results = False
-    st.session_state.keyword_input = ""
+    st.session_state.search_keyword = ""
     st.rerun()
 
 st.divider()
@@ -269,35 +269,24 @@ col_query, col_clear = st.columns([1, 1])
 with col_query:
     if st.button("📊 조회하기", type="primary", use_container_width=True):
         st.session_state.show_results = True
-        
+
 with col_clear:
     if st.button("🗑️ 전체 초기화", use_container_width=True):
-
-        # 1️⃣ 선택 제품 초기화
+        # 🔥 모든 세션 상태 완전 초기화
         st.session_state.selected_products = set()
-
-        # 2️⃣ 검색 초기화
-        st.session_state.keyword_input = ""
-        st.session_state.search_keyword = ""
-
-        # 3️⃣ 필터 초기화
-        st.session_state.filter_brand = "(전체)"
-        st.session_state.filter_cat1 = "(전체)"
-        st.session_state.filter_cat2 = "(전체)"
-
-        # 4️⃣ 결과 숨김
+        st.session_state.keyword_results = {}
         st.session_state.show_results = False
-
-        # 5️⃣ 모든 체크박스 강제 제거
-        for key in list(st.session_state.keys()):
-            if key.startswith("chk_"):
-                del st.session_state[key]
-
-        st.rerun()
-
-
+        st.session_state.search_keyword = ""
         
-
+        # 🔥 필터 selectbox 상태 초기화
+        if "filter_brand" in st.session_state:
+            del st.session_state.filter_brand
+        if "filter_cat1" in st.session_state:
+            del st.session_state.filter_cat1
+        if "filter_cat2" in st.session_state:
+            del st.session_state.filter_cat2
+            
+        st.rerun()
 
 st.divider()
 
@@ -314,14 +303,15 @@ if "selected_products" not in st.session_state:
 # =========================
 if search_mode == "키워드 검색":
 
-    # 🔍 검색 입력 (Enter 가능)
+    # 🔍 검색 입력 (Enter 가능) - 🔥 value에 세션 상태 반영
     with st.form("search_form", clear_on_submit=False):
         keyword_input = st.text_input(
             "제품명 검색",
             placeholder="예: 쥬시, 멜로지오",
-            key="keyword_input"   # 🔥 반드시 필요
-    )
-    submitted = st.form_submit_button("검색")
+            value=st.session_state.get("search_keyword", ""),  # 🔥 현재 검색어 표시
+            key="keyword_input_field"
+        )
+        submitted = st.form_submit_button("검색")
 
     if submitted:
         st.session_state.search_keyword = keyword_input.strip()
@@ -361,7 +351,6 @@ elif search_mode == "필터 선택 (브랜드/카테고리)":
 
     col1, col2, col3 = st.columns(3)
 
-    # 1️⃣ 브랜드
     with col1:
         brands = options_from(df_all, "brand")
         sel_brand = st.selectbox(
@@ -372,7 +361,6 @@ elif search_mode == "필터 선택 (브랜드/카테고리)":
 
     df1 = df_all if sel_brand == "(전체)" else df_all[df_all["brand"] == sel_brand]
 
-    # 2️⃣ 카테고리1
     with col2:
         cat1s = options_from(df1, "category1")
         sel_cat1 = st.selectbox(
@@ -383,7 +371,6 @@ elif search_mode == "필터 선택 (브랜드/카테고리)":
 
     df2 = df1 if sel_cat1 == "(전체)" else df1[df1["category1"] == sel_cat1]
 
-    # 3️⃣ 카테고리2
     with col3:
         cat2s = options_from(df2, "category2")
         sel_cat2 = st.selectbox(
@@ -394,9 +381,6 @@ elif search_mode == "필터 선택 (브랜드/카테고리)":
 
     candidates_df = df2 if sel_cat2 == "(전체)" else df2[df2["category2"] == sel_cat2]
 
-    # -------------------------
-    # 제품 선택
-    # -------------------------
     st.markdown("### 📦 비교할 제품 선택")
 
     with st.expander("목록 펼치기 / 접기", expanded=False):
@@ -409,6 +393,7 @@ elif search_mode == "필터 선택 (브랜드/카테고리)":
                 args=(pname,)
             )
 
+
 # =========================
 # 8️⃣ 결과 표시
 # =========================
@@ -419,7 +404,7 @@ if not selected_products:
     st.stop()
 
 if not st.session_state.show_results:
-    st.info("제품을 선택한 뒤 ‘조회하기’를 클릭하세요.")
+    st.info("제품을 선택한 뒤 '조회하기'를 클릭하세요.")
     st.stop()
 
 st.divider()
@@ -546,10 +531,6 @@ if timeline_rows:
                 on=["product_name", "event_date"],
                 how="left"
             )
-            
-            # (선택) 디버깅용 — 필요할 때만
-            # if st.checkbox("디버그: lifecycle merge 보기"):
-            #     st.dataframe(df_filtered[["product_name","event_date","unit_price"]])
             
             # 🔥 중요: unit_price 없는 lifecycle 제거 (가격선에 정확히 붙이기 위함)
             df_filtered = df_filtered.dropna(subset=["unit_price"])
@@ -1020,19 +1001,3 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
