@@ -457,7 +457,7 @@ st.title("☕ Capsule Price Intelligence")
 # -------------------------
 st.subheader("🔎 조회 기준")
 
-col_search, col_insight = st.columns([3, 1])
+col_search, col_buttons, col_insight = st.columns([2, 1, 2])
 
 with col_search:
     search_mode = st.radio(
@@ -465,6 +465,33 @@ with col_search:
         ["키워드 검색", "필터 선택 (브랜드/카테고리)"],
         horizontal=True
     )
+
+with col_buttons:
+    st.markdown("##### ⚙️ 작업")
+    if st.button("📊 조회하기", type="primary", use_container_width=True):
+        st.session_state.show_results = True
+    
+    if st.button("🗑️ 전체 초기화", use_container_width=True):
+        # 🔥 모든 세션 상태 완전 초기화
+        st.session_state.selected_products = set()
+        st.session_state.keyword_results = {}
+        st.session_state.show_results = False
+        st.session_state.search_keyword = ""
+        st.session_state.search_history = []
+        
+        # 🔥 질문 입력창 초기화
+        if "insight_question" in st.session_state:
+            del st.session_state.insight_question
+        
+        # 🔥 필터 selectbox 상태 초기화
+        if "filter_brand" in st.session_state:
+            del st.session_state.filter_brand
+        if "filter_cat1" in st.session_state:
+            del st.session_state.filter_cat1
+        if "filter_cat2" in st.session_state:
+            del st.session_state.filter_cat2
+            
+        st.rerun()
 
 with col_insight:
     st.markdown("##### 🤖 가격 인사이트 질문")
@@ -581,40 +608,14 @@ if ask_question and question:
                 answer = llm_fallback(question, filtered_df)
             save_question_log(question, intent, True)
             st.success(answer)
-
-
-# -------------------------
-# 상단 버튼 - 검색 방식 아래로 이동
-# -------------------------
-col_query, col_clear = st.columns([1, 1])
-
-with col_query:
-    if st.button("📊 조회하기", type="primary", use_container_width=True):
-        st.session_state.show_results = True
-
-with col_clear:
-    if st.button("🗑️ 전체 초기화", use_container_width=True):
-        # 🔥 모든 세션 상태 완전 초기화
-        st.session_state.selected_products = set()
-        st.session_state.keyword_results = {}
-        st.session_state.show_results = False
-        st.session_state.search_keyword = ""
-        st.session_state.search_history = []  # 🔥 검색 이력 초기화
-        
-        # 🔥 질문 입력창 초기화
-        if "insight_question" in st.session_state:
-            del st.session_state.insight_question
-        
-        # 🔥 필터 selectbox 상태 초기화
-        if "filter_brand" in st.session_state:
-            del st.session_state.filter_brand
-        if "filter_cat1" in st.session_state:
-            del st.session_state.filter_cat1
-        if "filter_cat2" in st.session_state:
-            del st.session_state.filter_cat2
-            
+    
+    # 🔥 질문 처리 후 입력창 초기화
+    if "insight_question" in st.session_state:
+        del st.session_state.insight_question
         st.rerun()
 
+
+# -------------------------
 st.divider()
 
 # =========================
@@ -631,11 +632,10 @@ if "selected_products" not in st.session_state:
 if search_mode == "키워드 검색":
 
     # 🔍 검색 입력 (Enter 가능) - 🔥 value에 세션 상태 반영
-    with st.form("search_form", clear_on_submit=False):
+    with st.form("search_form", clear_on_submit=True):  # 🔥 clear_on_submit=True로 변경
         keyword_input = st.text_input(
             "제품명 검색",
             placeholder="예: 쥬시, 멜로지오",
-            value=st.session_state.get("search_keyword", ""),  # 🔥 현재 검색어 표시
             key="keyword_input_field"
         )
         submitted = st.form_submit_button("검색")
