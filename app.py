@@ -888,47 +888,42 @@ with tab3:
         save_question_log(question, intent, used_llm)
 
 
-
+    
     # -------------------------
     # 답변 출력 (항상 단일)
     # -------------------------
     if st.session_state.current_answer:
-
-        st.markdown("---")
-
+    
         answer_data = st.session_state.current_answer
-
-        # 🔥 제품 리스트 형태일 경우
-        if (
-            isinstance(answer_data, dict)
-            and answer_data.get("type") == "product_list"
-        ):
-
-            col_left, col_right = st.columns([1, 3])
-
-            with col_left:
-                st.markdown("### 📦 추가")
-                for pname in answer_data["products"]:
+    
+        st.markdown("### 💬 답변")
+    
+        # 🔥 제품 리스트일 경우
+        if isinstance(answer_data, dict) and answer_data.get("type") == "product_list":
+    
+            for pname in answer_data["products"]:
+    
+                col_chk, col_txt = st.columns([1, 8])
+    
+                with col_chk:
                     st.checkbox(
-                        pname,
+                        "",
                         value=pname in st.session_state.selected_products,
-                        key=f"nlp_add_{pname}",
+                        key=f"nlp_chk_{pname}",
                         on_change=toggle_product,
                         args=(pname,)
                     )
-
-            with col_right:
-                st.markdown("### 💬 답변")
-                st.markdown(answer_data["text"])
-
+    
+                with col_txt:
+                    st.markdown(pname)
+    
         # 🔥 일반 텍스트 답변
         else:
-            st.markdown("### 💬 답변")
-
             if isinstance(answer_data, dict):
                 st.markdown(answer_data.get("text", ""))
             else:
                 st.markdown(answer_data)
+    
 
 
 # =========================
@@ -1447,6 +1442,7 @@ for pname in selected_products:
             use_container_width=True,
             hide_index=True
         )
+
 
 
 
