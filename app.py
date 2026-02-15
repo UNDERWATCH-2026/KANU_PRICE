@@ -195,6 +195,8 @@ if "show_results" not in st.session_state:
     st.session_state.show_results = False
 if "search_keyword" not in st.session_state:
     st.session_state.search_keyword = ""
+if "search_history" not in st.session_state:
+    st.session_state.search_history = []  # 🔥 검색 이력 [{keyword: "쥬시", results: [...]}]
 
 # =========================
 # 5️⃣ 메인 UI
@@ -217,6 +219,7 @@ if search_mode != st.session_state.active_mode:
     st.session_state.keyword_results = {}
     st.session_state.show_results = False
     st.session_state.search_keyword = ""
+    st.session_state.search_history = []  # 🔥 검색 이력 초기화
     st.rerun()
 
 st.divider()
@@ -277,6 +280,7 @@ with col_clear:
         st.session_state.keyword_results = {}
         st.session_state.show_results = False
         st.session_state.search_keyword = ""
+        st.session_state.search_history = []  # 🔥 검색 이력 초기화
         
         # 🔥 필터 selectbox 상태 초기화
         if "filter_brand" in st.session_state:
@@ -313,36 +317,76 @@ if search_mode == "키워드 검색":
         )
         submitted = st.form_submit_button("검색")
 
-    if submitted:
-        st.session_state.search_keyword = keyword_input.strip()
-        st.rerun()
-
-    search_keyword = st.session_state.get("search_keyword", "")
-
-    # 🎯 후보 필터링
-    if search_keyword:
+    if submitted and keyword_input.strip():
+        search_keyword = keyword_input.strip()
+        st.session_state.search_keyword = search_keyword
+        
+        # 🔥 검색 결과 계산
         keywords = [k.strip() for k in search_keyword.split(",") if k.strip()]
         mask = False
         for kw in keywords:
             mask |= _norm_series(df_all["product_name"]).str.contains(kw, case=False)
         candidates_df = df_all[mask].copy()
-    else:
-        candidates_df = pd.DataFrame()
+        
+        # 🔥 검색 이력에 추가 (중복 검색어는 덮어쓰기)
+        existing_idx = None
+        for idx, history in enumerate(st.session_state.search_history):
+            if history["keyword"] == search_keyword:
+                existing_idx = idx
+                break
+        
+        search_result = {
+            "keyword": search_keyword,
+            "results": sorted(candidates_df["product_name"].unique().tolist()) if not candidates_df.empty else []
+        }
+        
+        if existing_idx is not None:
+            st.session_state.search_history[existing_idx] = search_result
+        else:
+            st.session_state.search_history.append(search_result)
+        
+        st.rerun()
 
-    # 📦 제품 선택
+    # 📦 제품 선택 - 검색 이력별로 구획화
     st.markdown("### 📦 비교할 제품 선택")
-
-    if candidates_df.empty:
+    
+    if not st.session_state.search_history:
         st.info("검색 결과가 없습니다.")
     else:
-        for pname in sorted(candidates_df["product_name"].unique()):
-            st.checkbox(
-                pname,
-                value=pname in st.session_state.selected_products,
-                key=f"chk_kw_{pname}",
-                on_change=toggle_product,
-                args=(pname,)
-            )
+        for history_idx, history in enumerate(st.session_state.search_history):
+            # 🔥 검색어별 섹션
+            col_title, col_delete = st.columns([5, 1])
+            
+            with col_title:
+                st.markdown(f"#### 🔍 검색어: `{history['keyword']}`")
+            
+            with col_delete:
+                if st.button("🗑️ 삭제", key=f"delete_search_{history_idx}", use_container_width=True):
+                    # 해당 검색 결과의 제품들을 선택에서 제거
+                    for pname in history['results']:
+                        if pname in st.session_state.selected_products:
+                            st.session_state.selected_products.remove(pname)
+                    
+                    # 검색 이력에서 제거
+                    st.session_state.search_history.pop(history_idx)
+                    st.rerun()
+            
+            if not history['results']:
+                st.caption("📭 검색 결과 없음")
+            else:
+                # 🔥 2열 레이아웃으로 체크박스 표시
+                cols = st.columns(2)
+                for idx, pname in enumerate(history['results']):
+                    with cols[idx % 2]:
+                        st.checkbox(
+                            pname,
+                            value=pname in st.session_state.selected_products,
+                            key=f"chk_kw_{history_idx}_{pname}",
+                            on_change=toggle_product,
+                            args=(pname,)
+                        )
+            
+            st.divider()
 
 # =========================
 # 🎛 B) 필터 선택 모드
