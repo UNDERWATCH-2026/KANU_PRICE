@@ -488,7 +488,7 @@ for pname in selected_products:
     else:
         st.success(f"📈 가격 이벤트 {p['event_count']}건")
 
-    # 이벤트 히스토리
+    # 이벤트 히스토리 (전략 분석 버전)
     with st.expander("📅 이벤트 히스토리"):
     
         df_price = load_events(p["product_url"])
@@ -496,67 +496,127 @@ for pname in selected_products:
     
         frames = []
     
+        # ---------------------------------
+        # 1️⃣ 가격 이벤트 정제
+        # ---------------------------------
         if not df_price.empty:
-            frames.append(
-                df_price[["date", "unit_price", "event_type"]]
-            )
     
+            df_price = df_price.copy()
+            df_price["date"] = pd.to_datetime(df_price["date"])
+    
+            # NORMAL 제거
+            df_price = df_price[df_price["event_type"] != "NORMAL"]
+    
+            if not df_price.empty:
+                frames.append(df_price[["date", "unit_price", "event_type"]])
+    
+        # ---------------------------------
+        # 2️⃣ Lifecycle 이벤트
+        # ---------------------------------
         if not df_life.empty:
+    
             df_life = df_life[df_life["lifecycle_event"].notna()]
             df_life = df_life.rename(columns={"lifecycle_event": "event_type"})
-            df_life["unit_price"] = None   # 🔥 lifecycle에는 가격 없으므로 명시적으로 추가
-            frames.append(
-                df_life[["date", "unit_price", "event_type"]]
-            )
+            df_life["unit_price"] = None
+            df_life["date"] = pd.to_datetime(df_life["date"])
     
-        if frames:
+            frames.append(df_life[["date", "unit_price", "event_type"]])
     
+        # ---------------------------------
+        # 3️⃣ 데이터 통합
+        # ---------------------------------
+        if not frames:
+            st.caption("이벤트 없음")
+        else:    
             df_all_events = pd.concat(frames, ignore_index=True)
     
-            df_all_events["date"] = pd.to_datetime(df_all_events["date"]).dt.date
-            df_all_events = df_all_events.sort_values("date", ascending=False)
+        # 같은 날짜 + 같은 이벤트 중복 제거
+        df_all_events = df_all_events.drop_duplicates(
+            subset=["date", "event_type"]
+        )
     
-            icon_map = {
-                "DISCOUNT": "💸 할인",
-                "NORMAL": "💰 정상가",
-                "NEW_PRODUCT": "🆕 신제품",
-                "OUT_OF_STOCK": "❌ 품절",
-                "RESTOCK": "🔄 복원",
-            }
+        # ---------------------------------
+        # 4️⃣ 할인 구간 묶기
+        # ---------------------------------
+        if not df_price.empty:
     
-            df_all_events["event_type"] = (
-                df_all_events["event_type"]
-                .map(icon_map)
-                .fillna(df_all_events["event_type"])
-            )
+            df_discount = df_price[df_price["event_type"] == "DISCOUNT"]
     
-            df_all_events = df_all_events.rename(columns={
-                "date": "날짜",
-                "unit_price": "개당 가격",
-                "event_type": "이벤트"
-            })
+            if not df_discount.empty:
     
-            # 🔥 숫자 안전 처리
-            if "개당 가격" in df_all_events.columns:
-                df_all_events["개당 가격"] = (
-                    pd.to_numeric(df_all_events["개당 가격"], errors="coerce")
-                    .round(1)
+                df_discount = df_discount.sort_values("date")
+    
+                # 연속 날짜 구간 계산
+                df_discount["gap"] = (
+                    df_discount["date"].diff().dt.days.fillna(1)
                 )
     
-            st.dataframe(
-                df_all_events.style.format({
-                    "개당 가격": "{:.1f}"
-                }),
-                use_container_width=True,
-                hide_index=True
-            )
+                df_discount["group"] = (df_discount["gap"] > 1).cumsum()
+    
+                discount_periods = (
+                    df_discount
+                    .groupby("group")
+                    .agg(start_date=("date", "min"),
+                         end_date=("date", "max"),
+                         unit_price=("unit_price", "first"))
+                    .reset_index(drop=True)
+                )
+    
+            else:
+                discount_periods = pd.DataFrame()
     
         else:
-            st.caption("이벤트 없음")
-
-
-st.divider()
-
+            discount_periods = pd.DataFrame()
+    
+        # ---------------------------------
+        # 5️⃣ 이벤트 포맷 정리
+        # ---------------------------------
+        display_rows = []
+    
+        # 할인 구간 추가
+        for _, row_d in discount_periods.iterrows():
+            display_rows.append({
+                "날짜": f"{row_d['start_date'].date()} ~ {row_d['end_date'].date()}",
+                "개당 가격": round(float(row_d["unit_price"]), 1),
+                "이벤트": "💸 할인 기간"
+            })
+    
+        # lifecycle 이벤트 추가
+        df_lifecycle_only = df_all_events[
+            df_all_events["event_type"].isin(
+                ["NEW_PRODUCT", "OUT_OF_STOCK", "RESTOCK"]
+            )
+        ]
+    
+        icon_map = {
+            "NEW_PRODUCT": "🆕 신제품",
+            "OUT_OF_STOCK": "❌ 품절",
+            "RESTOCK": "🔄 복원",
+        }
+    
+        for _, row_l in df_lifecycle_only.iterrows():
+            display_rows.append({
+                "날짜": row_l["date"].date(),
+                "개당 가격": None,
+                "이벤트": icon_map.get(row_l["event_type"], row_l["event_type"])
+            })
+    
+        if not display_rows:
+            st.caption("실제 변화 이벤트 없음")
+        else:
+            df_display = pd.DataFrame(display_rows)
+    
+        # 날짜 기준 정렬
+        df_display = df_display.sort_values("날짜", ascending=False)
+    
+        st.dataframe(
+            df_display.style.format({
+                "개당 가격": "{:.1f}"
+            }),
+            use_container_width=True,
+            hide_index=True
+        )
+    
 
 # =========================
 # 9️⃣ 자연어 질문 (Rule → LLM fallback)
@@ -678,18 +738,21 @@ def execute_rule(intent, question, df_summary):
     # ---------------------------------
     if intent == "PRICE_MIN":
     
-        # 1. 전체 중 최저가 계산
-        min_price = df_work["current_unit_price"].min()
-        df_min = df_work[df_work["current_unit_price"] == min_price]
+        # 🔥 0원 제외 (품절 제거)
+        df_valid = df_work[df_work["current_unit_price"] > 0]
     
-        if df_min.empty:
-            return None
+        if df_valid.empty:
+            return "현재 판매 중인 제품이 없습니다."
+    
+        # 최저가 계산
+        min_price = df_valid["current_unit_price"].min()
+    
+        df_min = df_valid[df_valid["current_unit_price"] == min_price]
     
         output_lines = []
     
         for _, row in df_min.iterrows():
     
-            # 2. 해당 제품의 과거 가격 이벤트 불러오기
             res = (
                 supabase.table("product_all_events")
                 .select("date, unit_price")
@@ -704,7 +767,9 @@ def execute_rule(intent, question, df_summary):
             df_hist["date"] = pd.to_datetime(df_hist["date"])
             df_hist["unit_price"] = df_hist["unit_price"].astype(float)
     
-            # 3. 최저가 기록한 날짜만 필터
+            # 🔥 0원 제외
+            df_hist = df_hist[df_hist["unit_price"] > 0]
+    
             df_low = df_hist[df_hist["unit_price"] == min_price]
     
             if df_low.empty:
@@ -719,16 +784,18 @@ def execute_rule(intent, question, df_summary):
             )
     
         if not output_lines:
-            return None
+            return "최저가 계산 대상 제품이 없습니다."
     
         return "최저가 제품 목록:\n\n" + "\n\n".join(output_lines)
+
 
 
     # ---------------------------------
     # 5️⃣ 최고가 제품
     # ---------------------------------
     if intent == "PRICE_MAX":
-        df = df_work.sort_values("current_unit_price", ascending=False)
+        df = df_work[df_work["current_unit_price"] > 0]
+        df = df.sort_values("current_unit_price", ascending=False)
         if df.empty:
             return None
 
@@ -946,6 +1013,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
 
