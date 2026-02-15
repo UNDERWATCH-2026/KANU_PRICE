@@ -330,7 +330,29 @@ for pname in selected_products:
         tmp["product_name"] = pname
         tmp["event_date"] = pd.to_datetime(tmp["date"])
         tmp["unit_price"] = tmp["unit_price"].astype(float)
+        
+        # 🔥 lifecycle 데이터 불러오기
+        df_life = load_lifecycle_events(row["product_url"])
+        
+        if not df_life.empty:
+            df_life["date"] = pd.to_datetime(df_life["date"])
+        
+            # 품절/복원 구간 계산
+            out_dates = df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]["date"].tolist()
+            restore_dates = df_life[df_life["lifecycle_event"] == "RESTOCK"]["date"].tolist()
+        
+            for out_date in out_dates:
+                # 해당 품절 이후 첫 복원 날짜 찾기
+                restore_after = [d for d in restore_dates if d > out_date]
+                if restore_after:
+                    restore_date = min(restore_after)
+        
+                    # 🔥 품절~복원 사이 가격 제거
+                    mask = (tmp["event_date"] >= out_date) & (tmp["event_date"] <= restore_date)
+                    tmp.loc[mask, "unit_price"] = None
+        
         timeline_rows.append(tmp[["product_name", "event_date", "unit_price"]])
+        
 
     # lifecycle 이벤트
     df_life = load_lifecycle_events(row["product_url"])
@@ -346,9 +368,14 @@ for pname in selected_products:
 if timeline_rows:
     df_timeline = pd.concat(timeline_rows, ignore_index=True)
 
+    # 🔥 정렬 추가 (중요)
+    df_timeline = df_timeline.sort_values(
+        ["product_name", "event_date"]
+    )
+
     base_line = (
         alt.Chart(df_timeline)
-        .mark_line(point=True)
+        .mark_line(point=True, interpolate="linear")
         .encode(
             x=alt.X("event_date:T", title="날짜"),
             y=alt.Y("unit_price:Q", title="개당 가격 (원)"),
@@ -423,7 +450,11 @@ for pname in selected_products:
         st.metric("개당 가격", f"{float(p['current_unit_price']):,.1f}원")
 
     with c2:
-        st.success("현재(마지막 관측일 기준) 할인 중") if p["is_discount"] else st.info("정상가")
+        if p["is_discount"]:
+            st.success("현재(마지막 관측일 기준) 할인 중")
+        else:
+            st.info("정상가")
+
 
     with c3:
         df_life = load_lifecycle_events(p["product_url"])
@@ -542,9 +573,9 @@ question = st.text_input(
 def classify_intent(q: str):
     q = q.lower()
 
-    if "할인" in q:
+    if "할인" in q or "행사" in q:
         return "DISCOUNT"
-    if "신제품" in q:
+    if any(word in q for word in ["신제품", "새롭게", "새로", "신규", "출시", "새로운", "처음"]):
         return "NEW"
     if "가장 싼" in q or "최저가" in q:
         return "PRICE_MIN"
@@ -566,9 +597,9 @@ def classify_intent(q: str):
 def extract_period(q: str):
     today = datetime.today()
 
-    if "최근 7일" in q:
+    if any(word in q for word in ["최근 7일", "최근 일주일", "최근 1주일"]):
         return today - timedelta(days=7)
-    if "최근 한달" in q or "최근 30일" in q:
+    if any(word in q for word in ["최근 한 달", "최근 30일", "최근 1개월"]):
         return today - timedelta(days=30)
     if "최근 3개월" in q:
         return today - timedelta(days=90)
@@ -797,3 +828,4 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
