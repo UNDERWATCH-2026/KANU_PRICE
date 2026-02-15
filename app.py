@@ -271,16 +271,24 @@ with col_query:
         st.session_state.show_results = True
 
 with col_clear:
-    if st.button("🗑️ 전체 초기화", use_container_width=True):
+    if st.button("🗑️ 전체 삭제", use_container_width=True):
+
+        # 1️⃣ 선택 초기화
         st.session_state.selected_products = set()
+
+        # 2️⃣ 검색 상태 초기화
         st.session_state.keyword_results = {}
         st.session_state.show_results = False
-
-        # 🔥 검색 관련 상태 전부 초기화
         st.session_state.keyword_input = ""
         st.session_state.search_keyword = ""
 
+        # 3️⃣ checkbox key 강제 삭제
+        for key in list(st.session_state.keys()):
+            if key.startswith("chk_"):
+                st.session_state.pop(key, None)
+
         st.rerun()
+
 
 
 st.divider()
@@ -987,6 +995,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
 
