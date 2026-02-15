@@ -775,8 +775,13 @@ for pname in selected_products:
         df_display = pd.DataFrame(display_rows)
         df_display = df_display.sort_values("날짜", ascending=False)
 
+        # 🔥 None 값 처리 - 포맷팅 전에 "-"로 변경
+        df_display["개당 가격"] = df_display["개당 가격"].apply(
+            lambda x: f"{x:.1f}" if pd.notna(x) else "-"
+        )
+
         st.dataframe(
-            df_display.style.format({"개당 가격": "{:.1f}"}),
+            df_display,
             use_container_width=True,
             hide_index=True
         )
