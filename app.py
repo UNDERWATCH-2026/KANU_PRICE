@@ -828,18 +828,20 @@ with tab3:
     # -------------------------
     # 질문 입력
     # -------------------------
-    question = st.text_area(
-        "질문 입력",
-        placeholder="예:\n- 네스프레소 중 최저가는?\n- 최근 1개월 할인 제품\n- 에스프레소 품절 제품",
-        height=100,
-        key="insight_question"
-    )
+    with st.form("nlp_form", clear_on_submit=True):
 
-    ask_question = st.button(
-        "🔍 질문하기",
-        type="primary",
-        use_container_width=True
-    )
+        question = st.text_area(
+            "질문 입력",
+            placeholder="예:\n- 네스프레소 중 최저가는?\n- 최근 1개월 할인 제품\n- 에스프레소 품절 제품",
+            height=100,
+            key="insight_question"
+        )
+    
+        ask_question = st.form_submit_button(
+            "🔍 질문하기",
+            type="primary",
+            use_container_width=True
+        )
 
     # -------------------------
     # 질문 처리
@@ -885,8 +887,7 @@ with tab3:
         # 🔥 로그 저장
         save_question_log(question, intent, used_llm)
 
-        # 🔥 질문 입력창 초기화
-        st.session_state.insight_question = ""
+
 
     # -------------------------
     # 답변 출력 (항상 단일)
@@ -1446,6 +1447,7 @@ for pname in selected_products:
             use_container_width=True,
             hide_index=True
         )
+
 
 
 
