@@ -124,7 +124,7 @@ def extract_brew_type(q: str, df_all: pd.DataFrame):
             return brew
     return None
 
-def execute_rule(intent, question, df_summary):
+def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
     df_work = df_summary.copy()
 
     brew_condition = extract_brew_type(question, df_summary)
@@ -150,12 +150,21 @@ def execute_rule(intent, question, df_summary):
             
             category_str = f" [{' > '.join(categories)}]" if categories else ""
             
-            results.append(
-                f"• **{row['brand']}** - {row['product_name']}{category_str}\n"
-                f"  💰 현재가: {float(row['current_unit_price']):,.1f}원"
-            )
+            product_name = row['product_name']
+            
+            results.append({
+                "text": f"• **{row['brand']}** - {product_name}{category_str}\n  💰 현재가: {float(row['current_unit_price']):,.1f}원",
+                "product_name": product_name
+            })
         
-        return "현재 할인 중 제품:\n\n" + "\n\n".join(results)
+        if not results:
+            return None
+        
+        return {
+            "type": "product_list",
+            "text": "현재 할인 중 제품:\n\n" + "\n\n".join([r["text"] for r in results]),
+            "products": [r["product_name"] for r in results]
+        }
 
     if intent == "PRICE_MIN":
         df_valid = df_work[df_work["current_unit_price"] > 0]
@@ -209,8 +218,16 @@ def execute_rule(intent, question, df_summary):
             supabase.table("product_lifecycle_events")
             .select("product_url, date")
             .eq("lifecycle_event", "NEW_PRODUCT")
-            .execute()
         )
+        
+        # 🔥 조회 기간 필터링
+        if date_from:
+            res = res.gte("date", date_from.strftime("%Y-%m-%d"))
+        if date_to:
+            res = res.lte("date", date_to.strftime("%Y-%m-%d"))
+        
+        res = res.execute()
+        
         if not res.data:
             return None
         
@@ -236,20 +253,39 @@ def execute_rule(intent, question, df_summary):
             
             category_str = f" [{' > '.join(categories)}]" if categories else ""
             
-            results.append(
-                f"• **{row['brand']}** - {row['product_name']}{category_str}\n"
-                f"  🎉 출시일: {launch_date}"
-            )
+            # 🔥 체크박스 추가 가능하도록 제품명만 포함
+            product_name = row['product_name']
+            
+            results.append({
+                "text": f"• **{row['brand']}** - {product_name}{category_str}\n  🎉 출시일: {launch_date}",
+                "product_name": product_name
+            })
         
-        return "최근 신제품:\n\n" + "\n\n".join(results)
+        if not results:
+            return None
+        
+        # 체크박스와 텍스트 분리 반환
+        return {
+            "type": "product_list",
+            "text": "최근 신제품:\n\n" + "\n\n".join([r["text"] for r in results]),
+            "products": [r["product_name"] for r in results]
+        }
 
     if intent == "OUT":
         res = (
             supabase.table("product_lifecycle_events")
             .select("product_url, date")
             .eq("lifecycle_event", "OUT_OF_STOCK")
-            .execute()
         )
+        
+        # 🔥 조회 기간 필터링
+        if date_from:
+            res = res.gte("date", date_from.strftime("%Y-%m-%d"))
+        if date_to:
+            res = res.lte("date", date_to.strftime("%Y-%m-%d"))
+        
+        res = res.execute()
+        
         if not res.data:
             return None
         
@@ -275,20 +311,37 @@ def execute_rule(intent, question, df_summary):
             
             category_str = f" [{' > '.join(categories)}]" if categories else ""
             
-            results.append(
-                f"• **{row['brand']}** - {row['product_name']}{category_str}\n"
-                f"  📅 품절일: {out_date}"
-            )
+            product_name = row['product_name']
+            
+            results.append({
+                "text": f"• **{row['brand']}** - {product_name}{category_str}\n  📅 품절일: {out_date}",
+                "product_name": product_name
+            })
         
-        return "최근 품절 제품:\n\n" + "\n\n".join(results)
+        if not results:
+            return None
+        
+        return {
+            "type": "product_list",
+            "text": "최근 품절 제품:\n\n" + "\n\n".join([r["text"] for r in results]),
+            "products": [r["product_name"] for r in results]
+        }
 
     if intent == "RESTORE":
         res = (
             supabase.table("product_lifecycle_events")
             .select("product_url, date")
             .eq("lifecycle_event", "RESTOCK")
-            .execute()
         )
+        
+        # 🔥 조회 기간 필터링
+        if date_from:
+            res = res.gte("date", date_from.strftime("%Y-%m-%d"))
+        if date_to:
+            res = res.lte("date", date_to.strftime("%Y-%m-%d"))
+        
+        res = res.execute()
+        
         if not res.data:
             return None
         
@@ -314,12 +367,21 @@ def execute_rule(intent, question, df_summary):
             
             category_str = f" [{' > '.join(categories)}]" if categories else ""
             
-            results.append(
-                f"• **{row['brand']}** - {row['product_name']}{category_str}\n"
-                f"  🔄 복원일: {restock_date}"
-            )
+            product_name = row['product_name']
+            
+            results.append({
+                "text": f"• **{row['brand']}** - {product_name}{category_str}\n  🔄 복원일: {restock_date}",
+                "product_name": product_name
+            })
         
-        return "최근 복원된 제품:\n\n" + "\n\n".join(results)
+        if not results:
+            return None
+        
+        return {
+            "type": "product_list",
+            "text": "최근 복원된 제품:\n\n" + "\n\n".join([r["text"] for r in results]),
+            "products": [r["product_name"] for r in results]
+        }
 
     if intent == "VOLATILITY" and start_date:
         res = (
@@ -758,6 +820,10 @@ with tab3:
     if ask_question and question:
         st.session_state.active_mode = "자연어 질문"
         
+        # 🔥 질문 이력에 저장
+        if "question_history" not in st.session_state:
+            st.session_state.question_history = []
+        
         intent = classify_intent(question)
         
         # 🔥 현재 검색/필터 조건을 반영한 데이터셋 생성
@@ -778,16 +844,79 @@ with tab3:
         elif len(filtered_df) < len(df_all):
             st.info(f"📊 {len(filtered_df)}개 제품을 대상으로 검색합니다.")
         
-        answer = execute_rule(intent, question, filtered_df)
+        # 🔥 조회 기간 적용
+        answer = execute_rule(intent, question, filtered_df, date_from, date_to)
 
         if answer:
             save_question_log(question, intent, False)
-            st.success(answer)
+            
+            # 🔥 답변을 질문 이력에 저장
+            st.session_state.question_history.append({
+                "question": question,
+                "answer": answer,
+                "intent": intent
+            })
+            
         else:
             with st.spinner("분석 중..."):
                 answer = llm_fallback(question, filtered_df)
+                answer = {"type": "text", "text": answer}  # 통일된 형식으로 변환
             save_question_log(question, intent, True)
-            st.success(answer)
+            
+            # 🔥 답변을 질문 이력에 저장
+            st.session_state.question_history.append({
+                "question": question,
+                "answer": answer,
+                "intent": intent
+            })
+        
+        # 🔥 질문 처리 후 입력창 초기화
+        if "insight_question" in st.session_state:
+            del st.session_state.insight_question
+        st.rerun()
+    
+    # 🔥 질문 이력 표시
+    if "question_history" in st.session_state and st.session_state.question_history:
+        st.markdown("---")
+        
+        for idx, history in enumerate(reversed(st.session_state.question_history)):
+            with st.container(border=True):
+                col_q, col_del = st.columns([10, 1])
+                
+                with col_q:
+                    st.markdown(f"**Q:** {history['question']}")
+                
+                with col_del:
+                    if st.button("🗑️", key=f"delete_q_{idx}", help="질문 삭제"):
+                        st.session_state.question_history.pop(len(st.session_state.question_history) - 1 - idx)
+                        st.rerun()
+                
+                # 🔥 답변 표시
+                answer_data = history['answer']
+                
+                if isinstance(answer_data, dict) and answer_data.get("type") == "product_list":
+                    # 제품 목록이 있는 경우
+                    st.markdown(f"**A:** {answer_data['text']}")
+                    
+                    # 체크박스 추가
+                    if answer_data.get("products"):
+                        st.markdown("##### 📦 비교할 제품으로 추가")
+                        cols = st.columns(3)
+                        for pidx, pname in enumerate(answer_data["products"]):
+                            with cols[pidx % 3]:
+                                st.checkbox(
+                                    pname,
+                                    value=pname in st.session_state.selected_products,
+                                    key=f"chk_nlp_{idx}_{pidx}_{pname}",
+                                    on_change=toggle_product,
+                                    args=(pname,)
+                                )
+                elif isinstance(answer_data, dict):
+                    # 딕셔너리지만 product_list가 아닌 경우
+                    st.markdown(f"**A:** {answer_data.get('text', str(answer_data))}")
+                else:
+                    # 일반 텍스트 답변
+                    st.markdown(f"**A:** {answer_data}")
 
 st.divider()
 
@@ -833,9 +962,11 @@ with col_buttons:
         st.session_state.search_keyword = ""
         st.session_state.search_history = []
         
-        # 🔥 질문 입력창 초기화
+        # 🔥 질문 입력창 및 이력 초기화
         if "insight_question" in st.session_state:
             del st.session_state.insight_question
+        if "question_history" in st.session_state:
+            del st.session_state.question_history
         
         # 🔥 기간 초기화
         if "date_from" in st.session_state:
@@ -852,7 +983,7 @@ with col_buttons:
             del st.session_state.filter_cat2
         
         # 🔥 모든 체크박스 및 버튼 키 삭제 (검색 결과 카드 제거용)
-        keys_to_delete = [key for key in st.session_state.keys() if key.startswith(("chk_kw_", "chk_filter_", "delete_search_"))]
+        keys_to_delete = [key for key in st.session_state.keys() if key.startswith(("chk_kw_", "chk_filter_", "chk_nlp_", "delete_search_", "delete_q_"))]
         for key in keys_to_delete:
             del st.session_state[key]
         
