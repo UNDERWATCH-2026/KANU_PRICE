@@ -457,7 +457,7 @@ st.title("☕ Capsule Price Intelligence")
 # -------------------------
 st.subheader("🔎 조회 기준")
 
-col_search, col_buttons, col_insight = st.columns([2, 1, 2])
+col_search, col_insight = st.columns([3, 2])
 
 with col_search:
     search_mode = st.radio(
@@ -465,33 +465,6 @@ with col_search:
         ["키워드 검색", "필터 선택 (브랜드/카테고리)"],
         horizontal=True
     )
-
-with col_buttons:
-    st.markdown("##### ⚙️ 작업")
-    if st.button("📊 조회하기", type="primary", use_container_width=True):
-        st.session_state.show_results = True
-    
-    if st.button("🗑️ 전체 초기화", use_container_width=True):
-        # 🔥 모든 세션 상태 완전 초기화
-        st.session_state.selected_products = set()
-        st.session_state.keyword_results = {}
-        st.session_state.show_results = False
-        st.session_state.search_keyword = ""
-        st.session_state.search_history = []
-        
-        # 🔥 질문 입력창 초기화
-        if "insight_question" in st.session_state:
-            del st.session_state.insight_question
-        
-        # 🔥 필터 selectbox 상태 초기화
-        if "filter_brand" in st.session_state:
-            del st.session_state.filter_brand
-        if "filter_cat1" in st.session_state:
-            del st.session_state.filter_cat1
-        if "filter_cat2" in st.session_state:
-            del st.session_state.filter_cat2
-            
-        st.rerun()
 
 with col_insight:
     st.markdown("##### 🤖 가격 인사이트 질문")
@@ -554,74 +527,100 @@ except Exception as e:
     print(f"[ENCODING_LOG_ERROR] {e}")
 
 # -------------------------
-# 🔥 질문 처리 (데이터 로드 후) - 질문하기 버튼 클릭 시에만
+# -------------------------
+# -------------------------
+# 🔥 질문 처리 (조회 기준 바로 아래)
 # -------------------------
 if ask_question and question:
-    with st.expander("💡 인사이트 결과", expanded=True):
-        intent = classify_intent(question)
-        
-        # 🔥 현재 검색/필터 조건을 반영한 데이터셋 생성
-        filtered_df = df_all.copy()
-        
-        # 키워드 검색 모드: 검색 이력의 모든 제품으로 필터링
-        if search_mode == "키워드 검색" and st.session_state.search_history:
-            all_searched_products = []
-            for history in st.session_state.search_history:
-                all_searched_products.extend(history['results'])
-            
-            if all_searched_products:
-                filtered_df = filtered_df[filtered_df["product_name"].isin(all_searched_products)]
-        
-        # 필터 선택 모드: 현재 선택된 필터 적용 (세션 상태에서 가져옴)
-        elif search_mode == "필터 선택 (브랜드/카테고리)":
-            if "filter_brand" in st.session_state and st.session_state.filter_brand != "(전체)":
-                filtered_df = filtered_df[filtered_df["brand"] == st.session_state.filter_brand]
-            
-            if "filter_cat1" in st.session_state and st.session_state.filter_cat1 != "(전체)":
-                filtered_df = filtered_df[filtered_df["category1"] == st.session_state.filter_cat1]
-            
-            if "filter_cat2" in st.session_state and st.session_state.filter_cat2 != "(전체)":
-                filtered_df = filtered_df[filtered_df["category2"] == st.session_state.filter_cat2]
-        
-        # 질문에서 브랜드 추출하여 추가 필터링
-        brands = options_from(df_all, "brand")
-        for brand in brands:
-            if brand.lower() in question.lower():
-                filtered_df = filtered_df[filtered_df["brand"] == brand]
-                st.info(f"🔍 '{brand}' 브랜드로 필터링된 결과입니다.")
-                break
-        
-        # 필터링된 데이터가 없으면 전체 데이터 사용
-        if filtered_df.empty:
-            filtered_df = df_all.copy()
-            st.warning("⚠️ 필터링 결과가 없어 전체 제품을 대상으로 검색합니다.")
-        elif len(filtered_df) < len(df_all):
-            st.info(f"📊 {len(filtered_df)}개 제품을 대상으로 검색합니다.")
-        
-        answer = execute_rule(intent, question, filtered_df)
-
-        if answer:
-            save_question_log(question, intent, False)
-            st.success(answer)
-        else:
-            with st.spinner("분석 중..."):
-                answer = llm_fallback(question, filtered_df)
-            save_question_log(question, intent, True)
-            st.success(answer)
+    intent = classify_intent(question)
     
-    # 🔥 질문 처리 후 입력창 초기화
-    if "insight_question" in st.session_state:
-        del st.session_state.insight_question
-        st.rerun()
+    # 🔥 현재 검색/필터 조건을 반영한 데이터셋 생성
+    filtered_df = df_all.copy()
+    
+    # 키워드 검색 모드: 검색 이력의 모든 제품으로 필터링
+    if search_mode == "키워드 검색" and st.session_state.search_history:
+        all_searched_products = []
+        for history in st.session_state.search_history:
+            all_searched_products.extend(history['results'])
+        
+        if all_searched_products:
+            filtered_df = filtered_df[filtered_df["product_name"].isin(all_searched_products)]
+    
+    # 필터 선택 모드: 현재 선택된 필터 적용 (세션 상태에서 가져옴)
+    elif search_mode == "필터 선택 (브랜드/카테고리)":
+        if "filter_brand" in st.session_state and st.session_state.filter_brand != "(전체)":
+            filtered_df = filtered_df[filtered_df["brand"] == st.session_state.filter_brand]
+        
+        if "filter_cat1" in st.session_state and st.session_state.filter_cat1 != "(전체)":
+            filtered_df = filtered_df[filtered_df["category1"] == st.session_state.filter_cat1]
+        
+        if "filter_cat2" in st.session_state and st.session_state.filter_cat2 != "(전체)":
+            filtered_df = filtered_df[filtered_df["category2"] == st.session_state.filter_cat2]
+    
+    # 질문에서 브랜드 추출하여 추가 필터링
+    brands = options_from(df_all, "brand")
+    for brand in brands:
+        if brand.lower() in question.lower():
+            filtered_df = filtered_df[filtered_df["brand"] == brand]
+            st.info(f"🔍 '{brand}' 브랜드로 필터링된 결과입니다.")
+            break
+    
+    # 필터링된 데이터가 없으면 전체 데이터 사용
+    if filtered_df.empty:
+        filtered_df = df_all.copy()
+        st.warning("⚠️ 필터링 결과가 없어 전체 제품을 대상으로 검색합니다.")
+    elif len(filtered_df) < len(df_all):
+        st.info(f"📊 {len(filtered_df)}개 제품을 대상으로 검색합니다.")
+    
+    answer = execute_rule(intent, question, filtered_df)
 
+    if answer:
+        save_question_log(question, intent, False)
+        st.success(answer)
+    else:
+        with st.spinner("분석 중..."):
+            answer = llm_fallback(question, filtered_df)
+        save_question_log(question, intent, True)
+        st.success(answer)
 
-# -------------------------
 st.divider()
 
 # =========================
 # 6️⃣ 조회 조건
 # =========================
 st.subheader("🔍 조회 조건")
+
+# 🔥 조회하기/전체초기화 버튼을 우측에 배치
+col_label, col_buttons = st.columns([4, 1])
+
+with col_label:
+    st.markdown("")  # 빈 공간
+
+with col_buttons:
+    if st.button("📊 조회하기", type="primary", use_container_width=True):
+        st.session_state.show_results = True
+    
+    if st.button("🗑️ 전체 초기화", use_container_width=True):
+        # 🔥 모든 세션 상태 완전 초기화
+        st.session_state.selected_products = set()
+        st.session_state.keyword_results = {}
+        st.session_state.show_results = False
+        st.session_state.search_keyword = ""
+        st.session_state.search_history = []
+        
+        # 🔥 질문 입력창 초기화
+        if "insight_question" in st.session_state:
+            del st.session_state.insight_question
+        
+        # 🔥 필터 selectbox 상태 초기화
+        if "filter_brand" in st.session_state:
+            del st.session_state.filter_brand
+        if "filter_cat1" in st.session_state:
+            del st.session_state.filter_cat1
+        if "filter_cat2" in st.session_state:
+            del st.session_state.filter_cat2
+            
+        st.rerun()
 
 if "selected_products" not in st.session_state:
     st.session_state.selected_products = set()
@@ -1196,3 +1195,4 @@ for pname in selected_products:
             use_container_width=True,
             hide_index=True
         )
+    
