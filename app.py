@@ -966,7 +966,6 @@ with col_period:
             value=st.session_state.date_to,
             key="date_to_input"
         )
-    )
 
 with col_buttons:
     st.markdown("##### ⚙️")  # 높이 맞추기용
@@ -1458,4 +1457,5 @@ for pname in selected_products:
             use_container_width=True,
             hide_index=True
         )
+
 
