@@ -288,103 +288,56 @@ st.subheader("🔍 조회 조건")
 if "selected_products" not in st.session_state:
     st.session_state.selected_products = set()
 
-# -------------------------
-# 🔍 검색 입력 (Enter 동작)
-# -------------------------
-with st.form("search_form", clear_on_submit=False):
-    keyword_input = st.text_input(
-        "제품명 검색",
-        placeholder="예: 쥬시, 멜로지오",
-        label_visibility="collapsed"
-    )
-    submitted = st.form_submit_button("검색")
+# =========================
+# 🔎 A) 키워드 검색 모드
+# =========================
+if search_mode == "키워드 검색":
 
-if submitted:
-    st.session_state.search_keyword = keyword_input.strip()
-    st.rerun()
+    # 🔍 검색 입력 (Enter 가능)
+    with st.form("search_form", clear_on_submit=False):
+        keyword_input = st.text_input(
+            "제품명 검색",
+            placeholder="예: 쥬시, 멜로지오",
+            label_visibility="collapsed"
+        )
+        submitted = st.form_submit_button("검색")
 
-search_keyword = st.session_state.get("search_keyword", "")
+    if submitted:
+        st.session_state.search_keyword = keyword_input.strip()
+        st.rerun()
 
-# -------------------------
-# 🎯 비교할 제품 필터링
-# -------------------------
-if search_keyword:
-    keywords = [k.strip() for k in search_keyword.split(",") if k.strip()]
-    mask = False
-    for kw in keywords:
-        mask |= _norm_series(df_all["product_name"]).str.contains(kw, case=False)
-    candidates_df = df_all[mask].copy()
-else:
-    candidates_df = df_all.copy()
+    search_keyword = st.session_state.get("search_keyword", "")
 
-# -------------------------
-# ✅ 비교할 제품 선택
-# -------------------------
-st.markdown("### 📊 비교할 제품 선택")
-
-for _, row in candidates_df.iterrows():
-    pname = row["product_name"]
-    checked = pname in st.session_state.selected_products
-
-    selected = st.checkbox(
-        pname,
-        value=checked,
-        key=f"product_{pname}"
-    )
-
-    if selected:
-        st.session_state.selected_products.add(pname)
+    # 🎯 후보 필터링
+    if search_keyword:
+        keywords = [k.strip() for k in search_keyword.split(",") if k.strip()]
+        mask = False
+        for kw in keywords:
+            mask |= _norm_series(df_all["product_name"]).str.contains(kw, case=False)
+        candidates_df = df_all[mask].copy()
     else:
-        st.session_state.selected_products.discard(pname)
-
-
-    # -------------------------
-    # 키워드별 결과 출력
-    # -------------------------
-    st.subheader("📦 비교할 제품 선택")
-
-    if st.session_state.keyword_results:
-        all_candidates = []
-
-        for kw in reversed(list(st.session_state.keyword_results.keys())):
-            st.markdown(f"#### 🔎 '{kw}' 검색 결과")
-
-            col_title, col_delete = st.columns([8, 2])
-            with col_delete:
-                if st.button("검색 결과 삭제", key=f"del_{kw}"):
-                    df_kw = st.session_state.keyword_results[kw]
-                    remove_list = df_kw["product_name"].tolist()
-
-                    st.session_state.selected_products = {
-                        p for p in st.session_state.selected_products
-                        if p not in remove_list
-                    }
-
-                    del st.session_state.keyword_results[kw]
-                    st.rerun()
-
-            df_kw = st.session_state.keyword_results[kw]
-            product_list = sorted(df_kw["product_name"].unique().tolist())
-
-            for pname in product_list:
-                st.checkbox(
-                    pname,
-                    value=pname in st.session_state.selected_products,
-                    key=f"chk_{kw}_{pname}",
-                    on_change=toggle_product,
-                    args=(pname,),
-                )
-
-            all_candidates.append(df_kw)
-
-        candidates_df = pd.concat(all_candidates).drop_duplicates()
-
-    else:
-        st.info("제품명 키워드를 추가하세요.")
         candidates_df = pd.DataFrame()
 
-# --- B) 필터 선택 ---
-else:
+    # 📦 제품 선택
+    st.markdown("### 📦 비교할 제품 선택")
+
+    if candidates_df.empty:
+        st.info("검색 결과가 없습니다.")
+    else:
+        for pname in sorted(candidates_df["product_name"].unique()):
+            st.checkbox(
+                pname,
+                value=pname in st.session_state.selected_products,
+                key=f"chk_kw_{pname}",
+                on_change=toggle_product,
+                args=(pname,)
+            )
+
+# =========================
+# 🎛 B) 필터 선택 모드
+# =========================
+elif search_mode == "필터 선택 (브랜드/카테고리)":
+
     col1, col2, col3 = st.columns(3)
 
     with col1:
@@ -405,21 +358,18 @@ else:
 
     candidates_df = df2 if sel_cat2 == "(전체)" else df2[df2["category2"] == sel_cat2]
 
-# 필터 결과에서 제품 선택
-if search_mode == "필터 선택 (브랜드/카테고리)":
-    st.subheader("📦 비교할 제품 선택")
+    st.markdown("### 📦 비교할 제품 선택")
 
     with st.expander("목록 펼치기 / 접기", expanded=False):
-        product_list = sorted(candidates_df["product_name"].unique().tolist())
-
-        for pname in product_list:
+        for pname in sorted(candidates_df["product_name"].unique()):
             st.checkbox(
                 pname,
                 value=pname in st.session_state.selected_products,
                 key=f"chk_filter_{pname}",
                 on_change=toggle_product,
-                args=(pname,),
+                args=(pname,)
             )
+
 
 # =========================
 # 8️⃣ 결과 표시
@@ -1032,6 +982,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
 
