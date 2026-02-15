@@ -221,34 +221,44 @@ if search_mode != st.session_state.active_mode:
 
 st.divider()
 
+
 # -------------------------
 # 데이터 로딩
 # -------------------------
 df_all = load_product_summary()
 
-# 🔥 제품명 깨짐 보정 적용
+# 데이터 없으면 즉시 중단
+if df_all is None or df_all.empty:
+    st.warning("아직 집계된 제품 데이터가 없습니다.")
+    st.stop()
+
+# -------------------------
+# 제품명 정제
+# -------------------------
 df_all["product_name_raw"] = df_all["product_name"]
 df_all["product_name"] = df_all["product_name"].apply(clean_product_name)
 
-# 🔥 깨진 문자열 자동 감지
-encoding_issues = detect_encoding_issues(df_all)
+# -------------------------
+# 깨진 문자열 감지 (운영 로그 전용)
+# -------------------------
+try:
+    encoding_issues = detect_encoding_issues(df_all)
 
-if not encoding_issues.empty:
+    if isinstance(encoding_issues, pd.DataFrame) and not encoding_issues.empty:
+        print(f"[ENCODING] 깨진 제품명 {len(encoding_issues)}건 감지")
 
-    st.warning(f"⚠ 깨진 제품명 {len(encoding_issues)}건 감지됨")
+        # Supabase 저장용 최소 컬럼만 추출
+        log_records = encoding_issues[[
+            "product_url",
+            "product_name_raw"
+        ]].to_dict(orient="records")
 
-    # Supabase에 로그 저장 (중복 방지용 try)
-    try:
-        supabase.table("product_name_encoding_issues").insert(
-            encoding_issues.to_dict(orient="records")
-        ).execute()
-    except Exception:
-        pass
+        supabase.table("product_name_encoding_issues") \
+                .insert(log_records) \
+                .execute()
 
-
-if df_all.empty:
-    st.warning("아직 집계된 제품 데이터가 없습니다.")
-    st.stop()
+except Exception as e:
+    print(f"[ENCODING_LOG_ERROR] {e}")
 
 
 # -------------------------
@@ -995,6 +1005,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
 
