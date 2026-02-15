@@ -285,46 +285,33 @@ st.divider()
 # 6️⃣ 조회 조건
 # =========================
 st.subheader("🔍 조회 조건")
-candidates_df = pd.DataFrame()
 
-# --- A) 키워드 검색 ---
-if search_mode == "키워드 검색":
+with st.form("search_form"):
+    keyword_input = st.text_input(
+        "제품명 키워드 입력",
+        placeholder="예: 쥬시, 멜로지오",
+        label_visibility="collapsed"
+    )
 
-    col_input, col_reset = st.columns([8, 2])
+    submitted = st.form_submit_button("검색", use_container_width=True)
 
-    with col_input:
-        with st.form("kw_add_form", clear_on_submit=False):
-            keyword_input = st.text_input(
-                "제품명 키워드 입력",
-                value=st.session_state.keyword_input,
-                placeholder="예: 스노우, 쥬시",
-                label_visibility="collapsed",
-                key="keyword_input"
-            )
+if submitted and keyword_input.strip():
 
-            submitted_add = st.form_submit_button(
-                "🔍 검색어 추가",
-                use_container_width=True
-            )
+    keywords = [k.strip() for k in keyword_input.split(",") if k.strip()]
 
-        if submitted_add:
-            kw = st.session_state.keyword_input.strip()
-            if kw:
-                mask = _norm_series(df_all["product_name"]).str.contains(kw, case=False)
-                result_df = df_all[mask].copy()
-                if not result_df.empty:
-                    st.session_state.keyword_results[kw] = result_df
+    mask = False
+    for kw in keywords:
+        mask |= _norm_series(df_all["product_name"]).str.contains(kw, case=False)
 
-            st.session_state.keyword_input = ""
-            st.rerun()
+    result_df = df_all[mask]
 
-    with col_reset:
-        if st.button("🧹 검색 초기화", use_container_width=True):
-            st.session_state.keyword_results = {}
-            st.session_state.selected_products = set()
-            st.session_state.show_results = False
-            st.session_state.keyword_input = ""
-            st.rerun()
+    if not result_df.empty:
+        st.session_state.selected_products = set(result_df["product_name"].tolist())
+    else:
+        st.warning("검색 결과 없음")
+
+    st.rerun()
+
 
 
     # -------------------------
@@ -1021,6 +1008,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
 
