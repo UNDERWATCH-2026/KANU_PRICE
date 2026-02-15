@@ -271,24 +271,27 @@ with col_query:
         st.session_state.show_results = True
 
 with col_clear:
-    if st.button("🗑️ 전체 삭제", use_container_width=True):
+    if st.button("🗑️ 전체 초기화", use_container_width=True):
 
-        # 1️⃣ 선택 초기화
-        st.session_state.selected_products = set()
-
-        # 2️⃣ 검색 상태 초기화
-        st.session_state.keyword_results = {}
-        st.session_state.show_results = False
-        st.session_state.keyword_input = ""
-        st.session_state.search_keyword = ""
-
-        # 3️⃣ checkbox key 강제 삭제
-        for key in list(st.session_state.keys()):
-            if key.startswith("chk_"):
-                st.session_state.pop(key, None)
-
-        st.rerun()
-
+        sel_brand = st.selectbox(
+            "브랜드",
+            ["(전체)"] + brands,
+            key="filter_brand"
+        )
+        
+        sel_cat1 = st.selectbox(
+            "카테고리1",
+            ["(전체)"] + cat1s,
+            key="filter_cat1"
+        )
+        
+        sel_cat2 = st.selectbox(
+            "카테고리2",
+            ["(전체)"] + cat2s,
+            key="filter_cat2"
+        )
+        rerun()
+        
 
 
 st.divider()
@@ -311,9 +314,9 @@ if search_mode == "키워드 검색":
         keyword_input = st.text_input(
             "제품명 검색",
             placeholder="예: 쥬시, 멜로지오",
-            label_visibility="collapsed"
-        )
-        submitted = st.form_submit_button("검색")
+            key="keyword_input"   # 🔥 반드시 필요
+    )
+    submitted = st.form_submit_button("검색")
 
     if submitted:
         st.session_state.search_keyword = keyword_input.strip()
@@ -355,7 +358,24 @@ elif search_mode == "필터 선택 (브랜드/카테고리)":
 
     with col1:
         brands = options_from(df_all, "brand")
-        sel_brand = st.selectbox("브랜드", ["(전체)"] + brands)
+        sel_brand = st.selectbox(
+            "브랜드",
+            ["(전체)"] + brands,
+            key="filter_brand"
+        )
+        
+        sel_cat1 = st.selectbox(
+            "카테고리1",
+            ["(전체)"] + cat1s,
+            key="filter_cat1"
+        )
+        
+        sel_cat2 = st.selectbox(
+            "카테고리2",
+            ["(전체)"] + cat2s,
+            key="filter_cat2"
+        )
+
 
     df1 = df_all if sel_brand == "(전체)" else df_all[df_all["brand"] == sel_brand]
 
@@ -995,6 +1015,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
 
