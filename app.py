@@ -474,6 +474,7 @@ with col_insight:
         label_visibility="collapsed",
         key="insight_question"
     )
+    ask_question = st.button("🔍 질문하기", use_container_width=True, type="primary")
 
 if search_mode != st.session_state.active_mode:
     st.session_state.active_mode = search_mode
@@ -526,9 +527,9 @@ except Exception as e:
     print(f"[ENCODING_LOG_ERROR] {e}")
 
 # -------------------------
-# 🔥 질문 처리 (데이터 로드 후)
+# 🔥 질문 처리 (데이터 로드 후) - 질문하기 버튼 클릭 시에만
 # -------------------------
-if question:
+if ask_question and question:
     with st.expander("💡 인사이트 결과", expanded=True):
         intent = classify_intent(question)
         
@@ -583,7 +584,7 @@ if question:
 
 
 # -------------------------
-# 상단 버튼
+# 상단 버튼 - 검색 방식 아래로 이동
 # -------------------------
 col_query, col_clear = st.columns([1, 1])
 
@@ -599,6 +600,10 @@ with col_clear:
         st.session_state.show_results = False
         st.session_state.search_keyword = ""
         st.session_state.search_history = []  # 🔥 검색 이력 초기화
+        
+        # 🔥 질문 입력창 초기화
+        if "insight_question" in st.session_state:
+            del st.session_state.insight_question
         
         # 🔥 필터 selectbox 상태 초기화
         if "filter_brand" in st.session_state:
