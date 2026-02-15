@@ -503,8 +503,12 @@ for pname in selected_products:
                 if restore_after:
                     restore_date = min(restore_after)
         
-                    # 🔥 품절~복원 사이 가격 제거 (price_status는 유지)
-                    mask = (tmp["event_date"] > out_date) & (tmp["event_date"] < restore_date)
+                    # 🔥 품절~복원 사이 가격 제거 (품절/복원 당일 포함)
+                    mask = (tmp["event_date"] >= out_date) & (tmp["event_date"] <= restore_date)
+                    tmp.loc[mask, "unit_price"] = None
+                else:
+                    # 복원 이벤트가 없으면 품절 이후 모든 데이터 제거
+                    mask = tmp["event_date"] >= out_date
                     tmp.loc[mask, "unit_price"] = None
         
         timeline_rows.append(tmp[["product_name", "event_date", "unit_price", "price_status"]])
@@ -589,14 +593,56 @@ if timeline_rows:
             if df_filtered.empty:
                 continue
 
-            # 아이콘 위치를 가격선에 맞추기 위해 join
+            # 🔥 아이콘 위치를 가격선에 맞추기 위해 join
             df_filtered = df_filtered.merge(
                 df_timeline[["product_name", "event_date", "unit_price"]],
                 on=["product_name", "event_date"],
                 how="left"
             )
             
-            # 🔥 중요: unit_price 없는 lifecycle 제거 (가격선에 정확히 붙이기 위함)
+            # 🔥 품절/복원 아이콘은 실제 가격선 위에만 표시
+            if event_type in ["OUT_OF_STOCK", "RESTOCK"]:
+                # 품절 시작점: 품절 직전 가격 사용
+                if event_type == "OUT_OF_STOCK":
+                    for idx, row in df_filtered[df_filtered["unit_price"].isna()].iterrows():
+                        product_prices = df_timeline[
+                            (df_timeline["product_name"] == row["product_name"]) &
+                            (df_timeline["event_date"] < row["event_date"]) &
+                            (df_timeline["unit_price"].notna())
+                        ]
+                        if not product_prices.empty:
+                            closest = product_prices.nsmallest(1, "event_date").iloc[-1]
+                            df_filtered.at[idx, "unit_price"] = closest["unit_price"]
+                
+                # 복원 시점: 복원 직후 가격 사용
+                elif event_type == "RESTOCK":
+                    for idx, row in df_filtered[df_filtered["unit_price"].isna()].iterrows():
+                        product_prices = df_timeline[
+                            (df_timeline["product_name"] == row["product_name"]) &
+                            (df_timeline["event_date"] >= row["event_date"]) &
+                            (df_timeline["unit_price"].notna())
+                        ]
+                        if not product_prices.empty:
+                            closest = product_prices.nsmallest(1, "event_date").iloc[0]
+                            df_filtered.at[idx, "unit_price"] = closest["unit_price"]
+            
+            else:
+                # NEW 이벤트: 가장 가까운 가격 사용
+                for idx, row in df_filtered[df_filtered["unit_price"].isna()].iterrows():
+                    product_prices = df_timeline[
+                        (df_timeline["product_name"] == row["product_name"]) &
+                        (df_timeline["unit_price"].notna())
+                    ]
+                    
+                    if not product_prices.empty:
+                        # 이벤트 날짜와 가장 가까운 가격 찾기
+                        product_prices["date_diff"] = abs(
+                            (product_prices["event_date"] - row["event_date"]).dt.total_seconds()
+                        )
+                        closest = product_prices.nsmallest(1, "date_diff").iloc[0]
+                        df_filtered.at[idx, "unit_price"] = closest["unit_price"]
+            
+            # unit_price 없는 lifecycle 제거 (매칭 실패한 경우)
             df_filtered = df_filtered.dropna(subset=["unit_price"])
 
             
