@@ -642,6 +642,17 @@ try:
 except Exception as e:
     print(f"[ENCODING_LOG_ERROR] {e}")
 
+
+# =========================
+# 🔥 전역 날짜 기본값 세팅 (자연어 질문용)
+# =========================
+if "date_from" not in st.session_state:
+    st.session_state.date_from = datetime.now() - timedelta(days=90)
+
+if "date_to" not in st.session_state:
+    st.session_state.date_to = datetime.now()
+
+
 # -------------------------
 # 조회 기준 선택
 # -------------------------
@@ -845,7 +856,14 @@ with tab3:
             st.info(f"📊 {len(filtered_df)}개 제품을 대상으로 검색합니다.")
         
         # 🔥 조회 기간 적용
-        answer = execute_rule(intent, question, filtered_df, date_from, date_to)
+        answer = execute_rule(
+            intent,
+            question,
+            filtered_df,
+            st.session_state.date_from,
+            st.session_state.date_to
+        )
+
 
         if answer:
             save_question_log(question, intent, False)
@@ -936,18 +954,19 @@ with col_period:
     col_from, col_to = st.columns(2)
     
     with col_from:
-        date_from = st.date_input(
+        st.session_state.date_from = st.date_input(
             "시작일",
-            value=datetime.now() - timedelta(days=90),  # 기본 3개월 전
-            key="date_from"
+            value=st.session_state.date_from,
+            key="date_from_input"
         )
     
     with col_to:
-        date_to = st.date_input(
+        st.session_state.date_to = st.date_input(
             "종료일",
-            value=datetime.now(),
-            key="date_to"
+            value=st.session_state.date_to,
+            key="date_to_input"
         )
+    )
 
 with col_buttons:
     st.markdown("##### ⚙️")  # 높이 맞추기용
@@ -1439,3 +1458,4 @@ for pname in selected_products:
             use_container_width=True,
             hide_index=True
         )
+
