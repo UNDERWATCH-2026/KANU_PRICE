@@ -457,181 +457,14 @@ st.title("☕ Capsule Price Intelligence")
 # -------------------------
 st.subheader("🔎 조회 기준")
 
-col_search, col_insight = st.columns([3, 2])
-
-with col_search:
-    search_mode = st.radio(
-        "검색 방식 선택",
-        ["키워드 검색", "필터 선택 (브랜드/카테고리)"],
-        horizontal=True
-    )
-
-with col_insight:
-    st.markdown("##### 🤖 가격 인사이트 질문")
-    question = st.text_input(
-        "자연어로 질문하세요",
-        placeholder="예: 에스프레소 중 최저가",
-        label_visibility="collapsed",
-        key="insight_question"
-    )
-    ask_question = st.button("🔍 질문하기", use_container_width=True, type="primary")
-
-if search_mode != st.session_state.active_mode:
-    st.session_state.active_mode = search_mode
-    st.session_state.selected_products = set()
-    st.session_state.keyword_results = {}
-    st.session_state.show_results = False
-    st.session_state.search_keyword = ""
-    st.session_state.search_history = []  # 🔥 검색 이력 초기화
-    st.rerun()
-
-st.divider()
-
-
-# -------------------------
-# 데이터 로딩
-# -------------------------
-df_all = load_product_summary()
-
-# 데이터 없으면 즉시 중단
-if df_all is None or df_all.empty:
-    st.warning("아직 집계된 제품 데이터가 없습니다.")
-    st.stop()
-
-# -------------------------
-# 제품명 정제
-# -------------------------
-df_all["product_name_raw"] = df_all["product_name"]
-df_all["product_name"] = df_all["product_name"].apply(clean_product_name)
-
-# -------------------------
-# 깨진 문자열 감지 (운영 로그 전용)
-# -------------------------
-try:
-    encoding_issues = detect_encoding_issues(df_all)
-
-    if isinstance(encoding_issues, pd.DataFrame) and not encoding_issues.empty:
-        print(f"[ENCODING] 깨진 제품명 {len(encoding_issues)}건 감지")
-
-        # Supabase 저장용 최소 컬럼만 추출
-        log_records = encoding_issues[[
-            "product_url",
-            "product_name_raw"
-        ]].to_dict(orient="records")
-
-        supabase.table("product_name_encoding_issues") \
-                .insert(log_records) \
-                .execute()
-
-except Exception as e:
-    print(f"[ENCODING_LOG_ERROR] {e}")
-
-# -------------------------
-# -------------------------
-# -------------------------
-# 🔥 질문 처리 (조회 기준 바로 아래)
-# -------------------------
-if ask_question and question:
-    intent = classify_intent(question)
-    
-    # 🔥 현재 검색/필터 조건을 반영한 데이터셋 생성
-    filtered_df = df_all.copy()
-    
-    # 키워드 검색 모드: 검색 이력의 모든 제품으로 필터링
-    if search_mode == "키워드 검색" and st.session_state.search_history:
-        all_searched_products = []
-        for history in st.session_state.search_history:
-            all_searched_products.extend(history['results'])
-        
-        if all_searched_products:
-            filtered_df = filtered_df[filtered_df["product_name"].isin(all_searched_products)]
-    
-    # 필터 선택 모드: 현재 선택된 필터 적용 (세션 상태에서 가져옴)
-    elif search_mode == "필터 선택 (브랜드/카테고리)":
-        if "filter_brand" in st.session_state and st.session_state.filter_brand != "(전체)":
-            filtered_df = filtered_df[filtered_df["brand"] == st.session_state.filter_brand]
-        
-        if "filter_cat1" in st.session_state and st.session_state.filter_cat1 != "(전체)":
-            filtered_df = filtered_df[filtered_df["category1"] == st.session_state.filter_cat1]
-        
-        if "filter_cat2" in st.session_state and st.session_state.filter_cat2 != "(전체)":
-            filtered_df = filtered_df[filtered_df["category2"] == st.session_state.filter_cat2]
-    
-    # 질문에서 브랜드 추출하여 추가 필터링
-    brands = options_from(df_all, "brand")
-    for brand in brands:
-        if brand.lower() in question.lower():
-            filtered_df = filtered_df[filtered_df["brand"] == brand]
-            st.info(f"🔍 '{brand}' 브랜드로 필터링된 결과입니다.")
-            break
-    
-    # 필터링된 데이터가 없으면 전체 데이터 사용
-    if filtered_df.empty:
-        filtered_df = df_all.copy()
-        st.warning("⚠️ 필터링 결과가 없어 전체 제품을 대상으로 검색합니다.")
-    elif len(filtered_df) < len(df_all):
-        st.info(f"📊 {len(filtered_df)}개 제품을 대상으로 검색합니다.")
-    
-    answer = execute_rule(intent, question, filtered_df)
-
-    if answer:
-        save_question_log(question, intent, False)
-        st.success(answer)
-    else:
-        with st.spinner("분석 중..."):
-            answer = llm_fallback(question, filtered_df)
-        save_question_log(question, intent, True)
-        st.success(answer)
-
-st.divider()
+tab1, tab2, tab3 = st.tabs(["🔍 키워드 검색", "🎛️ 필터 선택", "🤖 자연어 질문"])
 
 # =========================
-# 6️⃣ 조회 조건
+# TAB 1: 키워드 검색
 # =========================
-st.subheader("🔍 조회 조건")
-
-# 🔥 조회하기/전체초기화 버튼을 우측에 배치
-col_label, col_buttons = st.columns([4, 1])
-
-with col_label:
-    st.markdown("")  # 빈 공간
-
-with col_buttons:
-    if st.button("📊 조회하기", type="primary", use_container_width=True):
-        st.session_state.show_results = True
-    
-    if st.button("🗑️ 전체 초기화", use_container_width=True):
-        # 🔥 모든 세션 상태 완전 초기화
-        st.session_state.selected_products = set()
-        st.session_state.keyword_results = {}
-        st.session_state.show_results = False
-        st.session_state.search_keyword = ""
-        st.session_state.search_history = []
-        
-        # 🔥 질문 입력창 초기화
-        if "insight_question" in st.session_state:
-            del st.session_state.insight_question
-        
-        # 🔥 필터 selectbox 상태 초기화
-        if "filter_brand" in st.session_state:
-            del st.session_state.filter_brand
-        if "filter_cat1" in st.session_state:
-            del st.session_state.filter_cat1
-        if "filter_cat2" in st.session_state:
-            del st.session_state.filter_cat2
-            
-        st.rerun()
-
-if "selected_products" not in st.session_state:
-    st.session_state.selected_products = set()
-
-# =========================
-# 🔎 A) 키워드 검색 모드
-# =========================
-if search_mode == "키워드 검색":
-
-    # 🔍 검색 입력 (Enter 가능) - 🔥 value에 세션 상태 반영
-    with st.form("search_form", clear_on_submit=True):  # 🔥 clear_on_submit=True로 변경
+with tab1:
+    # 🔍 검색 입력 (Enter 가능)
+    with st.form("search_form", clear_on_submit=True):
         keyword_input = st.text_input(
             "제품명 검색",
             placeholder="예: 쥬시, 멜로지오",
@@ -642,6 +475,7 @@ if search_mode == "키워드 검색":
     if submitted and keyword_input.strip():
         search_keyword = keyword_input.strip()
         st.session_state.search_keyword = search_keyword
+        st.session_state.active_mode = "키워드 검색"
         
         # 🔥 검색 결과 계산
         keywords = [k.strip() for k in search_keyword.split(",") if k.strip()]
@@ -726,10 +560,9 @@ if search_mode == "키워드 검색":
                                 )
 
 # =========================
-# 🎛 B) 필터 선택 모드
+# TAB 2: 필터 선택
 # =========================
-elif search_mode == "필터 선택 (브랜드/카테고리)":
-
+with tab2:
     col1, col2, col3 = st.columns(3)
 
     with col1:
@@ -761,6 +594,10 @@ elif search_mode == "필터 선택 (브랜드/카테고리)":
         )
 
     candidates_df = df2 if sel_cat2 == "(전체)" else df2[df2["category2"] == sel_cat2]
+    
+    # 필터 변경 시 active_mode 업데이트
+    if sel_brand != "(전체)" or sel_cat1 != "(전체)" or sel_cat2 != "(전체)":
+        st.session_state.active_mode = "필터 선택"
 
     st.markdown("### 📦 비교할 제품 선택")
 
@@ -773,6 +610,159 @@ elif search_mode == "필터 선택 (브랜드/카테고리)":
                 on_change=toggle_product,
                 args=(pname,)
             )
+
+# =========================
+# TAB 3: 자연어 질문
+# =========================
+with tab3:
+    st.markdown("### 💬 자연어로 질문하세요")
+    
+    question = st.text_area(
+        "질문 입력",
+        placeholder="예:\n- 네스프레소 중 최저가는?\n- 최근 1개월 할인 제품\n- 에스프레소 품절 제품",
+        height=100,
+        key="insight_question"
+    )
+    
+    ask_question = st.button("🔍 질문하기", type="primary", use_container_width=True)
+    
+    # 🔥 질문 처리
+    if ask_question and question:
+        st.session_state.active_mode = "자연어 질문"
+        
+        intent = classify_intent(question)
+        
+        # 🔥 현재 검색/필터 조건을 반영한 데이터셋 생성
+        filtered_df = df_all.copy()
+        
+        # 질문에서 브랜드 추출하여 필터링
+        brands = options_from(df_all, "brand")
+        for brand in brands:
+            if brand.lower() in question.lower():
+                filtered_df = filtered_df[filtered_df["brand"] == brand]
+                st.info(f"🔍 '{brand}' 브랜드로 필터링된 결과입니다.")
+                break
+        
+        # 필터링된 데이터가 없으면 전체 데이터 사용
+        if filtered_df.empty:
+            filtered_df = df_all.copy()
+            st.warning("⚠️ 필터링 결과가 없어 전체 제품을 대상으로 검색합니다.")
+        elif len(filtered_df) < len(df_all):
+            st.info(f"📊 {len(filtered_df)}개 제품을 대상으로 검색합니다.")
+        
+        answer = execute_rule(intent, question, filtered_df)
+
+        if answer:
+            save_question_log(question, intent, False)
+            st.success(answer)
+        else:
+            with st.spinner("분석 중..."):
+                answer = llm_fallback(question, filtered_df)
+            save_question_log(question, intent, True)
+            st.success(answer)
+
+st.divider()
+
+
+# -------------------------
+# 데이터 로딩
+# -------------------------
+df_all = load_product_summary()
+
+# 데이터 없으면 즉시 중단
+if df_all is None or df_all.empty:
+    st.warning("아직 집계된 제품 데이터가 없습니다.")
+    st.stop()
+
+# -------------------------
+# 제품명 정제
+# -------------------------
+df_all["product_name_raw"] = df_all["product_name"]
+df_all["product_name"] = df_all["product_name"].apply(clean_product_name)
+
+# -------------------------
+# 깨진 문자열 감지 (운영 로그 전용)
+# -------------------------
+try:
+    encoding_issues = detect_encoding_issues(df_all)
+
+    if isinstance(encoding_issues, pd.DataFrame) and not encoding_issues.empty:
+        print(f"[ENCODING] 깨진 제품명 {len(encoding_issues)}건 감지")
+
+        # Supabase 저장용 최소 컬럼만 추출
+        log_records = encoding_issues[[
+            "product_url",
+            "product_name_raw"
+        ]].to_dict(orient="records")
+
+        supabase.table("product_name_encoding_issues") \
+                .insert(log_records) \
+                .execute()
+
+except Exception as e:
+    print(f"[ENCODING_LOG_ERROR] {e}")
+
+# -------------------------
+# -------------------------
+
+st.divider()
+
+# =========================
+# 6️⃣ 조회 조건
+# =========================
+st.subheader("🔍 조회 조건")
+
+# 🔥 기간 설정과 버튼을 함께 배치
+col_period, col_buttons = st.columns([4, 1])
+
+with col_period:
+    st.markdown("##### 📅 조회 기간")
+    col_from, col_to = st.columns(2)
+    
+    with col_from:
+        date_from = st.date_input(
+            "시작일",
+            value=datetime.now() - timedelta(days=90),  # 기본 3개월 전
+            key="date_from"
+        )
+    
+    with col_to:
+        date_to = st.date_input(
+            "종료일",
+            value=datetime.now(),
+            key="date_to"
+        )
+
+with col_buttons:
+    st.markdown("##### ⚙️")  # 높이 맞추기용
+    if st.button("📊 조회하기", type="primary", use_container_width=True):
+        st.session_state.show_results = True
+    
+    if st.button("🗑️ 전체 초기화", use_container_width=True):
+        # 🔥 모든 세션 상태 완전 초기화
+        st.session_state.selected_products = set()
+        st.session_state.keyword_results = {}
+        st.session_state.show_results = False
+        st.session_state.search_keyword = ""
+        st.session_state.search_history = []
+        
+        # 🔥 질문 입력창 초기화
+        if "insight_question" in st.session_state:
+            del st.session_state.insight_question
+        
+        # 🔥 기간 초기화
+        if "date_from" in st.session_state:
+            del st.session_state.date_from
+        if "date_to" in st.session_state:
+            del st.session_state.date_to
+        
+        # 🔥 필터 selectbox 상태 초기화
+        if "filter_brand" in st.session_state:
+            del st.session_state.filter_brand
+        if "filter_cat1" in st.session_state:
+            del st.session_state.filter_cat1
+        if "filter_cat2" in st.session_state:
+            del st.session_state.filter_cat2
 
 
 # =========================
@@ -791,8 +781,19 @@ if not st.session_state.show_results:
 st.divider()
 st.subheader(f"📊 조회 결과 ({len(selected_products)}개 제품)")
 
+# 🔥 기간 유효성 검사
+if date_from > date_to:
+    st.error("❌ 시작일이 종료일보다 늦습니다. 기간을 다시 설정해주세요.")
+    st.stop()
+
+st.info(f"📅 조회 기간: {date_from.strftime('%Y-%m-%d')} ~ {date_to.strftime('%Y-%m-%d')}")
+
 timeline_rows = []
 lifecycle_rows = []
+
+# 🔥 선택된 기간 가져오기
+filter_date_from = pd.to_datetime(date_from)
+filter_date_to = pd.to_datetime(date_to)
 
 for pname in selected_products:
     row = df_all[df_all["product_name"] == pname].iloc[0]
@@ -805,6 +806,13 @@ for pname in selected_products:
         display_name = f"{row['brand']} - {pname}"
         tmp["product_name"] = display_name
         tmp["event_date"] = pd.to_datetime(tmp["date"])
+        
+        # 🔥 기간 필터 적용
+        tmp = tmp[(tmp["event_date"] >= filter_date_from) & (tmp["event_date"] <= filter_date_to)]
+        
+        if tmp.empty:
+            continue
+            
         tmp["unit_price"] = tmp["unit_price"].astype(float)
         
         # 🔥 할인 여부 추가
@@ -846,7 +854,12 @@ for pname in selected_products:
         display_name = f"{row['brand']} - {pname}"
         tmp2["product_name"] = display_name
         tmp2["event_date"] = pd.to_datetime(tmp2["date"])
-        lifecycle_rows.append(tmp2[["product_name", "event_date", "lifecycle_event"]])
+        
+        # 🔥 기간 필터 적용
+        tmp2 = tmp2[(tmp2["event_date"] >= filter_date_from) & (tmp2["event_date"] <= filter_date_to)]
+        
+        if not tmp2.empty:
+            lifecycle_rows.append(tmp2[["product_name", "event_date", "lifecycle_event"]])
 
 # =========================
 # 8-1️⃣ 개당 가격 타임라인 비교 차트
@@ -1195,4 +1208,3 @@ for pname in selected_products:
             use_container_width=True,
             hide_index=True
         )
-    
