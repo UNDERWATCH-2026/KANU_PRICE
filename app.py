@@ -453,6 +453,44 @@ if "search_history" not in st.session_state:
 st.title("☕ Capsule Price Intelligence")
 
 # -------------------------
+# 데이터 로딩 (탭 이전에 로드)
+# -------------------------
+df_all = load_product_summary()
+
+# 데이터 없으면 즉시 중단
+if df_all is None or df_all.empty:
+    st.warning("아직 집계된 제품 데이터가 없습니다.")
+    st.stop()
+
+# -------------------------
+# 제품명 정제
+# -------------------------
+df_all["product_name_raw"] = df_all["product_name"]
+df_all["product_name"] = df_all["product_name"].apply(clean_product_name)
+
+# -------------------------
+# 깨진 문자열 감지 (운영 로그 전용)
+# -------------------------
+try:
+    encoding_issues = detect_encoding_issues(df_all)
+
+    if isinstance(encoding_issues, pd.DataFrame) and not encoding_issues.empty:
+        print(f"[ENCODING] 깨진 제품명 {len(encoding_issues)}건 감지")
+
+        # Supabase 저장용 최소 컬럼만 추출
+        log_records = encoding_issues[[
+            "product_url",
+            "product_name_raw"
+        ]].to_dict(orient="records")
+
+        supabase.table("product_name_encoding_issues") \
+                .insert(log_records) \
+                .execute()
+
+except Exception as e:
+    print(f"[ENCODING_LOG_ERROR] {e}")
+
+# -------------------------
 # 조회 기준 선택
 # -------------------------
 st.subheader("🔎 조회 기준")
@@ -663,47 +701,6 @@ with tab3:
 
 st.divider()
 
-
-# -------------------------
-# 데이터 로딩
-# -------------------------
-df_all = load_product_summary()
-
-# 데이터 없으면 즉시 중단
-if df_all is None or df_all.empty:
-    st.warning("아직 집계된 제품 데이터가 없습니다.")
-    st.stop()
-
-# -------------------------
-# 제품명 정제
-# -------------------------
-df_all["product_name_raw"] = df_all["product_name"]
-df_all["product_name"] = df_all["product_name"].apply(clean_product_name)
-
-# -------------------------
-# 깨진 문자열 감지 (운영 로그 전용)
-# -------------------------
-try:
-    encoding_issues = detect_encoding_issues(df_all)
-
-    if isinstance(encoding_issues, pd.DataFrame) and not encoding_issues.empty:
-        print(f"[ENCODING] 깨진 제품명 {len(encoding_issues)}건 감지")
-
-        # Supabase 저장용 최소 컬럼만 추출
-        log_records = encoding_issues[[
-            "product_url",
-            "product_name_raw"
-        ]].to_dict(orient="records")
-
-        supabase.table("product_name_encoding_issues") \
-                .insert(log_records) \
-                .execute()
-
-except Exception as e:
-    print(f"[ENCODING_LOG_ERROR] {e}")
-
-# -------------------------
-# -------------------------
 
 st.divider()
 
