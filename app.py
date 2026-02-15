@@ -628,7 +628,11 @@ for pname in selected_products:
 
 
     with c2:
-
+    
+        # 🔥 현재 선택된 기간 가져오기
+        date_from = df_timeline["event_date"].min().date()
+        date_to = df_timeline["event_date"].max().date()
+    
         res = supabase.rpc(
             "get_discount_periods_in_range",
             {
@@ -638,17 +642,18 @@ for pname in selected_products:
             }
         ).execute()
     
-        discount_data = res.data if res.data else []
+        discount_rows = res.data if res.data else []
     
-        if discount_data:
-            for d in discount_data:
+        if discount_rows:
+    
+            for d in discount_rows:
                 st.success(
-                    f"{d['discount_start_date']} ~ {d['discount_end_date']} "
-                    f"({d['discount_days']}일, {round(float(d['discount_rate']),1)}%)"
+                    f"💸 할인 {d['discount_start_date']} ~ {d['discount_end_date']}"
                 )
-        else:
-            st.info("해당 기간 내 할인 없음")
     
+        else:
+            st.info("정상가")
+
 
     with c3:
         df_life = load_lifecycle_events(p["product_url"])
@@ -1022,6 +1027,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
 
