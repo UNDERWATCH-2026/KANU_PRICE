@@ -286,31 +286,67 @@ st.divider()
 # =========================
 st.subheader("🔍 조회 조건")
 
-with st.form("search_form"):
+if "keyword_results" not in st.session_state:
+    st.session_state.keyword_results = {}
+
+if "selected_products" not in st.session_state:
+    st.session_state.selected_products = set()
+
+# -------------------------
+# 🔍 검색 폼 (Enter 가능)
+# -------------------------
+with st.form("search_form", clear_on_submit=True):
     keyword_input = st.text_input(
         "제품명 키워드 입력",
         placeholder="예: 쥬시, 멜로지오",
         label_visibility="collapsed"
     )
-
     submitted = st.form_submit_button("검색", use_container_width=True)
 
 if submitted and keyword_input.strip():
 
     keywords = [k.strip() for k in keyword_input.split(",") if k.strip()]
 
-    mask = False
     for kw in keywords:
-        mask |= _norm_series(df_all["product_name"]).str.contains(kw, case=False)
+        mask = _norm_series(df_all["product_name"]).str.contains(kw, case=False)
+        result_df = df_all[mask].copy()
 
-    result_df = df_all[mask]
-
-    if not result_df.empty:
-        st.session_state.selected_products = set(result_df["product_name"].tolist())
-    else:
-        st.warning("검색 결과 없음")
+        if not result_df.empty:
+            st.session_state.keyword_results[kw] = result_df
 
     st.rerun()
+
+# -------------------------
+# 🔎 검색 결과 표시
+# -------------------------
+for kw, result_df in st.session_state.keyword_results.items():
+
+    st.markdown(f"#### 🔎 '{kw}' 검색 결과")
+
+    for _, row in result_df.iterrows():
+
+        pname = row["product_name"]
+        checked = pname in st.session_state.selected_products
+
+        col1, col2 = st.columns([1, 9])
+
+        with col1:
+            if st.checkbox("", value=checked, key=f"{kw}_{pname}"):
+                st.session_state.selected_products.add(pname)
+            else:
+                st.session_state.selected_products.discard(pname)
+
+        with col2:
+            st.write(pname)
+
+    st.divider()
+
+# -------------------------
+# 선택 제품 요약 표시
+# -------------------------
+if st.session_state.selected_products:
+    st.markdown("### ✅ 선택된 제품")
+    st.write(list(st.session_state.selected_products))
 
 
 
@@ -1008,6 +1044,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
 
