@@ -137,7 +137,25 @@ def execute_rule(intent, question, df_summary):
         df = df_work[df_work["is_discount"] == True]
         if df.empty:
             return None
-        return "현재 할인 중 제품:\n- " + "\n- ".join(df["product_name"].tolist())
+        
+        # 상세 정보 포함한 결과 생성
+        results = []
+        for _, row in df.iterrows():
+            # 카테고리 정보 구성
+            categories = []
+            if pd.notna(row.get("category1")) and row["category1"]:
+                categories.append(row["category1"])
+            if pd.notna(row.get("category2")) and row["category2"]:
+                categories.append(row["category2"])
+            
+            category_str = f" [{' > '.join(categories)}]" if categories else ""
+            
+            results.append(
+                f"• **{row['brand']}** - {row['product_name']}{category_str}\n"
+                f"  💰 현재가: {float(row['current_unit_price']):,.1f}원"
+            )
+        
+        return "현재 할인 중 제품:\n\n" + "\n\n".join(results)
 
     if intent == "PRICE_MIN":
         df_valid = df_work[df_work["current_unit_price"] > 0]
@@ -189,47 +207,119 @@ def execute_rule(intent, question, df_summary):
     if intent == "NEW":
         res = (
             supabase.table("product_lifecycle_events")
-            .select("product_url")
+            .select("product_url, date")
             .eq("lifecycle_event", "NEW_PRODUCT")
             .execute()
         )
         if not res.data:
             return None
-        urls = [r["product_url"] for r in res.data]
+        
+        # URL과 출시 날짜 매핑
+        new_product_data = {r["product_url"]: r["date"] for r in res.data}
+        urls = list(new_product_data.keys())
+        
         df = df_work[df_work["product_url"].isin(urls)]
         if df.empty:
             return None
-        return "최근 신제품:\n- " + "\n- ".join(df["product_name"].tolist())
+        
+        # 상세 정보 포함한 결과 생성
+        results = []
+        for _, row in df.iterrows():
+            launch_date = new_product_data.get(row["product_url"])
+            
+            # 카테고리 정보 구성
+            categories = []
+            if pd.notna(row.get("category1")) and row["category1"]:
+                categories.append(row["category1"])
+            if pd.notna(row.get("category2")) and row["category2"]:
+                categories.append(row["category2"])
+            
+            category_str = f" [{' > '.join(categories)}]" if categories else ""
+            
+            results.append(
+                f"• **{row['brand']}** - {row['product_name']}{category_str}\n"
+                f"  🎉 출시일: {launch_date}"
+            )
+        
+        return "최근 신제품:\n\n" + "\n\n".join(results)
 
     if intent == "OUT":
         res = (
             supabase.table("product_lifecycle_events")
-            .select("product_url")
+            .select("product_url, date")
             .eq("lifecycle_event", "OUT_OF_STOCK")
             .execute()
         )
         if not res.data:
             return None
-        urls = [r["product_url"] for r in res.data]
+        
+        # URL과 품절 날짜 매핑
+        out_of_stock_data = {r["product_url"]: r["date"] for r in res.data}
+        urls = list(out_of_stock_data.keys())
+        
         df = df_work[df_work["product_url"].isin(urls)]
         if df.empty:
             return None
-        return "최근 품절 제품:\n- " + "\n- ".join(df["product_name"].tolist())
+        
+        # 상세 정보 포함한 결과 생성
+        results = []
+        for _, row in df.iterrows():
+            out_date = out_of_stock_data.get(row["product_url"])
+            
+            # 카테고리 정보 구성
+            categories = []
+            if pd.notna(row.get("category1")) and row["category1"]:
+                categories.append(row["category1"])
+            if pd.notna(row.get("category2")) and row["category2"]:
+                categories.append(row["category2"])
+            
+            category_str = f" [{' > '.join(categories)}]" if categories else ""
+            
+            results.append(
+                f"• **{row['brand']}** - {row['product_name']}{category_str}\n"
+                f"  📅 품절일: {out_date}"
+            )
+        
+        return "최근 품절 제품:\n\n" + "\n\n".join(results)
 
     if intent == "RESTORE":
         res = (
             supabase.table("product_lifecycle_events")
-            .select("product_url")
+            .select("product_url, date")
             .eq("lifecycle_event", "RESTOCK")
             .execute()
         )
         if not res.data:
             return None
-        urls = [r["product_url"] for r in res.data]
+        
+        # URL과 복원 날짜 매핑
+        restock_data = {r["product_url"]: r["date"] for r in res.data}
+        urls = list(restock_data.keys())
+        
         df = df_work[df_work["product_url"].isin(urls)]
         if df.empty:
             return None
-        return "최근 복원된 제품:\n- " + "\n- ".join(df["product_name"].tolist())
+        
+        # 상세 정보 포함한 결과 생성
+        results = []
+        for _, row in df.iterrows():
+            restock_date = restock_data.get(row["product_url"])
+            
+            # 카테고리 정보 구성
+            categories = []
+            if pd.notna(row.get("category1")) and row["category1"]:
+                categories.append(row["category1"])
+            if pd.notna(row.get("category2")) and row["category2"]:
+                categories.append(row["category2"])
+            
+            category_str = f" [{' > '.join(categories)}]" if categories else ""
+            
+            results.append(
+                f"• **{row['brand']}** - {row['product_name']}{category_str}\n"
+                f"  🔄 복원일: {restock_date}"
+            )
+        
+        return "최근 복원된 제품:\n\n" + "\n\n".join(results)
 
     if intent == "VOLATILITY" and start_date:
         res = (
@@ -760,6 +850,13 @@ with col_buttons:
             del st.session_state.filter_cat1
         if "filter_cat2" in st.session_state:
             del st.session_state.filter_cat2
+        
+        # 🔥 모든 체크박스 및 버튼 키 삭제 (검색 결과 카드 제거용)
+        keys_to_delete = [key for key in st.session_state.keys() if key.startswith(("chk_kw_", "chk_filter_", "delete_search_"))]
+        for key in keys_to_delete:
+            del st.session_state[key]
+        
+        st.rerun()
 
 
 # =========================
@@ -767,13 +864,19 @@ with col_buttons:
 # =========================
 selected_products = list(st.session_state.selected_products)
 
-if not selected_products:
-    st.info("제품을 선택하세요.")
-    st.stop()
+# 🔥 자연어 질문 모드가 아닐 때만 제품 선택 확인
+if st.session_state.get("active_mode") != "자연어 질문":
+    if not selected_products:
+        st.info("제품을 선택하세요.")
+        st.stop()
 
-if not st.session_state.show_results:
-    st.info("제품을 선택한 뒤 '조회하기'를 클릭하세요.")
-    st.stop()
+    if not st.session_state.show_results:
+        st.info("제품을 선택한 뒤 '조회하기'를 클릭하세요.")
+        st.stop()
+else:
+    # 자연어 질문 모드에서는 제품 선택 없이도 진행
+    if not selected_products:
+        st.stop()  # 조용히 중단
 
 st.divider()
 st.subheader(f"📊 조회 결과 ({len(selected_products)}개 제품)")
