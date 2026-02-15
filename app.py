@@ -479,7 +479,9 @@ for pname in selected_products:
     df_price = load_events(row["product_url"])
     if not df_price.empty:
         tmp = df_price.copy()
-        tmp["product_name"] = pname
+        # 🔥 브랜드 + 제품명으로 표시
+        display_name = f"{row['brand']} - {pname}"
+        tmp["product_name"] = display_name
         tmp["event_date"] = pd.to_datetime(tmp["date"])
         tmp["unit_price"] = tmp["unit_price"].astype(float)
         
@@ -503,8 +505,8 @@ for pname in selected_products:
                 if restore_after:
                     restore_date = min(restore_after)
         
-                    # 🔥 품절~복원 사이 가격 제거 (품절/복원 당일 포함)
-                    mask = (tmp["event_date"] >= out_date) & (tmp["event_date"] <= restore_date)
+                    # 🔥 품절(포함) ~ 복원(제외) 사이 가격 제거
+                    mask = (tmp["event_date"] >= out_date) & (tmp["event_date"] < restore_date)
                     tmp.loc[mask, "unit_price"] = None
                 else:
                     # 복원 이벤트가 없으면 품절 이후 모든 데이터 제거
@@ -518,7 +520,9 @@ for pname in selected_products:
     df_life = load_lifecycle_events(row["product_url"])
     if not df_life.empty:
         tmp2 = df_life.copy()
-        tmp2["product_name"] = pname
+        # 🔥 브랜드 + 제품명으로 표시
+        display_name = f"{row['brand']} - {pname}"
+        tmp2["product_name"] = display_name
         tmp2["event_date"] = pd.to_datetime(tmp2["date"])
         lifecycle_rows.append(tmp2[["product_name", "event_date", "lifecycle_event"]])
 
@@ -614,8 +618,10 @@ if timeline_rows:
                             closest = product_prices.nsmallest(1, "event_date").iloc[-1]
                             df_filtered.at[idx, "unit_price"] = closest["unit_price"]
                 
-                # 복원 시점: 복원 직후 가격 사용
+                # 복원 시점: 복원 당일 가격 사용 (이미 있으면 그대로, 없으면 직후 가격)
                 elif event_type == "RESTOCK":
+                    # 복원 날짜는 가격선에 포함되므로 대부분 unit_price가 이미 있음
+                    # 없는 경우에만 직후 가격 사용
                     for idx, row in df_filtered[df_filtered["unit_price"].isna()].iterrows():
                         product_prices = df_timeline[
                             (df_timeline["product_name"] == row["product_name"]) &
@@ -659,7 +665,8 @@ if timeline_rows:
                     y="unit_price:Q",   # 🔥 반드시 추가
                     tooltip=[
                         alt.Tooltip("product_name:N", title="제품"),
-                        alt.Tooltip("event_date:T", title="날짜"),
+                        alt.Tooltip("event_date:T", title="날짜", format="%Y-%m-%d"),
+                        alt.Tooltip("unit_price:Q", title="개당 가격", format=",.1f"),  # 🔥 가격 추가
                         alt.Tooltip("lifecycle_event:N", title="이벤트"),
                     ],
                 )
@@ -687,6 +694,16 @@ if timeline_rows:
     chart = (
         alt.layer(*layers)
         .properties(height=420)
+        .configure_legend(
+            # 🔥 범례를 인터랙티브하게 설정
+            orient="right",
+            titleFontSize=13,
+            labelFontSize=12,
+            labelLimit=300,  # 🔥 텍스트 길이 제한 늘림 (기본 160)
+            symbolLimit=300,
+            columnPadding=10,
+            rowPadding=5,
+        )
         .interactive()
     )
 
