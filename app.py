@@ -353,40 +353,55 @@ if search_mode == "키워드 검색":
     if not st.session_state.search_history:
         st.info("검색 결과가 없습니다.")
     else:
-        for history_idx, history in enumerate(st.session_state.search_history):
-            # 🔥 검색어별 섹션
-            col_title, col_delete = st.columns([5, 1])
+        # 🔥 검색어를 3개씩 가로로 배열
+        num_cols = 3
+        total_searches = len(st.session_state.search_history)
+        
+        for row_idx in range(0, total_searches, num_cols):
+            cols = st.columns(num_cols)
             
-            with col_title:
-                st.markdown(f"#### 🔍 검색어: `{history['keyword']}`")
-            
-            with col_delete:
-                if st.button("🗑️ 삭제", key=f"delete_search_{history_idx}", use_container_width=True):
-                    # 해당 검색 결과의 제품들을 선택에서 제거
-                    for pname in history['results']:
-                        if pname in st.session_state.selected_products:
-                            st.session_state.selected_products.remove(pname)
-                    
-                    # 검색 이력에서 제거
-                    st.session_state.search_history.pop(history_idx)
-                    st.rerun()
-            
-            if not history['results']:
-                st.caption("📭 검색 결과 없음")
-            else:
-                # 🔥 2열 레이아웃으로 체크박스 표시
-                cols = st.columns(2)
-                for idx, pname in enumerate(history['results']):
-                    with cols[idx % 2]:
-                        st.checkbox(
-                            pname,
-                            value=pname in st.session_state.selected_products,
-                            key=f"chk_kw_{history_idx}_{pname}",
-                            on_change=toggle_product,
-                            args=(pname,)
-                        )
-            
-            st.divider()
+            for col_idx in range(num_cols):
+                history_idx = row_idx + col_idx
+                
+                if history_idx >= total_searches:
+                    break
+                
+                history = st.session_state.search_history[history_idx]
+                
+                with cols[col_idx]:
+                    # 🔥 박스 스타일로 표시
+                    with st.container(border=True):
+                        # 검색어 제목과 삭제 버튼
+                        col_title, col_delete = st.columns([4, 1])
+                        
+                        with col_title:
+                            st.markdown(f"**🔍 {history['keyword']}**")
+                        
+                        with col_delete:
+                            if st.button("🗑️", key=f"delete_search_{history_idx}", help="검색 결과 삭제"):
+                                # 해당 검색 결과의 제품들을 선택에서 제거
+                                for pname in history['results']:
+                                    if pname in st.session_state.selected_products:
+                                        st.session_state.selected_products.remove(pname)
+                                
+                                # 검색 이력에서 제거
+                                st.session_state.search_history.pop(history_idx)
+                                st.rerun()
+                        
+                        st.markdown("---")
+                        
+                        if not history['results']:
+                            st.caption("📭 검색 결과 없음")
+                        else:
+                            # 제품 체크박스
+                            for pname in history['results']:
+                                st.checkbox(
+                                    pname,
+                                    value=pname in st.session_state.selected_products,
+                                    key=f"chk_kw_{history_idx}_{pname}",
+                                    on_change=toggle_product,
+                                    args=(pname,)
+                                )
 
 # =========================
 # 🎛 B) 필터 선택 모드
