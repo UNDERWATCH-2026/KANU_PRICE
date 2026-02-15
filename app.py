@@ -280,72 +280,62 @@ with col_clear:
 
 st.divider()
 
-
 # =========================
 # 6️⃣ 조회 조건
 # =========================
 st.subheader("🔍 조회 조건")
 
-if "keyword_results" not in st.session_state:
-    st.session_state.keyword_results = {}
-
 if "selected_products" not in st.session_state:
     st.session_state.selected_products = set()
 
 # -------------------------
-# 🔍 검색 (Enter 가능)
+# 🔍 검색 입력 (Enter 동작)
 # -------------------------
-with st.form("search_form", clear_on_submit=True):
+with st.form("search_form", clear_on_submit=False):
     keyword_input = st.text_input(
-        "제품명 키워드 입력",
+        "제품명 검색",
         placeholder="예: 쥬시, 멜로지오",
         label_visibility="collapsed"
     )
-    submitted = st.form_submit_button("검색", use_container_width=True)
+    submitted = st.form_submit_button("검색")
 
-if submitted and keyword_input.strip():
-
-    keywords = [k.strip() for k in keyword_input.split(",") if k.strip()]
-
-    for kw in keywords:
-        mask = _norm_series(df_all["product_name"]).str.contains(kw, case=False)
-        result_df = df_all[mask].copy()
-
-        if not result_df.empty:
-            st.session_state.keyword_results[kw] = result_df
-
+if submitted:
+    st.session_state.search_keyword = keyword_input.strip()
     st.rerun()
 
+search_keyword = st.session_state.get("search_keyword", "")
+
 # -------------------------
-# 🔎 검색 결과 표시 (여기서 선택)
+# 🎯 비교할 제품 필터링
 # -------------------------
-for kw, result_df in st.session_state.keyword_results.items():
+if search_keyword:
+    keywords = [k.strip() for k in search_keyword.split(",") if k.strip()]
+    mask = False
+    for kw in keywords:
+        mask |= _norm_series(df_all["product_name"]).str.contains(kw, case=False)
+    candidates_df = df_all[mask].copy()
+else:
+    candidates_df = df_all.copy()
 
-    st.markdown(f"#### 🔎 '{kw}' 검색 결과")
+# -------------------------
+# ✅ 비교할 제품 선택
+# -------------------------
+st.markdown("### 📊 비교할 제품 선택")
 
-    for _, row in result_df.iterrows():
+for _, row in candidates_df.iterrows():
+    pname = row["product_name"]
+    checked = pname in st.session_state.selected_products
 
-        pname = row["product_name"]
-        checked = pname in st.session_state.selected_products
+    selected = st.checkbox(
+        pname,
+        value=checked,
+        key=f"product_{pname}"
+    )
 
-        col1, col2 = st.columns([1, 9])
-
-        with col1:
-            selected = st.checkbox(
-                "",
-                value=checked,
-                key=f"{kw}_{pname}"
-            )
-
-            if selected:
-                st.session_state.selected_products.add(pname)
-            else:
-                st.session_state.selected_products.discard(pname)
-
-        with col2:
-            st.write(pname)
-
-    st.divider()
+    if selected:
+        st.session_state.selected_products.add(pname)
+    else:
+        st.session_state.selected_products.discard(pname)
 
 
     # -------------------------
@@ -1042,6 +1032,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
 
