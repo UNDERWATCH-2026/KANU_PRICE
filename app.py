@@ -293,7 +293,7 @@ if "selected_products" not in st.session_state:
     st.session_state.selected_products = set()
 
 # -------------------------
-# 🔍 검색 폼 (Enter 가능)
+# 🔍 검색 (Enter 가능)
 # -------------------------
 with st.form("search_form", clear_on_submit=True):
     keyword_input = st.text_input(
@@ -317,7 +317,7 @@ if submitted and keyword_input.strip():
     st.rerun()
 
 # -------------------------
-# 🔎 검색 결과 표시
+# 🔎 검색 결과 표시 (여기서 선택)
 # -------------------------
 for kw, result_df in st.session_state.keyword_results.items():
 
@@ -331,7 +331,13 @@ for kw, result_df in st.session_state.keyword_results.items():
         col1, col2 = st.columns([1, 9])
 
         with col1:
-            if st.checkbox("", value=checked, key=f"{kw}_{pname}"):
+            selected = st.checkbox(
+                "",
+                value=checked,
+                key=f"{kw}_{pname}"
+            )
+
+            if selected:
                 st.session_state.selected_products.add(pname)
             else:
                 st.session_state.selected_products.discard(pname)
@@ -340,14 +346,6 @@ for kw, result_df in st.session_state.keyword_results.items():
             st.write(pname)
 
     st.divider()
-
-# -------------------------
-# 선택 제품 요약 표시
-# -------------------------
-if st.session_state.selected_products:
-    st.markdown("### ✅ 선택된 제품")
-    st.write(list(st.session_state.selected_products))
-
 
 
     # -------------------------
@@ -1044,6 +1042,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
 
