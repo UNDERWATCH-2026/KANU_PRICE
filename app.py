@@ -271,12 +271,17 @@ with col_query:
         st.session_state.show_results = True
 
 with col_clear:
-    if st.button("🗑️ 전체 삭제", use_container_width=True):
+    if st.button("🗑️ 전체 초기화", use_container_width=True):
         st.session_state.selected_products = set()
         st.session_state.keyword_results = {}
         st.session_state.show_results = False
+
+        # 🔥 검색 관련 상태 전부 초기화
         st.session_state.keyword_input = ""
+        st.session_state.search_keyword = ""
+
         st.rerun()
+
 
 st.divider()
 
@@ -982,6 +987,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
 
