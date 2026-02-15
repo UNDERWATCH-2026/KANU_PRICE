@@ -269,28 +269,33 @@ col_query, col_clear = st.columns([1, 1])
 with col_query:
     if st.button("📊 조회하기", type="primary", use_container_width=True):
         st.session_state.show_results = True
-
+        
 with col_clear:
     if st.button("🗑️ 전체 초기화", use_container_width=True):
 
-        sel_brand = st.selectbox(
-            "브랜드",
-            ["(전체)"] + brands,
-            key="filter_brand"
-        )
-        
-        sel_cat1 = st.selectbox(
-            "카테고리1",
-            ["(전체)"] + cat1s,
-            key="filter_cat1"
-        )
-        
-        sel_cat2 = st.selectbox(
-            "카테고리2",
-            ["(전체)"] + cat2s,
-            key="filter_cat2"
-        )
-        rerun()
+        # 1️⃣ 선택 제품 초기화
+        st.session_state.selected_products = set()
+
+        # 2️⃣ 검색 초기화
+        st.session_state.keyword_input = ""
+        st.session_state.search_keyword = ""
+
+        # 3️⃣ 필터 초기화
+        st.session_state.filter_brand = "(전체)"
+        st.session_state.filter_cat1 = "(전체)"
+        st.session_state.filter_cat2 = "(전체)"
+
+        # 4️⃣ 결과 숨김
+        st.session_state.show_results = False
+
+        # 5️⃣ 모든 체크박스 강제 제거
+        for key in list(st.session_state.keys()):
+            if key.startswith("chk_"):
+                del st.session_state[key]
+
+        st.rerun()
+
+
         
 
 
@@ -356,6 +361,7 @@ elif search_mode == "필터 선택 (브랜드/카테고리)":
 
     col1, col2, col3 = st.columns(3)
 
+    # 1️⃣ 브랜드
     with col1:
         brands = options_from(df_all, "brand")
         sel_brand = st.selectbox(
@@ -363,34 +369,34 @@ elif search_mode == "필터 선택 (브랜드/카테고리)":
             ["(전체)"] + brands,
             key="filter_brand"
         )
-        
+
+    df1 = df_all if sel_brand == "(전체)" else df_all[df_all["brand"] == sel_brand]
+
+    # 2️⃣ 카테고리1
+    with col2:
+        cat1s = options_from(df1, "category1")
         sel_cat1 = st.selectbox(
             "카테고리1",
             ["(전체)"] + cat1s,
             key="filter_cat1"
         )
-        
+
+    df2 = df1 if sel_cat1 == "(전체)" else df1[df1["category1"] == sel_cat1]
+
+    # 3️⃣ 카테고리2
+    with col3:
+        cat2s = options_from(df2, "category2")
         sel_cat2 = st.selectbox(
             "카테고리2",
             ["(전체)"] + cat2s,
             key="filter_cat2"
         )
 
-
-    df1 = df_all if sel_brand == "(전체)" else df_all[df_all["brand"] == sel_brand]
-
-    with col2:
-        cat1s = options_from(df1, "category1")
-        sel_cat1 = st.selectbox("카테고리1", ["(전체)"] + cat1s)
-
-    df2 = df1 if sel_cat1 == "(전체)" else df1[df1["category1"] == sel_cat1]
-
-    with col3:
-        cat2s = options_from(df2, "category2")
-        sel_cat2 = st.selectbox("카테고리2", ["(전체)"] + cat2s)
-
     candidates_df = df2 if sel_cat2 == "(전체)" else df2[df2["category2"] == sel_cat2]
 
+    # -------------------------
+    # 제품 선택
+    # -------------------------
     st.markdown("### 📦 비교할 제품 선택")
 
     with st.expander("목록 펼치기 / 접기", expanded=False):
@@ -402,7 +408,6 @@ elif search_mode == "필터 선택 (브랜드/카테고리)":
                 on_change=toggle_product,
                 args=(pname,)
             )
-
 
 # =========================
 # 8️⃣ 결과 표시
@@ -1015,6 +1020,7 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
 
