@@ -122,14 +122,23 @@ def clean_product_name(s: str) -> str:
     return s
 
 def detect_encoding_issues(df: pd.DataFrame):
-    """
-    제품명에 깨진 문자(�) 포함 여부 감지
-    """
     if "product_name_raw" not in df.columns:
-        return pd.DataFrame()
+        return
 
     mask = df["product_name_raw"].str.contains("�", na=False)
-    return df[mask][["product_url", "product_name_raw"]]
+    issues = df[mask][["product_url", "product_name_raw"]]
+
+    if not issues.empty:
+        import logging
+        logging.warning(f"[ENCODING ISSUE] {len(issues)}건 감지됨")
+
+        try:
+            supabase.table("product_name_encoding_issues").insert(
+                issues.to_dict(orient="records")
+            ).execute()
+        except Exception as e:
+            logging.error(f"로그 저장 실패: {e}")
+
 
 
 
@@ -986,5 +995,6 @@ if question:
             answer = llm_fallback(question, df_all)
         save_question_log(question, intent, True)
         st.success(answer)
+
 
 
