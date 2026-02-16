@@ -341,7 +341,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         return {
             "type": "product_list",
             "text": "할인 기간 정보:\n\n" + "\n\n".join([r["text"] for r in results]),
-            "products": results
+            "products": [r["product_name"] for r in results]
         }
 
     if intent == "DISCOUNT" and not start_date:
@@ -374,7 +374,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         return {
             "type": "product_list",
             "text": "현재 할인 중 제품:\n\n" + "\n\n".join([r["text"] for r in results]),
-            "products": results
+            "products": [r["product_name"] for r in results]
         }
 
     if intent == "PRICE_MIN":
@@ -429,7 +429,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         return {
             "type": "product_list",
             "text": "최저가 제품 목록:\n\n" + "\n\n".join([r["text"] for r in results]),
-            "products": results
+            "products": [r["product_name"] for r in results]
         }
 
     if intent == "PRICE_MAX":
@@ -494,7 +494,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         return {
             "type": "product_list",
             "text": "최근 신제품:\n\n" + "\n\n".join([r["text"] for r in results]),
-            "products": results
+            "products": [r["product_name"] for r in results]
         }
 
     if intent == "OUT":
@@ -550,7 +550,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         return {
             "type": "product_list",
             "text": "최근 품절 제품:\n\n" + "\n\n".join([r["text"] for r in results]),
-            "products": results
+            "products": [r["product_name"] for r in results]
         }
 
     if intent == "RESTORE":
@@ -606,7 +606,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         return {
             "type": "product_list",
             "text": "최근 복원된 제품:\n\n" + "\n\n".join([r["text"] for r in results]),
-            "products": results
+            "products": [r["product_name"] for r in results]
         }
 
     if intent == "VOLATILITY" and start_date:
@@ -1273,29 +1273,15 @@ with col_tabs:
                         # 체크박스 추가
                         if answer_data.get("products"):
                             st.markdown("##### 📦 비교할 제품으로 추가")
-                        
                             cols = st.columns(3)
-                        
-                            for pidx, item in enumerate(answer_data["products"]):
-                        
-                                product_url = item["product_url"]
-                        
-                                # 🔥 브랜드 + 카테고리 포함 표시
-                                display_name = (
-                                    f"{item.get('brand', '')} - {item.get('product_name', '')}"
-                                )
-                        
-                                # category 정보가 있다면 추가 표시
-                                if item.get("category1") or item.get("category2"):
-                                    display_name += f" [{item.get('category1', '')} > {item.get('category2', '')}]"
-                        
+                            for pidx, pname in enumerate(answer_data["products"]):
                                 with cols[pidx % 3]:
                                     st.checkbox(
-                                        display_name,
-                                        value=product_url in st.session_state.selected_products,
-                                        key=f"chk_nlp_{idx}_{pidx}_{product_url}",
+                                        pname,
+                                        value=pname in st.session_state.selected_products,
+                                        key=f"chk_nlp_{idx}_{pidx}_{pname}",
                                         on_change=toggle_product,
-                                        args=(product_url,)
+                                        args=(pname,)
                                     )
                     elif isinstance(answer_data, dict):
                         # 딕셔너리지만 product_list가 아닌 경우
@@ -1349,20 +1335,16 @@ lifecycle_rows = []
 filter_date_from = pd.to_datetime(date_from)
 filter_date_to = pd.to_datetime(date_to)
 
-for product_url in selected_products:
-    match = df_all[df_all["product_url"] == product_url]
-    if match.empty:
-        continue
-    row = match.iloc[0]
+for pname in selected_products:
+    row = df_all[df_all["product_name"] == pname].iloc[0]
 
     # 가격 이벤트
     df_price = load_events(row["product_url"])
     if not df_price.empty:
         tmp = df_price.copy()
         # 🔥 브랜드 + 제품명으로 표시
-        display_name = f"{row['brand']} - {row['product_name']}"
+        display_name = f"{row['brand']} - {pname}"
         tmp["product_name"] = display_name
-        tmp["product_url"] = row["product_url"]
         tmp["event_date"] = pd.to_datetime(tmp["date"])
         
         # 🔥 기간 필터 적용
@@ -1395,15 +1377,7 @@ for product_url in selected_products:
             )
 
             discount_price = float(price_row["unit_price"]) if pd.notna(price_row["unit_price"]) else None
-            
-            # 🔥 정상가를 단가로 변환 (capsule_count로 나누기)
-            raw_normal_price = float(normal_price_res.data[0]["normal_price"]) if normal_price_res.data else None
-            capsule_count = row.get("capsule_count")
-            
-            if raw_normal_price and capsule_count and capsule_count > 0:
-                normal_price = raw_normal_price / capsule_count
-            else:
-                normal_price = None
+            normal_price = float(normal_price_res.data[0]["normal_price"]) if normal_price_res.data else None
 
             if normal_price and discount_price:
                 discount_rate = ((normal_price - discount_price) / normal_price) * 100
@@ -1445,7 +1419,7 @@ for product_url in selected_products:
                     mask = tmp["event_date"] >= out_date
                     tmp.loc[mask, "unit_price"] = None
         
-        timeline_rows.append(tmp[["product_name", "product_url", "event_date", "unit_price", "price_status", "price_detail"]])
+        timeline_rows.append(tmp[["product_name", "event_date", "unit_price", "price_status", "price_detail"]])
         
 
     # lifecycle 이벤트
@@ -1453,7 +1427,7 @@ for product_url in selected_products:
     if not df_life.empty:
         tmp2 = df_life.copy()
         # 🔥 브랜드 + 제품명으로 표시
-        display_name = f"{row['brand']} - {row['product_name']}"
+        display_name = f"{row['brand']} - {pname}"
         tmp2["product_name"] = display_name
         tmp2["event_date"] = pd.to_datetime(tmp2["date"])
         
@@ -1797,33 +1771,14 @@ st.divider()
 # =========================
 # 8-2️⃣ 제품별 카드
 # =========================
-for product_url in selected_products:
-    p = df_all[df_all["product_url"] == product_url].iloc[0]
-    st.markdown(f"### {p['brand']} - {p['product_name']}")
+for pname in selected_products:
+    p = df_all[df_all["product_name"] == pname].iloc[0]
+    st.markdown(f"### {p['product_name']}")
 
     c1, c2, c3, c4 = st.columns(4)
 
     with c1:
-        price_res = (
-            supabase.table("raw_daily_prices")
-            .select("normal_price")
-            .eq("product_url", p["product_url"])
-            .eq("date", p["last_seen_date"])
-            .limit(1)
-            .execute()
-        )
-        
-        if price_res.data:
-            normal_price = price_res.data[0]["normal_price"]
-            capsule_count = p.get("capsule_count")
-            
-            if normal_price and capsule_count and capsule_count > 0:
-                normal_unit = normal_price / capsule_count
-                st.metric("개당 정상가", f"{normal_unit:,.1f}원")
-            else:
-                st.metric("개당 정상가", "-")
-        else:
-            st.metric("개당 정상가", "-")
+        st.metric("개당 가격", f"{float(p['current_unit_price']):,.1f}원")
 
 
     with c2:
@@ -2016,15 +1971,7 @@ for product_url in selected_products:
                 .limit(1)
                 .execute()
             )
-            
-            # 🔥 정상가를 단가로 변환
-            raw_normal_price = float(raw_res.data[0]["normal_price"]) if raw_res.data and raw_res.data[0].get("normal_price") is not None else None
-            capsule_count = p.get("capsule_count")
-            
-            if raw_normal_price and capsule_count and capsule_count > 0:
-                raw_normal = raw_normal_price / capsule_count
-            else:
-                raw_normal = None
+            raw_normal = float(raw_res.data[0]["normal_price"]) if raw_res.data and raw_res.data[0].get("normal_price") is not None else None
 
             # 그 날짜 이벤트 테이블에서 가격 이벤트 확인
             price_on_date = (
