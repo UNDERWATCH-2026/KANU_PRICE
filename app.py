@@ -1366,26 +1366,30 @@ for pname in selected_products:
         
         # 할인 중인 행에 대해 정상가 찾기
         for idx, price_row in tmp[tmp["is_discount"]].iterrows():
-            # 해당 할인일 직전의 정상가 조회
+            # ✅ 정상가는 "할인 당일" raw_daily_prices.normal_price 1순위
             normal_price_res = (
-                supabase.table("product_all_events")
-                .select("unit_price")
+                supabase.table("raw_daily_prices")
+                .select("normal_price")
                 .eq("product_url", row["product_url"])
-                .eq("event_type", "NORMAL")
-                .lt("date", price_row["event_date"].strftime("%Y-%m-%d"))
-                .order("date", desc=True)
+                .eq("date", price_row["event_date"].strftime("%Y-%m-%d"))
                 .limit(1)
                 .execute()
             )
-            
-            if normal_price_res.data:
-                normal_price = float(normal_price_res.data[0]["unit_price"])
+
+            discount_price = float(price_row["unit_price"]) if pd.notna(price_row["unit_price"]) else None
+            normal_price = float(normal_price_res.data[0]["normal_price"]) if normal_price_res.data else None
+
+            if normal_price and discount_price:
+                discount_rate = ((normal_price - discount_price) / normal_price) * 100
                 tmp.at[idx, "normal_price"] = normal_price
-                discount_rate = ((normal_price - price_row["unit_price"]) / normal_price) * 100
                 tmp.at[idx, "discount_rate"] = discount_rate
-                tmp.at[idx, "price_detail"] = f"정상가: {normal_price:,.1f}원 → 할인가: {price_row['unit_price']:,.1f}원 ({discount_rate:.0f}% 할인)"
+                tmp.at[idx, "price_detail"] = (
+                    f"정상가: {normal_price:,.1f}원 → 할인가: {discount_price:,.1f}원 ({discount_rate:.0f}% 할인)"
+                )
+            elif discount_price:
+                tmp.at[idx, "price_detail"] = f"할인가: {discount_price:,.1f}원"
             else:
-                tmp.at[idx, "price_detail"] = f"할인가: {price_row['unit_price']:,.1f}원"
+                tmp.at[idx, "price_detail"] = "-"
         
         # 정상가인 경우
         for idx, price_row in tmp[~tmp["is_discount"]].iterrows():
@@ -1956,47 +1960,45 @@ for pname in selected_products:
 
         df_lifecycle_only = df_all_events[df_all_events["event_type"].isin(icon_map.keys())]
         for _, row_l in df_lifecycle_only.iterrows():
-            # 🔥 해당 날짜의 가격 정보 조회
-            price_text = "-"
-            
-            # 해당 날짜의 가격 이벤트 조회
+            event_date_str = row_l["date"].strftime("%Y-%m-%d")
+
+            # 그 날짜 raw에서 정상가 확보 (있으면 1순위)
+            raw_res = (
+                supabase.table("raw_daily_prices")
+                .select("normal_price, sale_price")
+                .eq("product_url", p["product_url"])
+                .eq("date", event_date_str)
+                .limit(1)
+                .execute()
+            )
+            raw_normal = float(raw_res.data[0]["normal_price"]) if raw_res.data and raw_res.data[0].get("normal_price") is not None else None
+
+            # 그 날짜 이벤트 테이블에서 가격 이벤트 확인
             price_on_date = (
                 supabase.table("product_all_events")
                 .select("unit_price, event_type")
                 .eq("product_url", p["product_url"])
-                .eq("date", row_l["date"].strftime("%Y-%m-%d"))
+                .eq("date", event_date_str)
                 .execute()
             )
-            
+
+            price_text = "-"
             if price_on_date.data:
-                # 해당 날짜에 가격 정보가 있는 경우
-                for price_event in price_on_date.data:
-                    if price_event["event_type"] == "DISCOUNT":
-                        # 할인가인 경우 정상가도 조회
-                        normal_price_res = (
-                            supabase.table("product_all_events")
-                            .select("unit_price")
-                            .eq("product_url", p["product_url"])
-                            .eq("event_type", "NORMAL")
-                            .lt("date", row_l["date"].strftime("%Y-%m-%d"))
-                            .order("date", desc=True)
-                            .limit(1)
-                            .execute()
-                        )
-                        
-                        discount_price = float(price_event["unit_price"])
-                        if normal_price_res.data:
-                            normal_price = float(normal_price_res.data[0]["unit_price"])
-                            discount_rate = ((normal_price - discount_price) / normal_price) * 100
-                            price_text = f"{normal_price:,.1f}원 → {discount_price:,.1f}원 ({discount_rate:.0f}% 할인)"
-                        else:
-                            price_text = f"할인가: {discount_price:,.1f}원"
-                        break
-                    elif price_event["event_type"] == "NORMAL":
-                        # 정상가인 경우
-                        normal_price = float(price_event["unit_price"])
-                        price_text = f"정상가: {normal_price:,.1f}원"
-                        break
+                # 우선 DISCOUNT를 먼저 잡고, 없으면 NORMAL
+                discount_event = next((e for e in price_on_date.data if e["event_type"] == "DISCOUNT"), None)
+                normal_event = next((e for e in price_on_date.data if e["event_type"] == "NORMAL"), None)
+
+                if discount_event:
+                    discount_price = float(discount_event["unit_price"])
+                    if raw_normal:
+                        discount_rate = ((raw_normal - discount_price) / raw_normal) * 100
+                        price_text = f"{raw_normal:,.1f}원 → {discount_price:,.1f}원 ({discount_rate:.0f}% 할인)"
+                    else:
+                        price_text = f"할인가: {discount_price:,.1f}원"
+                elif normal_event:
+                    normal_price = float(normal_event["unit_price"])
+                    # raw_normal이 있으면 그걸 우선 표기(데이터 일관성)
+                    price_text = f"정상가: {(raw_normal if raw_normal else normal_price):,.1f}원"
             
             display_rows.append({
                 "날짜": str(row_l["date"].date()),
