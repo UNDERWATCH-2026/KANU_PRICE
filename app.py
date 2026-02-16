@@ -652,19 +652,21 @@ col_tabs, col_controls = st.columns([3, 1])
 
 with col_controls:
     st.markdown("##### 📅 조회 기간")
-    date_from = st.date_input(
-        "시작일",
-        value=datetime.now() - timedelta(days=90),
-        key="date_from",
-        label_visibility="collapsed"
-    )
     
-    date_to = st.date_input(
-        "종료일",
-        value=datetime.now(),
-        key="date_to",
-        label_visibility="collapsed"
-    )
+    # 🔥 시작일/종료일을 한 줄에 배치
+    col_from, col_to = st.columns(2)
+    with col_from:
+        date_from = st.date_input(
+            "시작일",
+            value=datetime.now() - timedelta(days=90),
+            key="date_from"
+        )
+    with col_to:
+        date_to = st.date_input(
+            "종료일",
+            value=datetime.now(),
+            key="date_to"
+        )
     
     st.button("📊 조회하기", type="primary", use_container_width=True, key="btn_search_trigger", on_click=lambda: st.session_state.update({"show_results": True}))
     
