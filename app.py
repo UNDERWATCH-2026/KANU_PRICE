@@ -2031,22 +2031,19 @@ for pname in selected_products:
             })
         
 
-            # 🔥 display_rows 화면 렌더링 추가
-            if not display_rows:
-                st.caption("이벤트 없음")
-            else:
-                df_display = pd.DataFrame(display_rows)
-            
-                # 날짜 기준 최신순 정렬
-                df_display = df_display.sort_values("날짜_정렬용", ascending=False)
-            
-                # 정렬용 컬럼 제거
-                df_display = df_display.drop(columns=["날짜_정렬용"])
-            
-                st.dataframe(
-                    df_display,
-                    use_container_width=True,
-                    hide_index=True
-                )
-            
+        # 🔥 display_rows 화면 렌더링 추가
+        if not display_rows:
+            st.caption("이벤트 없음")
+        else:
+            df_display = pd.DataFrame(display_rows)
+        
+            df_display = df_display.sort_values("날짜_정렬용", ascending=False)
+            df_display = df_display.drop(columns=["날짜_정렬용"])
+        
+            st.dataframe(
+                df_display,
+                use_container_width=True,
+                hide_index=True
+            )
+
 
