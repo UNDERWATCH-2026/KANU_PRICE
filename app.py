@@ -1678,44 +1678,48 @@ if timeline_rows:
         for idx, row in excel_data.iterrows():
         
             pname = row["product_name"]
-            product_url = df_all[
-                df_all["product_name"].apply(lambda x: pname.endswith(x))
-            ]["product_url"].iloc[0]
+            original_row = df_all[df_all["product_name"] == row["product_name_only"]]
         
-            # --------------------------
-            # 💸 할인 중인 경우
-            # --------------------------
-            if row["price_status"] == "💸 할인 중":
+            if original_row.empty:
+                continue
         
-                # ✅ 할인가 (이미 개당)
-                discount_price = float(row["unit_price"])
-                excel_data.at[idx, "discount_price"] = round(discount_price, 1)
-      
-                # 정상가 / 할인가 계산 (raw_daily_prices 기준)
-                # --------------------------
-                
-                normal_price = row["normal_price"]
-                sale_price = row["sale_price"]
-                
-                capsule_count = row["capsule_count"]
-                
-                normal_unit = normal_price / capsule_count
-                excel_data.at[idx, "normal_price"] = round(normal_unit, 1)
-                
-                if sale_price < normal_price:
-                    sale_unit = sale_price / capsule_count
-                    excel_data.at[idx, "discount_price"] = round(sale_unit, 1)
-                
-                    discount_rate = ((normal_price - sale_price) / normal_price) * 100
-                    excel_data.at[idx, "discount_rate"] = round(discount_rate, 1)
-                
-                        
-            # --------------------------
-            # 💰 정상가 상태
-            # --------------------------
-            else:
-                normal_price = float(row["unit_price"])
-                excel_data.at[idx, "normal_price"] = round(normal_price, 1)
+            product_url = original_row.iloc[0]["product_url"]
+            capsule_count = original_row.iloc[0]["capsule_count"]
+        
+            if not capsule_count or capsule_count == 0:
+                continue
+        
+            # 🔥 해당 날짜 raw 가격 조회
+            price_res = (
+                supabase.table("raw_daily_prices")
+                .select("normal_price, sale_price")
+                .eq("product_url", product_url)
+                .eq("date", row["event_date"].strftime("%Y-%m-%d"))
+                .limit(1)
+                .execute()
+            )
+        
+            if not price_res.data:
+                continue
+        
+            normal_price = price_res.data[0]["normal_price"]
+            sale_price = price_res.data[0]["sale_price"]
+        
+            if not normal_price:
+                continue
+        
+            normal_unit = normal_price / capsule_count
+            excel_data.at[idx, "normal_price"] = round(normal_unit, 1)
+        
+            # 🔥 할인 판단 기준: sale_price < normal_price
+            if sale_price and sale_price < normal_price:
+                sale_unit = sale_price / capsule_count
+                excel_data.at[idx, "discount_price"] = round(sale_unit, 1)
+        
+                discount_rate = ((normal_price - sale_price) / normal_price) * 100
+                excel_data.at[idx, "discount_rate"] = round(discount_rate, 1)
+
+
 
         
         # 날짜 형식 변환
@@ -1793,97 +1797,72 @@ for pname in selected_products:
     c1, c2, c3, c4 = st.columns(4)
 
     with c1:
-    
-        normal_price_res = (
-            supabase.table("product_all_events")
-            .select("unit_price")
+
+        price_res = (
+            supabase.table("raw_daily_prices")
+            .select("normal_price")
             .eq("product_url", p["product_url"])
-            .eq("event_type", "NORMAL")
-            .order("date", desc=True)
+            .eq("date", p["last_seen_date"])
             .limit(1)
             .execute()
         )
     
-        if normal_price_res.data:
-            normal_price = float(normal_price_res.data[0]["unit_price"])
+        if price_res.data:
+            normal_price = price_res.data[0]["normal_price"]
+            capsule_count = p.get("capsule_count", None)
+    
+            if (
+                normal_price is not None
+                and capsule_count
+                and capsule_count != 0
+            ):
+                normal_unit = normal_price / capsule_count
+                st.metric("개당 정상가", f"{normal_unit:,.1f}원")
+            else:
+                st.metric("개당 정상가", "-")
         else:
-            normal_price = float(p["current_unit_price"])  # fallback
-    
-        st.metric("개당 정상가", f"{normal_price:,.1f}원")
-    
-        
+            st.metric("개당 정상가", "-")
 
 
+    
     with c2:
     
-        # 🔥 현재 선택된 기간 가져오기
-        date_from = df_timeline["event_date"].min().date()
-        date_to = df_timeline["event_date"].max().date()
+        # 🔥 마지막 관측일 기준 raw 가격 조회
+        price_res = (
+            supabase.table("raw_daily_prices")
+            .select("normal_price, sale_price")
+            .eq("product_url", p["product_url"])
+            .eq("date", p["last_seen_date"])
+            .limit(1)
+            .execute()
+        )
     
-        res = supabase.rpc(
-            "get_discount_periods_in_range",
-            {
-                "p_product_url": p["product_url"],
-                "p_date_from": str(date_from),
-                "p_date_to": str(date_to),
-            }
-        ).execute()
-    
-        discount_rows = res.data if res.data else []
-    
-        if discount_rows:
-            # 🔥 할인 기간 중 가장 최근 것의 가격 정보 조회
-            latest_discount = discount_rows[0]
-            
-            # 할인가 조회
-            discount_price_res = (
-                supabase.table("product_all_events")
-                .select("unit_price")
-                .eq("product_url", p["product_url"])
-                .eq("event_type", "DISCOUNT")
-                .gte("date", latest_discount["discount_start_date"])
-                .lte("date", latest_discount["discount_end_date"])
-                .limit(1)
-                .execute()
-            )
-            
-            discount_price = float(discount_price_res.data[0]["unit_price"]) if discount_price_res.data else None
-
-            # 🔥 정상가 조회 - 할인 시작 직전 NORMAL 이벤트의 개당 가격
-            normal_price_res = (
-                supabase.table("product_all_events")
-                .select("unit_price")
-                .eq("product_url", p["product_url"])
-                .eq("event_type", "NORMAL")
-                .lt("date", latest_discount["discount_start_date"])
-                .order("date", desc=True)
-                .limit(1)
-                .execute()
-            )
-            
-            normal_price = (
-                float(normal_price_res.data[0]["unit_price"])
-                if normal_price_res.data
-                else None
-            )
-
-            
-            # 가격 정보 구성
-            if normal_price is not None and discount_price is not None:
-                discount_rate = ((normal_price - discount_price) / normal_price) * 100
-                st.success(
-                    f"💸 할인 중\n"
-                    f"정상가: {normal_price:,.1f}원\n"
-                    f"할인가: {discount_price:,.1f}원\n"
-                    f"({discount_rate:.0f}% 할인)"
-                )
-            elif discount_price is not None:
-                st.success(f"💸 할인 중 | 할인가: {discount_price:,.1f}원")
-            else:
-                st.success(f"💸 할인 {latest_discount['discount_start_date']} ~ {latest_discount['discount_end_date']}")
-    
-        else:
+        if not price_res.data:
             st.info("정상가")
+        else:
+            normal_price = price_res.data[0]["normal_price"]
+            sale_price = price_res.data[0]["sale_price"]
+            capsule_count = p["capsule_count"]
+    
+            # 안전 처리
+            if not normal_price or not capsule_count or capsule_count == 0:
+                st.info("정상가")
+            else:
+                normal_unit = normal_price / capsule_count
+    
+                # 🔥 할인 판단 기준
+                if sale_price and sale_price < normal_price:
+                    sale_unit = sale_price / capsule_count
+                    discount_rate = ((normal_price - sale_price) / normal_price) * 100
+    
+                    st.success(
+                        f"💸 할인 중\n"
+                        f"정상가: {normal_unit:,.1f}원\n"
+                        f"할인가: {sale_unit:,.1f}원\n"
+                        f"({discount_rate:.0f}% 할인)"
+                    )
+                else:
+                    st.info("정상가")
 
 
     with c3:
@@ -1961,31 +1940,38 @@ for pname in selected_products:
             if discount_price is None:
                 continue
             
-            # 🔥 정상가 조회 - 할인 당일의 정상가 (RAW_DAILY_PRICES에서)
-            normal_price_res = (
-                supabase.table("product_all_events")
-                .select("unit_price")
+            # 🔥 할인 시작일 raw 가격 조회
+            price_res = (
+                supabase.table("raw_daily_prices")
+                .select("normal_price, sale_price")
                 .eq("product_url", p["product_url"])
-                .eq("event_type", "NORMAL")
-                .lt("date", row_d['start_date'].strftime("%Y-%m-%d"))
-                .order("date", desc=True)
+                .eq("date", row_d['start_date'].strftime("%Y-%m-%d"))
                 .limit(1)
                 .execute()
             )
-
             
-            normal_price = None
-            if normal_price_res.data:
-                normal_price = round(float(normal_price_res.data[0]["unit_price"]), 1)
-
+            price_text = "-"
             
-            # 가격 정보 구성
-            if normal_price is not None and discount_price is not None:
-                discount_rate = ((normal_price - discount_price) / normal_price) * 100
-                price_text = f"{normal_price:,.1f}원 → {discount_price:,.1f}원 ({discount_rate:.0f}% 할인)"
-            else:
-                # 🔥 정상가를 찾지 못한 경우 (이론상 발생하지 않아야 함)
-                price_text = f"{discount_price:,.1f}원" if discount_price else "-"
+            if price_res.data:
+                normal_price = price_res.data[0]["normal_price"]
+                sale_price = price_res.data[0]["sale_price"]
+                capsule_count = p.get("capsule_count")
+            
+                if normal_price and capsule_count and capsule_count != 0:
+                    normal_unit = normal_price / capsule_count
+            
+                    if sale_price and sale_price < normal_price:
+                        sale_unit = sale_price / capsule_count
+                        discount_rate = ((normal_price - sale_price) / normal_price) * 100
+            
+                        price_text = (
+                            f"{normal_unit:,.1f}원 → "
+                            f"{sale_unit:,.1f}원 "
+                            f"({discount_rate:.0f}% 할인)"
+                        )
+                    else:
+                        price_text = f"정상가: {normal_unit:,.1f}원"
+
             
             display_rows.append({
                 "날짜": f"{row_d['start_date'].date()} ~ {row_d['end_date'].date()}",
@@ -2000,72 +1986,47 @@ for pname in selected_products:
             "RESTOCK": "🔄 복원",
         }
 
-        df_lifecycle_only = df_all_events[df_all_events["event_type"].isin(icon_map.keys())]
+        df_lifecycle_only = df_all_events[
+            df_all_events["event_type"].isin(icon_map.keys())
+        ]
+        
         for _, row_l in df_lifecycle_only.iterrows():
-            # 🔥 해당 날짜의 가격 정보 조회
+        
             price_text = "-"
-            
-            # 해당 날짜의 가격 이벤트 조회
-            price_on_date = (
-                supabase.table("product_all_events")
-                .select("unit_price, event_type")
+        
+            price_res = (
+                supabase.table("raw_daily_prices")
+                .select("normal_price, sale_price")
                 .eq("product_url", p["product_url"])
                 .eq("date", row_l["date"].strftime("%Y-%m-%d"))
+                .limit(1)
                 .execute()
             )
-            
-            if price_on_date.data:
-                # 해당 날짜에 가격 정보가 있는 경우
-                for price_event in price_on_date.data:
-                    if price_event["event_type"] == "DISCOUNT":
-                        # 할인가인 경우 정상가도 조회
-                        normal_price_res = (
-                            supabase.table("product_all_events")
-                            .select("unit_price")
-                            .eq("product_url", p["product_url"])
-                            .eq("event_type", "NORMAL")
-                            .lte("date", row_l["date"].strftime("%Y-%m-%d"))
-                            .order("date", desc=True)
-                            .limit(1)
-                            .execute()
+        
+            if price_res.data:
+                normal_price = price_res.data[0]["normal_price"]
+                sale_price = price_res.data[0]["sale_price"]
+                capsule_count = p.get("capsule_count")
+        
+                if normal_price and capsule_count:
+                    normal_unit = normal_price / capsule_count
+        
+                    if sale_price and sale_price < normal_price:
+                        sale_unit = sale_price / capsule_count
+                        discount_rate = ((normal_price - sale_price) / normal_price) * 100
+        
+                        price_text = (
+                            f"{normal_unit:,.1f}원 → "
+                            f"{sale_unit:,.1f}원 "
+                            f"({discount_rate:.0f}% 할인)"
                         )
-                        
-                        discount_price = float(price_event["unit_price"])
-                        if normal_price_res.data:
-                            normal_price = float(normal_price_res.data[0]["unit_price"])
-                            discount_rate = ((normal_price - discount_price) / normal_price) * 100
-                            price_text = f"{normal_price:,.1f}원 → {discount_price:,.1f}원 ({discount_rate:.0f}% 할인)"
-                        else:
-                            price_text = f"할인가: {discount_price:,.1f}원"
-                        break
-                    elif price_event["event_type"] == "NORMAL":
-                        # 정상가인 경우
-                        normal_price = float(price_event["unit_price"])
-                        price_text = f"정상가: {normal_price:,.1f}원"
-                        break
-            
+                    else:
+                        price_text = f"정상가: {normal_unit:,.1f}원"
+        
             display_rows.append({
                 "날짜": str(row_l["date"].date()),
-                "날짜_정렬용": row_l["date"],  # 🔥 정렬용 컬럼 추가
+                "날짜_정렬용": row_l["date"],
                 "이벤트": icon_map.get(row_l["event_type"], row_l["event_type"]),
                 "가격 정보": price_text
             })
-
-        if not display_rows:
-            st.caption("실제 변화 이벤트 없음")
-            continue
-
-        df_display = pd.DataFrame(display_rows)
         
-        # 🔥 정렬용 컬럼으로 정렬 후 제거
-        df_display = df_display.sort_values("날짜_정렬용", ascending=False)
-        df_display = df_display.drop(columns=["날짜_정렬용"])
-
-        st.dataframe(
-            df_display,
-            use_container_width=True,
-            hide_index=True
-        )
-
-
-
