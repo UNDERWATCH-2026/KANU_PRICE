@@ -248,19 +248,21 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
     # 🔥 질문에서 의미있는 키워드만 추출
     all_keywords = extract_product_name_from_question(question)
     
-    # 🔥 키워드가 있으면 모든 필드에서 OR 검색 (키워드 검색과 동일)
+    # 🔥 각 키워드는 모든 필드 중 어디든 포함되어야 함 (AND of OR)
+    # 예: "카누 디카페인" → "카누"가 어디든 있고 AND "디카페인"도 어디든 있어야 함
     if all_keywords:
-        mask = False
         for keyword in all_keywords:
             if len(keyword) >= 2:
-                # 모든 필드에서 검색 (OR 조건)
-                mask |= _norm_series(df_work["product_name"]).str.contains(keyword, case=False)
-                mask |= _norm_series(df_work["brand"]).str.contains(keyword, case=False)
-                mask |= _norm_series(df_work["category1"]).str.contains(keyword, case=False)
-                mask |= _norm_series(df_work["category2"]).str.contains(keyword, case=False)
-        
-        if mask is not False and mask.any():
-            df_work = df_work[mask]
+                # 각 키워드마다 모든 필드에서 OR 검색
+                keyword_mask = False
+                keyword_mask |= _norm_series(df_work["product_name"]).str.contains(keyword, case=False)
+                keyword_mask |= _norm_series(df_work["brand"]).str.contains(keyword, case=False)
+                keyword_mask |= _norm_series(df_work["category1"]).str.contains(keyword, case=False)
+                keyword_mask |= _norm_series(df_work["category2"]).str.contains(keyword, case=False)
+                
+                # 해당 키워드가 어디든 포함된 제품만 남김 (AND 조건)
+                if keyword_mask is not False and keyword_mask.any():
+                    df_work = df_work[keyword_mask]
 
     start_date = extract_period(question)
 
@@ -916,17 +918,39 @@ with col_tabs:
             st.session_state.search_keyword = search_keyword
             st.session_state.active_mode = "키워드 검색"
             
-            # 🔥 검색 결과 계산 (브랜드명, 제품명, 카테고리, brew_type_kr 모두 검색)
-            keywords = [k.strip() for k in search_keyword.split(",") if k.strip()]
-            mask = False
-            for kw in keywords:
-                # 모든 필드에서 검색
-                mask |= _norm_series(df_all["product_name"]).str.contains(kw, case=False)
-                mask |= _norm_series(df_all["brand"]).str.contains(kw, case=False)
-                mask |= _norm_series(df_all["category1"]).str.contains(kw, case=False)
-                mask |= _norm_series(df_all["category2"]).str.contains(kw, case=False)
-                mask |= _norm_series(df_all["brew_type_kr"]).str.contains(kw, case=False)
-            candidates_df = df_all[mask].copy()
+            # 🔥 검색 결과 계산
+            # 쉼표로 구분: OR 검색 (예: "쥬시, 멜로지오" → 쥬시 OR 멜로지오)
+            # 공백으로 구분: AND 검색 (예: "카누 디카페인" → 카누 AND 디카페인)
+            
+            if "," in search_keyword:
+                # 쉼표 구분: OR 검색
+                keywords = [k.strip() for k in search_keyword.split(",") if k.strip()]
+                mask = False
+                for kw in keywords:
+                    # 모든 필드에서 검색
+                    mask |= _norm_series(df_all["product_name"]).str.contains(kw, case=False)
+                    mask |= _norm_series(df_all["brand"]).str.contains(kw, case=False)
+                    mask |= _norm_series(df_all["category1"]).str.contains(kw, case=False)
+                    mask |= _norm_series(df_all["category2"]).str.contains(kw, case=False)
+                    mask |= _norm_series(df_all["brew_type_kr"]).str.contains(kw, case=False)
+                candidates_df = df_all[mask].copy()
+            else:
+                # 공백 구분: AND 검색
+                keywords = search_keyword.split()
+                candidates_df = df_all.copy()
+                for kw in keywords:
+                    if len(kw) >= 2:
+                        # 각 키워드마다 모든 필드에서 OR 검색
+                        keyword_mask = False
+                        keyword_mask |= _norm_series(candidates_df["product_name"]).str.contains(kw, case=False)
+                        keyword_mask |= _norm_series(candidates_df["brand"]).str.contains(kw, case=False)
+                        keyword_mask |= _norm_series(candidates_df["category1"]).str.contains(kw, case=False)
+                        keyword_mask |= _norm_series(candidates_df["category2"]).str.contains(kw, case=False)
+                        keyword_mask |= _norm_series(candidates_df["brew_type_kr"]).str.contains(kw, case=False)
+                        
+                        # 해당 키워드가 어디든 포함된 제품만 남김 (AND 조건)
+                        if keyword_mask is not False and keyword_mask.any():
+                            candidates_df = candidates_df[keyword_mask]
             
             # 🔥 키워드 검색 로그 저장
             try:
