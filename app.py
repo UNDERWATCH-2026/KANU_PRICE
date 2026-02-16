@@ -1798,30 +1798,50 @@ st.divider()
 # 8-2️⃣ 제품별 카드
 # =========================
 for product_url in selected_products:
-    p = df_all[df_all["product_url"] == product_url].iloc[0]
+    match = df_all[df_all["product_url"] == product_url]
+    if match.empty:
+        continue
+    p = match.iloc[0]
     st.markdown(f"### {p['brand']} - {p['product_name']}")
 
     c1, c2, c3, c4 = st.columns(4)
 
     with c1:
+        # 🔥 현재 선택된 기간 내에서 정상가 변동 확인
         price_res = (
             supabase.table("raw_daily_prices")
-            .select("normal_price")
+            .select("normal_price, date")
             .eq("product_url", p["product_url"])
-            .eq("date", p["last_seen_date"])
-            .limit(1)
+            .gte("date", date_from.strftime("%Y-%m-%d"))
+            .lte("date", date_to.strftime("%Y-%m-%d"))
+            .order("date", desc=False)  # 🔥 오래된 순으로 정렬 (첫번째=시작, 마지막=종료)
             .execute()
         )
         
-        if price_res.data:
-            normal_price = price_res.data[0]["normal_price"]
+        if price_res.data and len(price_res.data) > 0:
             capsule_count = p.get("capsule_count")
             
-            if normal_price and capsule_count and capsule_count > 0:
-                normal_unit = normal_price / capsule_count
-                st.metric("개당 정상가", f"{normal_unit:,.1f}원")
-            else:
+            if not capsule_count or capsule_count <= 0:
                 st.metric("개당 정상가", "-")
+            else:
+                # 기간 내 첫 정상가와 마지막 정상가
+                first_normal = price_res.data[0]["normal_price"]
+                last_normal = price_res.data[-1]["normal_price"]
+                
+                if not first_normal or not last_normal:
+                    st.metric("개당 정상가", "-")
+                else:
+                    first_unit = first_normal / capsule_count
+                    last_unit = last_normal / capsule_count
+                    
+                    # 기간 내 변동이 있으면 표시
+                    if len(price_res.data) > 1 and abs(first_unit - last_unit) > 0.01:
+                        st.metric(
+                            "개당 정상가",
+                            f"{first_unit:,.1f}원 → {last_unit:,.1f}원"
+                        )
+                    else:
+                        st.metric("개당 정상가", f"{last_unit:,.1f}원")
         else:
             st.metric("개당 정상가", "-")
 
