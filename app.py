@@ -64,22 +64,109 @@ def load_lifecycle_events(product_url: str):
 # =========================
 # 2-1️⃣ 질문 로그 저장
 # =========================
-def save_question_log(question: str, q_type: str, used_llm: bool):
+def save_question_log(question: str, q_type: str, used_llm: bool, answer: str = None, filters: dict = None):
+    """
+    질문 로그를 Supabase에 저장
+    
+    Args:
+        question: 사용자 질문
+        q_type: 질문 타입 (DISCOUNT, NEW, PRICE_MIN 등)
+        used_llm: LLM 사용 여부
+        answer: 생성된 답변 (선택)
+        filters: 적용된 필터 정보 (선택)
+    """
     try:
-        supabase.table("question_logs").insert({
+        log_data = {
             "question_text": question,
             "question_type": q_type,
-            "used_llm": used_llm
-        }).execute()
+            "used_llm": used_llm,
+            "created_at": datetime.now().isoformat()
+        }
+        
+        # 답변 추가 (있는 경우)
+        if answer:
+            # 답변이 dict인 경우 텍스트 추출
+            if isinstance(answer, dict):
+                log_data["answer_text"] = answer.get("text", str(answer))
+                log_data["answer_type"] = answer.get("type", "unknown")
+            else:
+                log_data["answer_text"] = str(answer)
+        
+        # 필터 정보 추가 (있는 경우)
+        if filters:
+            log_data["filters"] = filters
+        
+        supabase.table("question_logs").insert(log_data).execute()
     except Exception as e:
         print("로그 저장 실패:", e)
+
 
 # =========================
 # 2-2️⃣ 질문 처리 함수들
 # =========================
+
+def normalize_brand_name(brand_query: str) -> str:
+    """
+    브랜드명을 정규화
+    예: '카누', '카누바리스타', '카누 바리스타' → '카누 바리스타'
+    """
+    brand_query = brand_query.lower().strip()
+    
+    # 브랜드명 매핑 (공백 제거 버전 → 정식 명칭)
+    brand_mapping = {
+        "카누": "카누 바리스타",
+        "카누바리스타": "카누 바리스타",
+        "카누 바리스타": "카누 바리스타",
+        "네스프레소": "네스프레소",
+        "스타벅스": "스타벅스",
+        "일리": "일리",
+        "돌체구스토": "돌체구스토",
+    }
+    
+    # 공백 제거하여 매칭
+    for key, value in brand_mapping.items():
+        if key.replace(" ", "") == brand_query.replace(" ", ""):
+            return value
+    
+    return brand_query
+
+def extract_brand_from_question(q: str, df_all: pd.DataFrame) -> str:
+    """질문에서 브랜드명 추출"""
+    q_lower = q.lower()
+    brands = df_all["brand"].dropna().unique().tolist()
+    
+    for brand in brands:
+        if brand and brand.lower() in q_lower:
+            return brand
+    
+    # 정규화된 브랜드명으로 재시도
+    for brand in brands:
+        normalized = normalize_brand_name(q_lower)
+        if brand.lower() == normalized.lower():
+            return brand
+    
+    return None
+
+def extract_product_name_from_question(q: str) -> str:
+    """질문에서 제품명 키워드 추출"""
+    # 할인, 기간 등의 키워드 제거
+    exclude_words = ["할인", "기간", "언제", "얼마", "가격", "제품", "브랜드", "카누", "바리스타"]
+    
+    words = q.split()
+    product_keywords = []
+    
+    for word in words:
+        if len(word) >= 2 and not any(ex in word for ex in exclude_words):
+            product_keywords.append(word)
+    
+    return " ".join(product_keywords) if product_keywords else None
+
 def classify_intent(q: str):
     q = q.lower()
 
+    # 🔥 "할인 기간" 키워드 감지
+    if "할인" in q and ("기간" in q or "언제" in q):
+        return "DISCOUNT_PERIOD"
     if "할인" in q or "행사" in q:
         return "DISCOUNT"
     if any(word in q for word in ["신제품", "새롭게", "새로", "신규", "출시", "새로운", "처음"]):
@@ -131,7 +218,71 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
     if brew_condition:
         df_work = df_work[df_work["brew_type_kr"] == brew_condition]
 
+    # 🔥 브랜드 필터링
+    brand_from_q = extract_brand_from_question(question, df_summary)
+    if brand_from_q:
+        df_work = df_work[df_work["brand"] == brand_from_q]
+    
+    # 🔥 제품명 필터링
+    product_keywords = extract_product_name_from_question(question)
+    if product_keywords:
+        mask = False
+        for keyword in product_keywords.split():
+            if len(keyword) >= 2:
+                mask |= df_work["product_name"].str.contains(keyword, case=False, na=False)
+        if mask is not False:
+            df_work = df_work[mask]
+
     start_date = extract_period(question)
+
+    # 🔥 할인 기간 조회
+    if intent == "DISCOUNT_PERIOD":
+        results = []
+        
+        for _, row in df_work.iterrows():
+            # 할인 기간 조회
+            res = supabase.rpc(
+                "get_discount_periods_in_range",
+                {
+                    "p_product_url": row["product_url"],
+                    "p_date_from": (date_from if date_from else datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d"),
+                    "p_date_to": (date_to if date_to else datetime.now()).strftime("%Y-%m-%d"),
+                }
+            ).execute()
+            
+            discount_periods = res.data if res.data else []
+            
+            if discount_periods:
+                for period in discount_periods:
+                    # 할인 기간의 가격 조회
+                    price_res = (
+                        supabase.table("product_all_events")
+                        .select("unit_price")
+                        .eq("product_url", row["product_url"])
+                        .eq("event_type", "DISCOUNT")
+                        .gte("date", period["discount_start_date"])
+                        .lte("date", period["discount_end_date"])
+                        .limit(1)
+                        .execute()
+                    )
+                    
+                    discount_price = price_res.data[0]["unit_price"] if price_res.data else row["current_unit_price"]
+                    
+                    results.append({
+                        "text": f"• **{row['brand']}** - {row['product_name']}\n"
+                                f"  📅 할인 기간: {period['discount_start_date']} ~ {period['discount_end_date']}\n"
+                                f"  💰 할인가: {float(discount_price):,.1f}원",
+                        "product_name": row['product_name']
+                    })
+        
+        if not results:
+            return "해당 제품의 할인 기간 정보가 없습니다."
+        
+        return {
+            "type": "product_list",
+            "text": "할인 기간 정보:\n\n" + "\n\n".join([r["text"] for r in results]),
+            "products": [r["product_name"] for r in results]
+        }
 
     if intent == "DISCOUNT" and not start_date:
         df = df_work[df_work["is_discount"] == True]
@@ -743,6 +894,17 @@ with col_tabs:
                 mask |= _norm_series(df_all["product_name"]).str.contains(kw, case=False)
             candidates_df = df_all[mask].copy()
             
+            # 🔥 키워드 검색 로그 저장
+            try:
+                supabase.table("search_logs").insert({
+                    "search_type": "KEYWORD",
+                    "search_term": search_keyword,
+                    "result_count": len(candidates_df),
+                    "created_at": datetime.now().isoformat()
+                }).execute()
+            except Exception as e:
+                print("검색 로그 저장 실패:", e)
+            
             # 🔥 검색 이력에 추가 (중복 검색어는 덮어쓰기)
             existing_idx = None
             for idx, history in enumerate(st.session_state.search_history):
@@ -854,9 +1016,28 @@ with col_tabs:
 
         candidates_df = df2 if sel_cat2 == "(전체)" else df2[df2["category2"] == sel_cat2]
         
-        # 필터 변경 시 active_mode 업데이트
+        # 필터 변경 시 active_mode 업데이트 및 로그 저장
         if sel_brand != "(전체)" or sel_cat1 != "(전체)" or sel_cat2 != "(전체)":
             st.session_state.active_mode = "필터 선택"
+            
+            # 🔥 필터 선택 로그 저장 (이전 상태와 비교하여 변경 시만 저장)
+            current_filter = f"{sel_brand}|{sel_cat1}|{sel_cat2}"
+            if "last_filter" not in st.session_state or st.session_state.last_filter != current_filter:
+                try:
+                    supabase.table("search_logs").insert({
+                        "search_type": "FILTER",
+                        "search_term": current_filter,
+                        "filter_data": {
+                            "brand": sel_brand,
+                            "category1": sel_cat1,
+                            "category2": sel_cat2
+                        },
+                        "result_count": len(candidates_df),
+                        "created_at": datetime.now().isoformat()
+                    }).execute()
+                    st.session_state.last_filter = current_filter
+                except Exception as e:
+                    print("필터 로그 저장 실패:", e)
 
         st.markdown("### 📦 비교할 제품 선택")
 
@@ -874,12 +1055,10 @@ with col_tabs:
     # TAB 3: 자연어 질문
     # =========================
     with tab3:
-        st.markdown("### 💬 자연어로 질문하세요")
-    
         # 🔥 Form을 사용하여 제출 후 자동으로 입력창 비우기
         with st.form("question_form", clear_on_submit=True):
             question = st.text_area(
-                "질문 입력",
+                "자연어로 질문하세요",
                 placeholder="예:\n- 네스프레소 중 최저가는?\n- 최근 1개월 할인 제품\n- 에스프레소 품절 제품",
                 height=100,
                 key="insight_question_input"
@@ -890,9 +1069,8 @@ with col_tabs:
         if ask_question and question:
             st.session_state.active_mode = "자연어 질문"
         
-            # 🔥 질문 이력에 저장
-            if "question_history" not in st.session_state:
-                st.session_state.question_history = []
+            # 🔥 새 질문 시 이전 질문 이력 모두 삭제
+            st.session_state.question_history = []
         
             intent = classify_intent(question)
         
@@ -909,26 +1087,20 @@ with col_tabs:
             # 🔥 현재 검색/필터 조건을 반영한 데이터셋 생성
             filtered_df = df_all.copy()
         
-            # 질문에서 브랜드 추출하여 필터링
-            brands = options_from(df_all, "brand")
-            for brand in brands:
-                if brand.lower() in question.lower():
-                    filtered_df = filtered_df[filtered_df["brand"] == brand]
-                    st.info(f"🔍 '{brand}' 브랜드로 필터링된 결과입니다.")
-                    break
-        
-            # 필터링된 데이터가 없으면 전체 데이터 사용
-            if filtered_df.empty:
-                filtered_df = df_all.copy()
-                st.warning("⚠️ 필터링 결과가 없어 전체 제품을 대상으로 검색합니다.")
-            elif len(filtered_df) < len(df_all):
-                st.info(f"📊 {len(filtered_df)}개 제품을 대상으로 검색합니다.")
-        
-            # 🔥 조회 기간 적용
+            # 🔥 조회 기간 적용 (브랜드/제품명 필터링은 execute_rule에서 처리)
             answer = execute_rule(intent, question, filtered_df, date_from, date_to)
 
+            # 🔥 필터 정보 수집
+            filter_info = {
+                "date_from": date_from.strftime("%Y-%m-%d") if hasattr(date_from, 'strftime') else str(date_from),
+                "date_to": date_to.strftime("%Y-%m-%d") if hasattr(date_to, 'strftime') else str(date_to),
+                "total_products": len(filtered_df),
+                "filtered": len(filtered_df) < len(df_all)
+            }
+
             if answer:
-                save_question_log(question, intent, False)
+                # 🔥 로그 저장 (답변 포함)
+                save_question_log(question, intent, False, answer, filter_info)
             
                 # 🔥 답변을 질문 이력에 저장
                 st.session_state.question_history.append({
@@ -941,7 +1113,9 @@ with col_tabs:
                 with st.spinner("분석 중..."):
                     answer = llm_fallback(question, filtered_df)
                     answer = {"type": "text", "text": answer}  # 통일된 형식으로 변환
-                save_question_log(question, intent, True)
+                
+                # 🔥 로그 저장 (답변 포함)
+                save_question_log(question, intent, True, answer, filter_info)
             
                 # 🔥 답변을 질문 이력에 저장
                 st.session_state.question_history.append({
