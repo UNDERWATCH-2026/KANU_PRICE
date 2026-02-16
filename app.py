@@ -874,8 +874,12 @@ with col_tabs:
     with tab3:
         st.markdown("### 💬 자연어로 질문하세요")
     
+        # 🔥 세션 상태에서 질문 값 가져오기 (없으면 빈 문자열)
+        question_value = st.session_state.get("insight_question", "")
+        
         question = st.text_area(
             "질문 입력",
+            value=question_value,
             placeholder="예:\n- 네스프레소 중 최저가는?\n- 최근 1개월 할인 제품\n- 에스프레소 품절 제품",
             height=100,
             key="insight_question"
@@ -948,8 +952,7 @@ with col_tabs:
                 })
         
             # 🔥 질문 처리 후 입력창 초기화
-            if "insight_question" in st.session_state:
-                del st.session_state.insight_question
+            st.session_state.insight_question = ""
             st.rerun()
     
         # 🔥 질문 이력 표시
