@@ -2049,6 +2049,61 @@ for pname in selected_products:
         
             df_display = df_display.sort_values("날짜_정렬용", ascending=False)
             df_display = df_display.drop(columns=["날짜_정렬용"])
+
+            
+            # ============================================
+            # 📊 선택 기간 전략 요약 대시보드
+            # ============================================
+            
+            if not df_display.empty:
+            
+                event_counts = df_display["이벤트"].value_counts()
+            
+                normal_up = event_counts.get("🔼 정상가 인상", 0)
+                normal_down = event_counts.get("🔽 정상가 인하", 0)
+                sale_up = event_counts.get("🔺 할인가 인상", 0)
+                sale_down = event_counts.get("🔻 할인가 인하", 0)
+                discount_start = event_counts.get("🏷️ 할인 시작", 0)
+                discount_end = event_counts.get("🔚 할인 종료", 0)
+                new_product = event_counts.get("🆕 신제품", 0)
+                out_of_stock = event_counts.get("❌ 품절", 0)
+                restock = event_counts.get("🔄 복원", 0)
+            
+                # 전략 활동 강도 지수 (단순 버전)
+                strategy_score = (
+                    normal_up + normal_down +
+                    sale_up + sale_down +
+                    discount_start + discount_end
+                )
+            
+                col1, col2, col3, col4 = st.columns(4)
+            
+                with col1:
+                    st.metric(
+                        label="가격 조정 횟수",
+                        value=normal_up + normal_down + sale_up + sale_down
+                    )
+            
+                with col2:
+                    st.metric(
+                        label="할인 전략 활동",
+                        value=discount_start + discount_end
+                    )
+            
+                with col3:
+                    st.metric(
+                        label="재고/신제품 이벤트",
+                        value=new_product + out_of_stock + restock
+                    )
+            
+                with col4:
+                    st.metric(
+                        label="전략 활동 강도",
+                        value=strategy_score
+                    )
+            
+                st.divider()
+
         
             st.dataframe(
                 df_display,
