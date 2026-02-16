@@ -1949,162 +1949,120 @@ else:
 st.divider()
 
 # =========================
-# 8-2️⃣ 제품별 카드
+# 8-2️⃣ 제품별 카드 (간결 요약 버전)
 # =========================
 for product_url in selected_products:
     p = df_all[df_all["product_url"] == product_url].iloc[0]
 
     st.markdown(f"### {p['brand']} - {p['product_name']}")
 
-
     c1, c2, c3, c4 = st.columns(4)
 
+    # ============================================
+    # 🟦 C1: 개당 정상가 + 최근 정상가 변동
+    # ============================================
     with c1:
-
         price_res = (
             supabase.table("raw_daily_prices")
-            .select("normal_price")
+            .select("normal_price, date")
             .eq("product_url", p["product_url"])
-            .eq("date", p["last_seen_date"])
-            .limit(1)
+            .order("date", desc=True)
+            .limit(2)
             .execute()
         )
-    
-        if price_res.data:
-            normal_price = price_res.data[0]["normal_price"]
-            capsule_count = p.get("capsule_count", None)
-    
-            if (
-                normal_price is not None
-                and capsule_count
-                and capsule_count != 0
-            ):
-                normal_unit = normal_price / capsule_count
-                st.metric("개당 정상가", f"{normal_unit:,.1f}원")
+
+        if price_res.data and p.get("capsule_count"):
+            rows = price_res.data
+            capsule_count = p["capsule_count"]
+
+            if len(rows) >= 1 and rows[0]["normal_price"]:
+                latest_price = rows[0]["normal_price"] / capsule_count
+
+                # 변동 확인
+                if len(rows) == 2 and rows[1]["normal_price"]:
+                    prev_price = rows[1]["normal_price"] / capsule_count
+                    if latest_price != prev_price:
+                        st.metric(
+                            "개당 정상가",
+                            f"{prev_price:,.1f}원 → {latest_price:,.1f}원"
+                        )
+                    else:
+                        st.metric("개당 정상가", f"{latest_price:,.1f}원")
+                else:
+                    st.metric("개당 정상가", f"{latest_price:,.1f}원")
             else:
                 st.metric("개당 정상가", "-")
         else:
             st.metric("개당 정상가", "-")
 
-
-    
+    # ============================================
+    # 🟦 C2: 할인 상태 (기간만 표시)
+    # ============================================
     with c2:
-    
-        # 🔥 마지막 관측일 기준 raw 가격 조회
-        price_res = (
-            supabase.table("raw_daily_prices")
-            .select("normal_price, sale_price")
-            .eq("product_url", p["product_url"])
-            .eq("date", p["last_seen_date"])
-            .limit(1)
-            .execute()
-        )
-    
-        if not price_res.data:
-            st.info("정상가")
+        res = supabase.rpc(
+            "get_discount_periods_in_range",
+            {
+                "p_product_url": p["product_url"],
+                "p_date_from": (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d"),
+                "p_date_to": datetime.now().strftime("%Y-%m-%d"),
+            }
+        ).execute()
+
+        periods = res.data if res.data else []
+
+        if periods:
+            # 가장 최근 할인 기간
+            latest_period = sorted(
+                periods,
+                key=lambda x: x["discount_start_date"],
+                reverse=True
+            )[0]
+
+            start = latest_period["discount_start_date"][5:]
+            end = latest_period["discount_end_date"][5:]
+
+            st.metric("현재 상태", f"{start} ~ {end}")
         else:
-            normal_price = price_res.data[0]["normal_price"]
-            sale_price = price_res.data[0]["sale_price"]
-            capsule_count = p["capsule_count"]
-    
-            # 안전 처리
-            if not normal_price or not capsule_count or capsule_count == 0:
-                st.info("정상가")
-            else:
-                normal_unit = normal_price / capsule_count
-    
-                # 🔥 할인 판단 기준
-                if sale_price and sale_price < normal_price:
-                    sale_unit = sale_price / capsule_count
-                    discount_rate = ((normal_price - sale_price) / normal_price) * 100
-    
-                    st.success(
-                        f"💸 할인 중\n"
-                        f"정상가: {normal_unit:,.1f}원\n"
-                        f"할인가: {sale_unit:,.1f}원\n"
-                        f"({discount_rate:.0f}% 할인)"
-                    )
-                else:
-                    st.info("정상가")
+            st.metric("현재 상태", "정상가")
 
-
+    # ============================================
+    # 🟦 C3: 신제품 / 복원
+    # ============================================
     with c3:
         df_life = load_lifecycle_events(p["product_url"])
-        has_new = (not df_life.empty) and (df_life["lifecycle_event"] == "NEW_PRODUCT").any()
-        if has_new:
-            st.warning("🆕 신제품")
+
+        if not df_life.empty:
+
+            new_row = df_life[df_life["lifecycle_event"] == "NEW_PRODUCT"]
+            restore_row = df_life[df_life["lifecycle_event"] == "RESTOCK"]
+
+            if not new_row.empty:
+                launch_date = new_row.iloc[0]["date"]
+                st.metric("신제품", launch_date)
+            elif not restore_row.empty:
+                restore_date = restore_row.iloc[0]["date"]
+                st.metric("복원", restore_date)
+            else:
+                st.write("")
         else:
-            st.caption(f"관측 시작일\n{p['first_seen_date']}")
+            st.write("")
 
+    # ============================================
+    # 🟦 C4: 품절 여부
+    # ============================================
     with c4:
-        st.caption(f"마지막 관측일\n{p['last_seen_date']}")
-
-    if p["product_event_status"] == "NO_EVENT_STABLE":
-        st.info("📊 가격 변동 없음")
-    else:
-        st.success(f"📈 가격 이벤트 {p['event_count']}건")
-
-    with st.expander("📅 이벤트 히스토리"):
-        df_price = load_events(p["product_url"])
         df_life = load_lifecycle_events(p["product_url"])
 
-        frames = []
-
-       # 1) 가격 이벤트 정제
-        if not df_price.empty:
-            df_price = df_price.copy()
-            df_price["date"] = pd.to_datetime(df_price["date"])
-            frames.append(df_price[["date", "unit_price", "event_type"]])
-
-
-        # 2) Lifecycle 이벤트
         if not df_life.empty:
-            df_life = df_life[df_life["lifecycle_event"].notna()]
-            df_life = df_life.rename(columns={"lifecycle_event": "event_type"})
-            df_life["unit_price"] = None
-            df_life["date"] = pd.to_datetime(df_life["date"])
-            frames.append(df_life[["date", "unit_price", "event_type"]])
+            out_row = df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]
 
-        if not frames:
-            st.caption("이벤트 없음")
-            continue
-
-        df_all_events = pd.concat(frames, ignore_index=True)
-        df_all_events = df_all_events.drop_duplicates(subset=["date", "event_type"])
-
-        # 4) 할인 구간 묶기
-
-        # 🔥 날짜 기준 정렬
-        df_price = df_price.sort_values("date")
-        
-        # 🔥 이전 가격 비교
-        df_price["prev_price"] = df_price["unit_price"].shift(1)
-        
-        # 🔥 변화 감지
-        df_price["price_change"] = df_price["unit_price"] - df_price["prev_price"]
-
-        if not df_price.empty:
-            df_discount = df_price[df_price["event_type"] == "DISCOUNT"]
-            if not df_discount.empty:
-                df_discount = df_discount.sort_values("date")
-                df_discount["gap"] = df_discount["date"].diff().dt.days.fillna(1)
-                df_discount["group"] = (df_discount["gap"] > 1).cumsum()
-
-                discount_periods = (
-                    df_discount.groupby("group")
-                    .agg(
-                        start_date=("date", "min"),
-                        end_date=("date", "max"),
-                        unit_price=("unit_price", "first")
-                    )
-                    .reset_index(drop=True)
-                )
+            if not out_row.empty:
+                out_date = out_row.iloc[0]["date"]
+                st.metric("품절", out_date)
             else:
-                discount_periods = pd.DataFrame()
+                st.write("")
         else:
-            discount_periods = pd.DataFrame()
-
-        display_rows = []
+            st.write("")
 
         # ============================================
         # 1️⃣ 가격 이벤트 (정상가 / 할인가 인상·인하)
@@ -2212,62 +2170,13 @@ for product_url in selected_products:
             df_display = df_display.sort_values("날짜_정렬용", ascending=False)
             df_display = df_display.drop(columns=["날짜_정렬용"])
 
-            
-            # ============================================
-            # 📊 선택 기간 전략 요약 대시보드
-            # ============================================
-
-            st.markdown("### 📊 이벤트 유형별 발생 횟수")
-            
-            if not df_display.empty:
-            
-                event_counts = df_display["이벤트"].value_counts()
-            
-                normal_up = event_counts.get("🔼 정상가 인상", 0)
-                normal_down = event_counts.get("🔽 정상가 인하", 0)
-                sale_up = event_counts.get("🔺 할인가 인상", 0)
-                sale_down = event_counts.get("🔻 할인가 인하", 0)
-                discount_start = event_counts.get("🏷️ 할인 시작", 0)
-                discount_end = event_counts.get("🔚 할인 종료", 0)
-                new_product = event_counts.get("🆕 신제품", 0)
-                out_of_stock = event_counts.get("❌ 품절", 0)
-                restock = event_counts.get("🔄 복원", 0)
-            
-             
-                col1, col2, col3, col4 = st.columns(4)
-                col5, col6, col7 = st.columns(3)
-                
-                with col1:
-                    st.metric("정상가 인상", normal_up)
-                
-                with col2:
-                    st.metric("정상가 인하", normal_down)
-                
-                with col3:
-                    st.metric("할인가 인상", sale_up)
-                
-                with col4:
-                    st.metric("할인가 인하", sale_down)
-                
-                with col5:
-                    st.metric("신제품 출시", new_product)
-                
-                with col6:
-                    st.metric("품절", out_of_stock)
-                
-                with col7:
-                    st.metric("복원", restock)
-                
-                              
-            
-                st.divider()
-
         
-            st.dataframe(
-                df_display,
-                use_container_width=True,
-                hide_index=True
-            )
-
-
-
+        # ============================================
+        # 📋 이벤트 상세 테이블
+        # ============================================
+        
+        st.dataframe(
+            df_display,
+            use_container_width=True,
+            hide_index=True
+        )
