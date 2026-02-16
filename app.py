@@ -1690,27 +1690,26 @@ if timeline_rows:
                 # ✅ 할인가 (이미 개당)
                 discount_price = float(row["unit_price"])
                 excel_data.at[idx, "discount_price"] = round(discount_price, 1)
-        
-                # ✅ 할인 시작 이전 NORMAL 이벤트의 개당 정상가 조회
-                normal_price_res = (
-                    supabase.table("product_all_events")
-                    .select("unit_price")
-                    .eq("product_url", product_url)
-                    .eq("event_type", "NORMAL")
-                    .lte("date", row["event_date"].strftime("%Y-%m-%d"))
-                    .order("date", desc=True)
-                    .limit(1)
-                    .execute()
-                )
-        
-                if normal_price_res.data:
-                    normal_price = float(normal_price_res.data[0]["unit_price"])
-                    excel_data.at[idx, "normal_price"] = round(normal_price, 1)
-        
-                    # ✅ 할인율 계산 (개당 기준)
-                    discount_rate = ((normal_price - discount_price) / normal_price) * 100
+      
+                # 정상가 / 할인가 계산 (raw_daily_prices 기준)
+                # --------------------------
+                
+                normal_price = row["normal_price"]
+                sale_price = row["sale_price"]
+                
+                capsule_count = row["capsule_count"]
+                
+                normal_unit = normal_price / capsule_count
+                excel_data.at[idx, "normal_price"] = round(normal_unit, 1)
+                
+                if sale_price < normal_price:
+                    sale_unit = sale_price / capsule_count
+                    excel_data.at[idx, "discount_price"] = round(sale_unit, 1)
+                
+                    discount_rate = ((normal_price - sale_price) / normal_price) * 100
                     excel_data.at[idx, "discount_rate"] = round(discount_rate, 1)
-        
+                
+                        
             # --------------------------
             # 💰 정상가 상태
             # --------------------------
@@ -2067,5 +2066,6 @@ for pname in selected_products:
             use_container_width=True,
             hide_index=True
         )
+
 
 
