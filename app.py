@@ -263,6 +263,11 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
                 # 해당 키워드가 어디든 포함된 제품만 남김 (AND 조건)
                 if keyword_mask is not False and keyword_mask.any():
                     df_work = df_work[keyword_mask]
+    
+    # 🔥 키워드 필터링 후 결과가 없는 경우 메시지 반환
+    if all_keywords and df_work.empty:
+        keywords_str = ", ".join(all_keywords)
+        return f"'{keywords_str}'에 해당하는 제품이 없습니다."
 
     start_date = extract_period(question)
 
@@ -324,7 +329,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
                         price_info = f"  💰 할인가: {float(discount_price):,.1f}원"
                     
                     results.append({
-                        "text": f"• **{row['brand']}** - {row['product_name']}\n"
+                        "text": f"• {row['brand']} - {row['product_name']}\n"
                                 f"  📅 할인 기간: {period['discount_start_date']} ~ {period['discount_end_date']}\n"
                                 f"{price_info}",
                         "product_name": row['product_name']
@@ -359,7 +364,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
             product_name = row['product_name']
             
             results.append({
-                "text": f"• **{row['brand']}** - {product_name}{category_str}\n  💰 현재가: {float(row['current_unit_price']):,.1f}원",
+                "text": f"• {row['brand']} - {product_name}{category_str}\n  💰 현재가: {float(row['current_unit_price']):,.1f}원",
                 "product_name": product_name
             })
         
@@ -380,7 +385,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         min_price = df_valid["current_unit_price"].min()
         df_min = df_valid[df_valid["current_unit_price"] == min_price]
 
-        output_lines = []
+        results = []
         for _, row in df_min.iterrows():
             res = (
                 supabase.table("product_all_events")
@@ -402,15 +407,30 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
 
             sd = df_low["date"].min().date()
             ed = df_low["date"].max().date()
-            output_lines.append(
-                f"- {row['product_name']} / {min_price:,.1f}원\n"
-                f"  최저가 기간: {sd} ~ {ed}"
-            )
+            
+            # 카테고리 정보 구성
+            categories = []
+            if pd.notna(row.get("category1")) and row["category1"]:
+                categories.append(row["category1"])
+            if pd.notna(row.get("category2")) and row["category2"]:
+                categories.append(row["category2"])
+            
+            category_str = f" [{' > '.join(categories)}]" if categories else ""
+            
+            results.append({
+                "text": f"• {row['brand']} - {row['product_name']}{category_str}\n"
+                        f"  💰 최저가: {min_price:,.1f}원 (기간: {sd} ~ {ed})",
+                "product_name": row['product_name']
+            })
 
-        if not output_lines:
+        if not results:
             return "최저가 계산 대상 제품이 없습니다."
 
-        return "최저가 제품 목록:\n\n" + "\n\n".join(output_lines)
+        return {
+            "type": "product_list",
+            "text": "최저가 제품 목록:\n\n" + "\n\n".join([r["text"] for r in results]),
+            "products": [r["product_name"] for r in results]
+        }
 
     if intent == "PRICE_MAX":
         df = df_work[df_work["current_unit_price"] > 0].sort_values("current_unit_price", ascending=False)
@@ -463,7 +483,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
             product_name = row['product_name']
             
             results.append({
-                "text": f"• **{row['brand']}** - {product_name}{category_str}\n  🎉 출시일: {launch_date}",
+                "text": f"• {row['brand']} - {product_name}{category_str}\n  🎉 출시일: {launch_date}",
                 "product_name": product_name
             })
         
@@ -520,7 +540,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
             product_name = row['product_name']
             
             results.append({
-                "text": f"• **{row['brand']}** - {product_name}{category_str}\n  📅 품절일: {out_date}",
+                "text": f"• {row['brand']} - {product_name}{category_str}\n  📅 품절일: {out_date}",
                 "product_name": product_name
             })
         
@@ -576,7 +596,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
             product_name = row['product_name']
             
             results.append({
-                "text": f"• **{row['brand']}** - {product_name}{category_str}\n  🔄 복원일: {restock_date}",
+                "text": f"• {row['brand']} - {product_name}{category_str}\n  🔄 복원일: {restock_date}",
                 "product_name": product_name
             })
         
@@ -1879,7 +1899,10 @@ for pname in selected_products:
         for _, row_d in discount_periods.iterrows():
             discount_price = round(float(row_d["unit_price"]), 1) if pd.notna(row_d["unit_price"]) else None
             
-            # 🔥 정상가 조회 (할인 직전)
+            if not discount_price:
+                continue
+            
+            # 🔥 정상가 조회 (할인 직전 또는 전체 기간에서 NORMAL 가격)
             normal_price_res = (
                 supabase.table("product_all_events")
                 .select("unit_price")
@@ -1891,6 +1914,18 @@ for pname in selected_products:
                 .execute()
             )
             
+            # 🔥 할인 직전 정상가가 없으면 전체 기간에서 가장 최근 정상가 조회
+            if not normal_price_res.data:
+                normal_price_res = (
+                    supabase.table("product_all_events")
+                    .select("unit_price")
+                    .eq("product_url", p["product_url"])
+                    .eq("event_type", "NORMAL")
+                    .order("date", desc=True)
+                    .limit(1)
+                    .execute()
+                )
+            
             normal_price = None
             if normal_price_res.data:
                 normal_price = round(float(normal_price_res.data[0]["unit_price"]), 1)
@@ -1899,15 +1934,14 @@ for pname in selected_products:
             if normal_price and discount_price:
                 discount_rate = ((normal_price - discount_price) / normal_price) * 100
                 price_text = f"{normal_price:,.0f}원 → {discount_price:,.0f}원 ({discount_rate:.0f}% 할인)"
-            elif discount_price:
-                price_text = f"할인가: {discount_price:,.0f}원"
             else:
-                price_text = "-"
+                # 🔥 정상가를 찾지 못한 경우 (이론상 발생하지 않아야 함)
+                price_text = f"할인가: {discount_price:,.0f}원"
             
             display_rows.append({
                 "날짜": f"{row_d['start_date'].date()} ~ {row_d['end_date'].date()}",
                 "날짜_정렬용": row_d['start_date'],
-                "이벤트": "💸 할인 기간",
+                "이벤트": "💸 할인",
                 "가격 정보": price_text
             })
 
