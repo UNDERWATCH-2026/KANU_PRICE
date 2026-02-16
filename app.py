@@ -1888,13 +1888,12 @@ for pname in selected_products:
 
         frames = []
 
-        # 1) 가격 이벤트 정제
+       # 1) 가격 이벤트 정제
         if not df_price.empty:
             df_price = df_price.copy()
             df_price["date"] = pd.to_datetime(df_price["date"])
-            df_price = df_price[df_price["event_type"] != "NORMAL"]
-            if not df_price.empty:
-                frames.append(df_price[["date", "unit_price", "event_type"]])
+            frames.append(df_price[["date", "unit_price", "event_type"]])
+
 
         # 2) Lifecycle 이벤트
         if not df_life.empty:
@@ -2031,4 +2030,5 @@ for pname in selected_products:
                 "가격 정보": price_text
             })
         
+
 
