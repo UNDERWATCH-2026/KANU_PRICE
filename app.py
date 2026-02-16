@@ -304,28 +304,33 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
                     
                     discount_price = discount_price_res.data[0]["unit_price"] if discount_price_res.data else None
                     
-                    # 정상가 조회 (할인 직전 가격)
+                   # 정상가 조회 (할인 직전 가격)
                     normal_price_res = (
                         supabase.table("product_all_events")
                         .select("unit_price")
                         .eq("product_url", row["product_url"])
                         .eq("event_type", "NORMAL")
-                        .lt("date", period["discount_start_date"])
+                        .lt("date", period["discount_start_date"])   # 🔥 여기 수정
                         .order("date", desc=True)
                         .limit(1)
                         .execute()
                     )
                     
-                    normal_price = normal_price_res.data[0]["unit_price"] if normal_price_res.data else None
-                    
+                    normal_price = (
+                        float(normal_price_res.data[0]["unit_price"])
+                        if normal_price_res.data
+                        else None
+                    )
+
+                                        
                     # 가격 정보 구성
                     price_info = ""
-                    if normal_price and discount_price:
+                    if normal_price is not None and discount_price is not None:
                         discount_rate = ((normal_price - discount_price) / normal_price) * 100
                         price_info = (f"  💰 정상가: {float(normal_price):,.1f}원 → "
                                     f"할인가: {float(discount_price):,.1f}원 "
                                     f"({discount_rate:.0f}% 할인)")
-                    elif discount_price:
+                    elif discount_price is not None:
                         price_info = f"  💰 할인가: {float(discount_price):,.1f}원"
                     
                     results.append({
@@ -926,13 +931,15 @@ with col_controls:
         if "date_to" in st.session_state:
             del st.session_state.date_to
         
-        # 🔥 필터 selectbox 상태 초기화
+        # 🔥 필터 selectbox 상태 완전 초기화 (삭제)
         if "filter_brand" in st.session_state:
             del st.session_state.filter_brand
         if "filter_cat1" in st.session_state:
             del st.session_state.filter_cat1
         if "filter_cat2" in st.session_state:
             del st.session_state.filter_cat2
+        if "last_filter" in st.session_state:
+            del st.session_state.last_filter
         
         # 🔥 모든 체크박스, 버튼, form 입력 키 삭제
         keys_to_delete = [
@@ -949,7 +956,8 @@ with col_controls:
             ))
         ]
         for key in keys_to_delete:
-            del st.session_state[key]
+            if key in st.session_state:
+                del st.session_state[key]
         
         st.rerun()
 
@@ -1105,6 +1113,7 @@ with col_tabs:
             sel_brand = st.selectbox(
                 "브랜드",
                 ["(전체)"] + brands,
+                index=0,  # 🔥 기본값 명시
                 key="filter_brand"
             )
 
@@ -1115,6 +1124,7 @@ with col_tabs:
             sel_cat1 = st.selectbox(
                 "카테고리1",
                 ["(전체)"] + cat1s,
+                index=0,  # 🔥 기본값 명시
                 key="filter_cat1"
             )
 
@@ -1125,6 +1135,7 @@ with col_tabs:
             sel_cat2 = st.selectbox(
                 "카테고리2",
                 ["(전체)"] + cat2s,
+                index=0,  # 🔥 기본값 명시
                 key="filter_cat2"
             )
 
@@ -1366,7 +1377,7 @@ for pname in selected_products:
                 .select("unit_price")
                 .eq("product_url", row["product_url"])
                 .eq("event_type", "NORMAL")
-                .lt("date", price_row["event_date"].strftime("%Y-%m-%d"))
+                .lte("date", price_row["event_date"].strftime("%Y-%m-%d"))
                 .order("date", desc=True)
                 .limit(1)
                 .execute()
@@ -1662,18 +1673,25 @@ if timeline_rows:
         # 🔥 정상가/할인가 분리
         excel_data["normal_price"] = None
         excel_data["discount_price"] = None
-        excel_data["discount_rate"] = None  # 🔥 할인율 추가
+        excel_data["discount_rate"] = None
         
         for idx, row in excel_data.iterrows():
+        
+            pname = row["product_name"]
+            product_url = df_all[
+                df_all["product_name"].apply(lambda x: pname.endswith(x))
+            ]["product_url"].iloc[0]
+        
+            # --------------------------
+            # 💸 할인 중인 경우
+            # --------------------------
             if row["price_status"] == "💸 할인 중":
-                # 할인가
-                excel_data.at[idx, "discount_price"] = round(float(row["unit_price"]), 1)
-                
-                # 정상가 조회
-                pname = row["product_name"]
-                product_url = df_all[df_all["product_name"].apply(lambda x: pname.endswith(x))]["product_url"].iloc[0]
-                
-                # 🔥 1단계: 할인 직전 정상가 조회
+        
+                # ✅ 할인가 (이미 개당)
+                discount_price = float(row["unit_price"])
+                excel_data.at[idx, "discount_price"] = round(discount_price, 1)
+        
+                # ✅ 할인 시작 이전 NORMAL 이벤트의 개당 정상가 조회
                 normal_price_res = (
                     supabase.table("product_all_events")
                     .select("unit_price")
@@ -1684,28 +1702,22 @@ if timeline_rows:
                     .limit(1)
                     .execute()
                 )
-                
-                # 🔥 2단계: 1단계 실패 시 전체 기간에서 가장 최근 정상가 조회
-                if not normal_price_res.data:
-                    normal_price_res = (
-                        supabase.table("product_all_events")
-                        .select("unit_price")
-                        .eq("product_url", product_url)
-                        .eq("event_type", "NORMAL")
-                        .order("date", desc=True)
-                        .limit(1)
-                        .execute()
-                    )
-                
+        
                 if normal_price_res.data:
                     normal_price = float(normal_price_res.data[0]["unit_price"])
                     excel_data.at[idx, "normal_price"] = round(normal_price, 1)
-                    # 🔥 할인율 계산
-                    discount_rate = ((normal_price - row["unit_price"]) / normal_price) * 100
+        
+                    # ✅ 할인율 계산 (개당 기준)
+                    discount_rate = ((normal_price - discount_price) / normal_price) * 100
                     excel_data.at[idx, "discount_rate"] = round(discount_rate, 1)
+        
+            # --------------------------
+            # 💰 정상가 상태
+            # --------------------------
             else:
-                # 정상가
-                excel_data.at[idx, "normal_price"] = round(float(row["unit_price"]), 1)
+                normal_price = float(row["unit_price"])
+                excel_data.at[idx, "normal_price"] = round(normal_price, 1)
+
         
         # 날짜 형식 변환
         excel_data["event_date"] = excel_data["event_date"].dt.strftime("%Y-%m-%d")
@@ -1819,8 +1831,8 @@ for pname in selected_products:
             )
             
             discount_price = float(discount_price_res.data[0]["unit_price"]) if discount_price_res.data else None
-            
-            # 정상가 조회 (할인 직전)
+
+            # 🔥 정상가 조회 - 할인 시작 직전 NORMAL 이벤트의 개당 가격
             normal_price_res = (
                 supabase.table("product_all_events")
                 .select("unit_price")
@@ -1832,10 +1844,15 @@ for pname in selected_products:
                 .execute()
             )
             
-            normal_price = float(normal_price_res.data[0]["unit_price"]) if normal_price_res.data else None
+            normal_price = (
+                float(normal_price_res.data[0]["unit_price"])
+                if normal_price_res.data
+                else None
+            )
+
             
             # 가격 정보 구성
-            if normal_price and discount_price:
+            if normal_price is not None and discount_price is not None:
                 discount_rate = ((normal_price - discount_price) / normal_price) * 100
                 st.success(
                     f"💸 할인 중\n"
@@ -1843,7 +1860,7 @@ for pname in selected_products:
                     f"할인가: {discount_price:,.1f}원\n"
                     f"({discount_rate:.0f}% 할인)"
                 )
-            elif discount_price:
+            elif discount_price is not None:
                 st.success(f"💸 할인 중 | 할인가: {discount_price:,.1f}원")
             else:
                 st.success(f"💸 할인 {latest_discount['discount_start_date']} ~ {latest_discount['discount_end_date']}")
@@ -1924,10 +1941,10 @@ for pname in selected_products:
         for _, row_d in discount_periods.iterrows():
             discount_price = round(float(row_d["unit_price"]), 1) if pd.notna(row_d["unit_price"]) else None
             
-            if not discount_price:
+            if discount_price is None:
                 continue
             
-            # 🔥 정상가 조회 (할인 직전 또는 전체 기간에서 NORMAL 가격)
+            # 🔥 정상가 조회 - 할인 당일의 정상가 (RAW_DAILY_PRICES에서)
             normal_price_res = (
                 supabase.table("product_all_events")
                 .select("unit_price")
@@ -1938,25 +1955,15 @@ for pname in selected_products:
                 .limit(1)
                 .execute()
             )
-            
-            # 🔥 할인 직전 정상가가 없으면 전체 기간에서 가장 최근 정상가 조회
-            if not normal_price_res.data:
-                normal_price_res = (
-                    supabase.table("product_all_events")
-                    .select("unit_price")
-                    .eq("product_url", p["product_url"])
-                    .eq("event_type", "NORMAL")
-                    .order("date", desc=True)
-                    .limit(1)
-                    .execute()
-                )
+
             
             normal_price = None
             if normal_price_res.data:
                 normal_price = round(float(normal_price_res.data[0]["unit_price"]), 1)
+
             
             # 가격 정보 구성
-            if normal_price and discount_price:
+            if normal_price is not None and discount_price is not None:
                 discount_rate = ((normal_price - discount_price) / normal_price) * 100
                 price_text = f"{normal_price:,.1f}원 → {discount_price:,.1f}원 ({discount_rate:.0f}% 할인)"
             else:
@@ -2000,7 +2007,7 @@ for pname in selected_products:
                             .select("unit_price")
                             .eq("product_url", p["product_url"])
                             .eq("event_type", "NORMAL")
-                            .lt("date", row_l["date"].strftime("%Y-%m-%d"))
+                            .lte("date", row_l["date"].strftime("%Y-%m-%d"))
                             .order("date", desc=True)
                             .limit(1)
                             .execute()
