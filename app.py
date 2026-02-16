@@ -1697,7 +1697,7 @@ if timeline_rows:
                     .select("unit_price")
                     .eq("product_url", product_url)
                     .eq("event_type", "NORMAL")
-                    .lt("date", row["event_date"].strftime("%Y-%m-%d"))
+                    .lte("date", row["event_date"].strftime("%Y-%m-%d"))
                     .order("date", desc=True)
                     .limit(1)
                     .execute()
@@ -1794,8 +1794,7 @@ for pname in selected_products:
     c1, c2, c3, c4 = st.columns(4)
 
     with c1:
-
-        # 최신 NORMAL 이벤트 조회
+    
         normal_price_res = (
             supabase.table("product_all_events")
             .select("unit_price")
@@ -1808,10 +1807,12 @@ for pname in selected_products:
     
         if normal_price_res.data:
             normal_price = float(normal_price_res.data[0]["unit_price"])
-            st.metric("개당 정상가", f"{normal_price:,.1f}원")
         else:
-            st.metric("개당 가격", f"{float(p['current_unit_price']):,.1f}원")
+            normal_price = float(p["current_unit_price"])  # fallback
     
+        st.metric("개당 정상가", f"{normal_price:,.1f}원")
+    
+        
 
 
     with c2:
@@ -2066,4 +2067,5 @@ for pname in selected_products:
             use_container_width=True,
             hide_index=True
         )
+
 
