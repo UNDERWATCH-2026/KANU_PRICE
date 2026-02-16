@@ -40,6 +40,7 @@ def load_product_summary():
     res = supabase.table("product_price_summary_enriched").select(", ".join(cols)).execute()
     return pd.DataFrame(res.data)
 
+
 @st.cache_data(ttl=300)
 def load_events(product_url: str):
     res = (
@@ -338,7 +339,8 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
                         "text": f"• {row['brand']} - {row['product_name']}\n"
                                 f"  📅 할인 기간: {period['discount_start_date']} ~ {period['discount_end_date']}\n"
                                 f"{price_info}",
-                        "product_name": row['product_name']
+                        "product_name": row["product_name"],
+                        "product_url": row["product_url"]
                     })
         
         if not results:
@@ -347,7 +349,14 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         return {
             "type": "product_list",
             "text": "할인 기간 정보:\n\n" + "\n\n".join([r["text"] for r in results]),
-            "products": [r["product_name"] for r in results]
+            "products": [
+                {
+                    "product_name": r["product_name"],
+                    "product_url": r["product_url"]
+                }
+                for r in results
+            ]
+
         }
 
     if intent == "DISCOUNT" and not start_date:
@@ -380,7 +389,14 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         return {
             "type": "product_list",
             "text": "현재 할인 중 제품:\n\n" + "\n\n".join([r["text"] for r in results]),
-            "products": [r["product_name"] for r in results]
+            "products": [
+                {
+                    "product_name": r["product_name"],
+                    "product_url": r["product_url"]
+                }
+                for r in results
+            ]
+
         }
 
     if intent == "PRICE_MIN":
@@ -426,7 +442,8 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
             results.append({
                 "text": f"• {row['brand']} - {row['product_name']}{category_str}\n"
                         f"  💰 최저가: {min_price:,.1f}원 (기간: {sd} ~ {ed})",
-                "product_name": row['product_name']
+                "product_name": row["product_name"],
+                "product_url": row["product_url"]
             })
 
         if not results:
@@ -435,7 +452,14 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         return {
             "type": "product_list",
             "text": "최저가 제품 목록:\n\n" + "\n\n".join([r["text"] for r in results]),
-            "products": [r["product_name"] for r in results]
+            "products": [
+                {
+                    "product_name": r["product_name"],
+                    "product_url": r["product_url"]
+                }
+                for r in results
+            ]
+
         }
 
     if intent == "PRICE_MAX":
@@ -500,7 +524,14 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         return {
             "type": "product_list",
             "text": "최근 신제품:\n\n" + "\n\n".join([r["text"] for r in results]),
-            "products": [r["product_name"] for r in results]
+            "products": [
+                {
+                    "product_name": r["product_name"],
+                    "product_url": r["product_url"]
+                }
+                for r in results
+            ]
+
         }
 
     if intent == "OUT":
@@ -556,7 +587,14 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         return {
             "type": "product_list",
             "text": "최근 품절 제품:\n\n" + "\n\n".join([r["text"] for r in results]),
-            "products": [r["product_name"] for r in results]
+            "products": [
+                {
+                    "product_name": r["product_name"],
+                    "product_url": r["product_url"]
+                }
+                for r in results
+            ]
+
         }
 
     if intent == "RESTORE":
@@ -612,7 +650,14 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         return {
             "type": "product_list",
             "text": "최근 복원된 제품:\n\n" + "\n\n".join([r["text"] for r in results]),
-            "products": [r["product_name"] for r in results]
+            "products": [
+                {
+                    "product_name": r["product_name"],
+                    "product_url": r["product_url"]
+                }
+                for r in results
+            ]
+
         }
 
     if intent == "VOLATILITY" and start_date:
@@ -795,25 +840,24 @@ def options_from(df: pd.DataFrame, col: str):
 
 
 # =========================
-# 🔧 제품 선택 토글 함수 (안정화)
+# 🔧 제품 선택 토글 함수 (product_url 기준)
 # =========================
-def toggle_product(pname):
+def toggle_product(product_url):
     """
-    제품 선택/해제 토글
+    제품 선택/해제 토글 (product_url 기준)
     """
 
     if "selected_products" not in st.session_state:
         st.session_state.selected_products = set()
 
-    # pname이 None이거나 빈값이면 방어
-    if not pname:
+    # 방어 코드
+    if not product_url:
         return
 
-    if pname in st.session_state.selected_products:
-        st.session_state.selected_products.remove(pname)
+    if product_url in st.session_state.selected_products:
+        st.session_state.selected_products.remove(product_url)
     else:
-        st.session_state.selected_products.add(pname)
-
+        st.session_state.selected_products.add(product_url)
 
 # =========================
 # 4️⃣ 세션 상태 초기화
@@ -1035,10 +1079,22 @@ with col_tabs:
                     existing_idx = idx
                     break
             
+            candidates_df = candidates_df.drop_duplicates(subset=["product_url"])
+            
+            candidates_df["display_name"] = (
+                candidates_df["brand"].fillna("") + " - " +
+                candidates_df["product_name"].fillna("") +
+                " [" +
+                candidates_df["category1"].fillna("") + " > " +
+                candidates_df["category2"].fillna("") +
+                "]"
+            )
+            
             search_result = {
                 "keyword": search_keyword,
-                "results": sorted(candidates_df["product_name"].unique().tolist()) if not candidates_df.empty else []
+                "results": candidates_df[["product_url", "display_name"]].to_dict("records")
             }
+
             
             if existing_idx is not None:
                 st.session_state.search_history[existing_idx] = search_result
@@ -1046,6 +1102,26 @@ with col_tabs:
                 st.session_state.search_history.append(search_result)
             
             st.rerun()
+
+
+        df_summary = load_product_summary()
+        
+        # UI 영역에서 summary 생성
+        if not df_summary.empty:
+        
+            df_summary = df_summary.sort_values(
+                ["brand", "category1", "category2", "product_name"]
+            )
+        
+            df_summary["display_name"] = (
+                df_summary["brand"].fillna("") + " - " +
+                df_summary["product_name"].fillna("") +
+                " [" +
+                df_summary["category1"].fillna("") + " > " +
+                df_summary["category2"].fillna("") +
+                "]"
+            )
+        
 
         # 📦 제품 선택 - 검색 이력별로 구획화
         st.markdown("### 📦 비교할 제품 선택")
@@ -1080,9 +1156,10 @@ with col_tabs:
                             with col_delete:
                                 if st.button("🗑️", key=f"delete_search_{history_idx}", help="검색 결과 삭제"):
                                     # 해당 검색 결과의 제품들을 선택에서 제거
-                                    for pname in history['results']:
-                                        if pname in st.session_state.selected_products:
-                                            st.session_state.selected_products.remove(pname)
+                                    for item in history['results']:
+                                        product_url = item["product_url"]
+                                        st.session_state.selected_products.discard(product_url)
+
                                     
                                     # 검색 이력에서 제거
                                     st.session_state.search_history.pop(history_idx)
@@ -1094,14 +1171,19 @@ with col_tabs:
                                 st.caption("📭 검색 결과 없음")
                             else:
                                 # 제품 체크박스
-                                for pname in history['results']:
+                                for item in history['results']:
+
+                                    product_url = item["product_url"]
+                                    display_name = item["display_name"]
+                                
                                     st.checkbox(
-                                        pname,
-                                        value=pname in st.session_state.selected_products,
-                                        key=f"chk_kw_{history_idx}_{pname}",
+                                        display_name,
+                                        value=product_url in st.session_state.selected_products,
+                                        key=f"chk_kw_{history_idx}_{product_url}",
                                         on_change=toggle_product,
-                                        args=(pname,)
+                                        args=(product_url,)
                                     )
+
 
     # =========================
     # TAB 2: 필터 선택
@@ -1168,14 +1250,23 @@ with col_tabs:
         st.markdown("### 📦 비교할 제품 선택")
 
         with st.expander("목록 펼치기 / 접기", expanded=False):
-            for pname in sorted(candidates_df["product_name"].unique()):
-                st.checkbox(
-                    pname,
-                    value=pname in st.session_state.selected_products,
-                    key=f"chk_filter_{pname}",
-                    on_change=toggle_product,
-                    args=(pname,)
+            candidates_df = candidates_df.drop_duplicates(subset=["product_url"])
+
+            for _, row in candidates_df.iterrows():
+            
+                display_name = (
+                    f"{row['brand']} - {row['product_name']} "
+                    f"[{row['category1']} > {row['category2']}]"
                 )
+            
+                st.checkbox(
+                    display_name,
+                    value=row["product_url"] in st.session_state.selected_products,
+                    key=f"chk_filter_{row['product_url']}",
+                    on_change=toggle_product,
+                    args=(row["product_url"],)
+                )
+
 
     # =========================
     # TAB 3: 자연어 질문
@@ -1279,16 +1370,23 @@ with col_tabs:
                         # 체크박스 추가
                         if answer_data.get("products"):
                             st.markdown("##### 📦 비교할 제품으로 추가")
+                        
                             cols = st.columns(3)
-                            for pidx, pname in enumerate(answer_data["products"]):
+                        
+                            for pidx, item in enumerate(answer_data["products"]):
+                        
+                                product_name = item["product_name"]
+                                product_url = item["product_url"]
+                        
                                 with cols[pidx % 3]:
                                     st.checkbox(
-                                        pname,
-                                        value=pname in st.session_state.selected_products,
-                                        key=f"chk_nlp_{idx}_{pidx}_{pname}",
+                                        product_name,
+                                        value=product_url in st.session_state.selected_products,
+                                        key=f"chk_nlp_{idx}_{pidx}_{product_url}",
                                         on_change=toggle_product,
-                                        args=(pname,)
+                                        args=(product_url,)
                                     )
+
                     elif isinstance(answer_data, dict):
                         # 딕셔너리지만 product_list가 아닌 경우
                         st.markdown(f"**A:** {answer_data.get('text', str(answer_data))}")
@@ -1341,16 +1439,19 @@ lifecycle_rows = []
 filter_date_from = pd.to_datetime(date_from)
 filter_date_to = pd.to_datetime(date_to)
 
-for pname in selected_products:
-    row = df_all[df_all["product_name"] == pname].iloc[0]
+for product_url in selected_products:
+    row = df_all[df_all["product_url"] == product_url].iloc[0]
+
 
     # 가격 이벤트
     df_price = load_events(row["product_url"])
     if not df_price.empty:
         tmp = df_price.copy()
         # 🔥 브랜드 + 제품명으로 표시
-        display_name = f"{row['brand']} - {pname}"
+        display_name = f"{row['brand']} - {row['product_name']}"
+
         tmp["product_name"] = display_name
+        tmp["product_url"] = row["product_url"]
         tmp["event_date"] = pd.to_datetime(tmp["date"])
         
         # 🔥 기간 필터 적용
@@ -1421,7 +1522,7 @@ for pname in selected_products:
                     mask = tmp["event_date"] >= out_date
                     tmp.loc[mask, "unit_price"] = None
         
-        timeline_rows.append(tmp[["product_name", "event_date", "unit_price", "price_status", "price_detail"]])
+        timeline_rows.append(tmp[["product_name", "product_url", "event_date", "unit_price", "price_status", "price_detail"]])
         
 
     # lifecycle 이벤트
@@ -1429,7 +1530,8 @@ for pname in selected_products:
     if not df_life.empty:
         tmp2 = df_life.copy()
         # 🔥 브랜드 + 제품명으로 표시
-        display_name = f"{row['brand']} - {pname}"
+        display_name = f"{row['brand']} - {row['product_name']}"
+
         tmp2["product_name"] = display_name
         tmp2["event_date"] = pd.to_datetime(tmp2["date"])
         
@@ -1625,20 +1727,33 @@ if timeline_rows:
         st.markdown("#### 📋 제품 목록")
         
         # 🔥 제품별로 색상 구분하여 표시 (삭제 버튼 포함)
-        unique_products = sorted(df_chart["product_name"].unique())
+
         
-        for idx, product in enumerate(unique_products):
+        unique_products = df_chart[["product_name"]].drop_duplicates()
+        
+        for idx, product_name in enumerate(unique_products["product_name"]):
+        
             col_btn, col_name = st.columns([1, 10])
-            
+        
+            # product_name → product_url 안전 매핑
+            row_match = df_all[
+                (df_all["brand"] + " - " + df_all["product_name"]) == product_name
+            ]
+        
+            if row_match.empty:
+                continue
+        
+            product_url = row_match.iloc[0]["product_url"]
+        
             with col_btn:
-                if st.button("×", key=f"remove_product_{idx}", help="차트에서 제거"):
-                    # 선택된 제품 목록에서 제거
-                    if product in st.session_state.selected_products:
-                        st.session_state.selected_products.remove(product)
+                if st.button("×", key=f"remove_product_{product_url}"):
+                    st.session_state.selected_products.discard(product_url)
                     st.rerun()
-            
+        
             with col_name:
-                st.markdown(f"**{product}**")
+                st.markdown(f"**{product_name}**")
+
+            
     
     # 🔥 엑셀 다운로드 버튼 추가
     with download_placeholder:
@@ -1791,9 +1906,11 @@ st.divider()
 # =========================
 # 8-2️⃣ 제품별 카드
 # =========================
-for pname in selected_products:
-    p = df_all[df_all["product_name"] == pname].iloc[0]
-    st.markdown(f"### {p['product_name']}")
+for product_url in selected_products:
+    p = df_all[df_all["product_url"] == product_url].iloc[0]
+
+    st.markdown(f"### {p['brand']} - {p['product_name']}")
+
 
     c1, c2, c3, c4 = st.columns(4)
 
@@ -2110,3 +2227,4 @@ for pname in selected_products:
                 use_container_width=True,
                 hide_index=True
             )
+
