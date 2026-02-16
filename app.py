@@ -285,8 +285,8 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
             
             if discount_periods:
                 for period in discount_periods:
-                    # 할인 기간의 가격 조회
-                    price_res = (
+                    # 할인가 조회
+                    discount_price_res = (
                         supabase.table("product_all_events")
                         .select("unit_price")
                         .eq("product_url", row["product_url"])
@@ -297,12 +297,36 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
                         .execute()
                     )
                     
-                    discount_price = price_res.data[0]["unit_price"] if price_res.data else row["current_unit_price"]
+                    discount_price = discount_price_res.data[0]["unit_price"] if discount_price_res.data else None
+                    
+                    # 정상가 조회 (할인 직전 가격)
+                    normal_price_res = (
+                        supabase.table("product_all_events")
+                        .select("unit_price")
+                        .eq("product_url", row["product_url"])
+                        .eq("event_type", "NORMAL")
+                        .lt("date", period["discount_start_date"])
+                        .order("date", desc=True)
+                        .limit(1)
+                        .execute()
+                    )
+                    
+                    normal_price = normal_price_res.data[0]["unit_price"] if normal_price_res.data else None
+                    
+                    # 가격 정보 구성
+                    price_info = ""
+                    if normal_price and discount_price:
+                        discount_rate = ((normal_price - discount_price) / normal_price) * 100
+                        price_info = (f"  💰 정상가: {float(normal_price):,.1f}원 → "
+                                    f"할인가: {float(discount_price):,.1f}원 "
+                                    f"({discount_rate:.0f}% 할인)")
+                    elif discount_price:
+                        price_info = f"  💰 할인가: {float(discount_price):,.1f}원"
                     
                     results.append({
                         "text": f"• **{row['brand']}** - {row['product_name']}\n"
                                 f"  📅 할인 기간: {period['discount_start_date']} ~ {period['discount_end_date']}\n"
-                                f"  💰 할인가: {float(discount_price):,.1f}원",
+                                f"{price_info}",
                         "product_name": row['product_name']
                     })
         
@@ -908,7 +932,7 @@ with col_tabs:
         with st.form("search_form", clear_on_submit=True):
             keyword_input = st.text_input(
                 "제품명 검색",
-                placeholder="예: 쥬시, 카누 바리스타, 에스프레소, 커피캡슐",
+                placeholder="예: 카누 디카페인 (공백=AND) / 쥬시, 멜로지오 (쉼표=OR)",
                 key="keyword_input_field"
             )
             submitted = st.form_submit_button("검색")
@@ -1514,11 +1538,21 @@ if timeline_rows:
     with col_legend:
         st.markdown("#### 📋 제품 목록")
         
-        # 🔥 제품별로 색상 구분하여 표시
+        # 🔥 제품별로 색상 구분하여 표시 (삭제 버튼 포함)
         unique_products = sorted(df_chart["product_name"].unique())
         
-        for product in unique_products:
-            st.markdown(f"**•** {product}")
+        for idx, product in enumerate(unique_products):
+            col_name, col_btn = st.columns([6, 1])
+            
+            with col_name:
+                st.markdown(f"**•** {product}")
+            
+            with col_btn:
+                if st.button("❌", key=f"remove_product_{idx}", help="차트에서 제거"):
+                    # 선택된 제품 목록에서 제거
+                    if product in st.session_state.selected_products:
+                        st.session_state.selected_products.remove(product)
+                    st.rerun()
 
 else:
     st.info("비교 가능한 이벤트 데이터가 없습니다.")
@@ -1637,10 +1671,37 @@ for pname in selected_products:
         display_rows = []
 
         for _, row_d in discount_periods.iterrows():
+            discount_price = round(float(row_d["unit_price"]), 1) if pd.notna(row_d["unit_price"]) else None
+            
+            # 🔥 정상가 조회 (할인 직전)
+            normal_price_res = (
+                supabase.table("product_all_events")
+                .select("unit_price")
+                .eq("product_url", p["product_url"])
+                .eq("event_type", "NORMAL")
+                .lt("date", row_d['start_date'].strftime("%Y-%m-%d"))
+                .order("date", desc=True)
+                .limit(1)
+                .execute()
+            )
+            
+            normal_price = None
+            if normal_price_res.data:
+                normal_price = round(float(normal_price_res.data[0]["unit_price"]), 1)
+            
+            # 가격 정보 구성
+            if normal_price and discount_price:
+                discount_rate = ((normal_price - discount_price) / normal_price) * 100
+                price_text = f"{normal_price:,.1f}원 → {discount_price:,.1f}원 ({discount_rate:.0f}% 할인)"
+            elif discount_price:
+                price_text = f"{discount_price:,.1f}원"
+            else:
+                price_text = "-"
+            
             display_rows.append({
                 "날짜": f"{row_d['start_date'].date()} ~ {row_d['end_date'].date()}",
-                "날짜_정렬용": row_d['start_date'],  # 🔥 정렬용 컬럼 추가
-                "개당 가격": round(float(row_d["unit_price"]), 1) if pd.notna(row_d["unit_price"]) else None,
+                "날짜_정렬용": row_d['start_date'],
+                "개당 가격": price_text,
                 "이벤트": "💸 할인 기간"
             })
 
@@ -1669,9 +1730,9 @@ for pname in selected_products:
         df_display = df_display.sort_values("날짜_정렬용", ascending=False)
         df_display = df_display.drop(columns=["날짜_정렬용"])
 
-        # 🔥 None 값 처리 - 포맷팅 전에 "-"로 변경
+        # 🔥 None 값 처리 - 이미 문자열인 경우와 숫자인 경우 구분
         df_display["개당 가격"] = df_display["개당 가격"].apply(
-            lambda x: f"{x:.1f}" if pd.notna(x) else "-"
+            lambda x: x if isinstance(x, str) else (f"{x:.1f}" if pd.notna(x) else "-")
         )
 
         st.dataframe(
