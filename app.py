@@ -642,17 +642,6 @@ try:
 except Exception as e:
     print(f"[ENCODING_LOG_ERROR] {e}")
 
-
-# =========================
-# 🔥 전역 날짜 기본값 세팅 (자연어 질문용)
-# =========================
-if "date_from" not in st.session_state:
-    st.session_state.date_from = datetime.now() - timedelta(days=90)
-
-if "date_to" not in st.session_state:
-    st.session_state.date_to = datetime.now()
-
-
 # -------------------------
 # 조회 기준 선택
 # -------------------------
@@ -816,115 +805,133 @@ with tab2:
 # TAB 3: 자연어 질문
 # =========================
 with tab3:
-
     st.markdown("### 💬 자연어로 질문하세요")
-
-    # -------------------------
-    # 세션 상태 초기화
-    # -------------------------
-    if "current_answer" not in st.session_state:
-        st.session_state.current_answer = None
-
-    # -------------------------
-    # 질문 입력
-    # -------------------------
-    with st.form("nlp_form", clear_on_submit=True):
-
-        question = st.text_area(
-            "질문 입력",
-            placeholder="예:\n- 네스프레소 중 최저가는?\n- 최근 1개월 할인 제품\n- 에스프레소 품절 제품",
-            height=100,
-            key="insight_question"
-        )
     
-        ask_question = st.form_submit_button(
-            "🔍 질문하기",
-            type="primary",
-            use_container_width=True
-        )
-
-    # -------------------------
-    # 질문 처리
-    # -------------------------
+    question = st.text_area(
+        "질문 입력",
+        placeholder="예:\n- 네스프레소 중 최저가는?\n- 최근 1개월 할인 제품\n- 에스프레소 품절 제품",
+        height=100,
+        key="insight_question"
+    )
+    
+    ask_question = st.button("🔍 질문하기", type="primary", use_container_width=True)
+    
+    # 🔥 질문 처리
     if ask_question and question:
-
         st.session_state.active_mode = "자연어 질문"
-
+        
+        # 🔥 질문 이력에 저장
+        if "question_history" not in st.session_state:
+            st.session_state.question_history = []
+        
         intent = classify_intent(question)
-
+        
+        # 🔥 기간 설정 (세션 상태에서 가져오기 또는 기본값 사용)
+        date_from = st.session_state.get("date_from", datetime.now() - timedelta(days=90))
+        date_to = st.session_state.get("date_to", datetime.now())
+        
+        # 날짜 객체로 변환 (필요시)
+        if not isinstance(date_from, datetime):
+            date_from = datetime.combine(date_from, datetime.min.time()) if hasattr(date_from, 'year') else datetime.now() - timedelta(days=90)
+        if not isinstance(date_to, datetime):
+            date_to = datetime.combine(date_to, datetime.min.time()) if hasattr(date_to, 'year') else datetime.now()
+        
+        # 🔥 현재 검색/필터 조건을 반영한 데이터셋 생성
         filtered_df = df_all.copy()
-
-        # 🔎 브랜드 자동 필터
+        
+        # 질문에서 브랜드 추출하여 필터링
         brands = options_from(df_all, "brand")
         for brand in brands:
             if brand.lower() in question.lower():
-                filtered_df = filtered_df[
-                    filtered_df["brand"] == brand
-                ]
+                filtered_df = filtered_df[filtered_df["brand"] == brand]
+                st.info(f"🔍 '{brand}' 브랜드로 필터링된 결과입니다.")
                 break
+        
+        # 필터링된 데이터가 없으면 전체 데이터 사용
+        if filtered_df.empty:
+            filtered_df = df_all.copy()
+            st.warning("⚠️ 필터링 결과가 없어 전체 제품을 대상으로 검색합니다.")
+        elif len(filtered_df) < len(df_all):
+            st.info(f"📊 {len(filtered_df)}개 제품을 대상으로 검색합니다.")
+        
+        # 🔥 조회 기간 적용
+        answer = execute_rule(intent, question, filtered_df, date_from, date_to)
 
-        # 🔥 룰 기반 실행
-        answer = execute_rule(
-            intent,
-            question,
-            filtered_df,
-            st.session_state.date_from,
-            st.session_state.date_to
-        )
-
-        used_llm = False
-
-        # 🔥 룰 실패 시 LLM fallback
-        if not answer:
-            with st.spinner("분석 중..."):
-                answer_text = llm_fallback(question, filtered_df)
-                answer = {"type": "text", "text": answer_text}
-                used_llm = True
-
-        # 🔥 답변 저장 (항상 1개만 유지)
-        st.session_state.current_answer = answer
-
-        # 🔥 로그 저장
-        save_question_log(question, intent, used_llm)
-
-
-    
-    # -------------------------
-    # 답변 출력 (항상 단일)
-    # -------------------------
-    if st.session_state.current_answer:
-    
-        answer_data = st.session_state.current_answer
-    
-        st.markdown("### 💬 답변")
-    
-        # 🔥 제품 리스트일 경우
-        if isinstance(answer_data, dict) and answer_data.get("type") == "product_list":
-    
-            for pname in answer_data["products"]:
-    
-                col_chk, col_txt = st.columns([1, 8])
-    
-                with col_chk:
-                    st.checkbox(
-                        "",
-                        value=pname in st.session_state.selected_products,
-                        key=f"nlp_chk_{pname}",
-                        on_change=toggle_product,
-                        args=(pname,)
-                    )
-    
-                with col_txt:
-                    st.markdown(pname)
-    
-        # 🔥 일반 텍스트 답변
+        if answer:
+            save_question_log(question, intent, False)
+            
+            # 🔥 답변을 질문 이력에 저장
+            st.session_state.question_history.append({
+                "question": question,
+                "answer": answer,
+                "intent": intent
+            })
+            
         else:
-            if isinstance(answer_data, dict):
-                st.markdown(answer_data.get("text", ""))
-            else:
-                st.markdown(answer_data)
+            with st.spinner("분석 중..."):
+                answer = llm_fallback(question, filtered_df)
+                answer = {"type": "text", "text": answer}  # 통일된 형식으로 변환
+            save_question_log(question, intent, True)
+            
+            # 🔥 답변을 질문 이력에 저장
+            st.session_state.question_history.append({
+                "question": question,
+                "answer": answer,
+                "intent": intent
+            })
+        
+        # 🔥 질문 처리 후 입력창 초기화
+        if "insight_question" in st.session_state:
+            del st.session_state.insight_question
+        st.rerun()
     
+    # 🔥 질문 이력 표시
+    if "question_history" in st.session_state and st.session_state.question_history:
+        st.markdown("---")
+        
+        for idx, history in enumerate(reversed(st.session_state.question_history)):
+            with st.container(border=True):
+                col_q, col_del = st.columns([10, 1])
+                
+                with col_q:
+                    st.markdown(f"**Q:** {history['question']}")
+                
+                with col_del:
+                    if st.button("🗑️", key=f"delete_q_{idx}", help="질문 삭제"):
+                        st.session_state.question_history.pop(len(st.session_state.question_history) - 1 - idx)
+                        st.rerun()
+                
+                # 🔥 답변 표시
+                answer_data = history['answer']
+                
+                if isinstance(answer_data, dict) and answer_data.get("type") == "product_list":
+                    # 제품 목록이 있는 경우
+                    st.markdown(f"**A:** {answer_data['text']}")
+                    
+                    # 체크박스 추가
+                    if answer_data.get("products"):
+                        st.markdown("##### 📦 비교할 제품으로 추가")
+                        cols = st.columns(3)
+                        for pidx, pname in enumerate(answer_data["products"]):
+                            with cols[pidx % 3]:
+                                st.checkbox(
+                                    pname,
+                                    value=pname in st.session_state.selected_products,
+                                    key=f"chk_nlp_{idx}_{pidx}_{pname}",
+                                    on_change=toggle_product,
+                                    args=(pname,)
+                                )
+                elif isinstance(answer_data, dict):
+                    # 딕셔너리지만 product_list가 아닌 경우
+                    st.markdown(f"**A:** {answer_data.get('text', str(answer_data))}")
+                else:
+                    # 일반 텍스트 답변
+                    st.markdown(f"**A:** {answer_data}")
 
+st.divider()
+
+
+st.divider()
 
 # =========================
 # 6️⃣ 조회 조건
@@ -939,17 +946,17 @@ with col_period:
     col_from, col_to = st.columns(2)
     
     with col_from:
-        st.session_state.date_from = st.date_input(
+        date_from = st.date_input(
             "시작일",
-            value=st.session_state.date_from,
-            key="date_from_input"
+            value=datetime.now() - timedelta(days=90),  # 기본 3개월 전
+            key="date_from"
         )
     
     with col_to:
-        st.session_state.date_to = st.date_input(
+        date_to = st.date_input(
             "종료일",
-            value=st.session_state.date_to,
-            key="date_to_input"
+            value=datetime.now(),
+            key="date_to"
         )
 
 with col_buttons:
@@ -1442,8 +1449,3 @@ for pname in selected_products:
             use_container_width=True,
             hide_index=True
         )
-
-
-
-
-
