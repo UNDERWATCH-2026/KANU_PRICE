@@ -1274,7 +1274,14 @@ else:
         st.stop()  # 조용히 중단
 
 st.divider()
-st.subheader(f"📊 조회 결과 ({len(selected_products)}개 제품)")
+
+# 🔥 제목과 다운로드 버튼을 한 줄에 배치
+col_title, col_download = st.columns([4, 1])
+with col_title:
+    st.subheader(f"📊 조회 결과 ({len(selected_products)}개 제품)")
+with col_download:
+    # 다운로드 버튼은 데이터 준비 후 표시
+    download_placeholder = st.empty()
 
 # 🔥 기간 유효성 검사
 if date_from > date_to:
@@ -1396,7 +1403,7 @@ if timeline_rows:
             alt.Chart(df_chart)
             .mark_line(point=True)
             .encode(
-                x=alt.X("event_date:T", title="날짜"),
+                x=alt.X("event_date:T", title="날짜", axis=alt.Axis(format="%m/%d")),  # 🔥 월/일 형식으로 고정
                 y=alt.Y("unit_price:Q", title="개당 가격 (원)"),
                 color=alt.Color("product_name:N", title="제품", legend=None),  # 🔥 범례 제거
                 detail="segment:N",  # 🔥 이게 핵심 (선 완전 분리)
@@ -1542,17 +1549,65 @@ if timeline_rows:
         unique_products = sorted(df_chart["product_name"].unique())
         
         for idx, product in enumerate(unique_products):
-            col_name, col_btn = st.columns([6, 1])
-            
-            with col_name:
-                st.markdown(f"**•** {product}")
+            col_btn, col_name = st.columns([1, 10])
             
             with col_btn:
-                if st.button("❌", key=f"remove_product_{idx}", help="차트에서 제거"):
+                if st.button("×", key=f"remove_product_{idx}", help="차트에서 제거"):
                     # 선택된 제품 목록에서 제거
                     if product in st.session_state.selected_products:
                         st.session_state.selected_products.remove(product)
                     st.rerun()
+            
+            with col_name:
+                st.markdown(f"**{product}**")
+    
+    # 🔥 엑셀 다운로드 버튼 추가
+    with download_placeholder:
+        # 엑셀 파일 생성
+        from io import BytesIO
+        import openpyxl
+        from openpyxl.styles import Font, Alignment, PatternFill
+        
+        # 데이터 준비
+        excel_data = df_chart[["product_name", "event_date", "unit_price", "event_type"]].copy()
+        excel_data["event_date"] = excel_data["event_date"].dt.strftime("%Y-%m-%d")
+        excel_data.columns = ["제품명", "날짜", "개당 가격", "이벤트 유형"]
+        
+        # BytesIO 객체 생성
+        output = BytesIO()
+        
+        # 엑셀 작성
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            excel_data.to_excel(writer, sheet_name='가격 데이터', index=False)
+            
+            # 스타일 적용
+            workbook = writer.book
+            worksheet = writer.sheets['가격 데이터']
+            
+            # 헤더 스타일
+            header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+            header_font = Font(bold=True, color="FFFFFF")
+            
+            for cell in worksheet[1]:
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = Alignment(horizontal="center")
+            
+            # 열 너비 조정
+            worksheet.column_dimensions['A'].width = 50
+            worksheet.column_dimensions['B'].width = 15
+            worksheet.column_dimensions['C'].width = 15
+            worksheet.column_dimensions['D'].width = 15
+        
+        output.seek(0)
+        
+        st.download_button(
+            label="📥 엑셀 다운로드",
+            data=output.getvalue(),
+            file_name=f"가격비교_{datetime.now().strftime('%Y%m%d')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
 
 else:
     st.info("비교 가능한 이벤트 데이터가 없습니다.")
