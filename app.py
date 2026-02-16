@@ -651,7 +651,7 @@ st.subheader("🔎 조회 기준")
 col_tabs, col_controls = st.columns([3, 1])
 
 with col_controls:
-    st.markdown("##### 📅 조회 기간")
+    st.write("📅 조회 기간")
     
     # 🔥 시작일/종료일을 한 줄에 배치
     col_from, col_to = st.columns(2)
