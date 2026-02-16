@@ -643,328 +643,32 @@ except Exception as e:
     print(f"[ENCODING_LOG_ERROR] {e}")
 
 # -------------------------
-# 조회 기준 선택
+# 조회 기준 선택 및 조회 조건 통합
 # -------------------------
 st.subheader("🔎 조회 기준")
 
-tab1, tab2, tab3 = st.tabs(["🔍 키워드 검색", "🎛️ 필터 선택", "🤖 자연어 질문"])
+# 🔥 메인 레이아웃: 탭(좌) + 조회조건(우)
+col_tabs, col_controls = st.columns([3, 1])
 
-# =========================
-# TAB 1: 키워드 검색
-# =========================
-with tab1:
-    # 🔍 검색 입력 (Enter 가능)
-    with st.form("search_form", clear_on_submit=True):
-        keyword_input = st.text_input(
-            "제품명 검색",
-            placeholder="예: 쥬시, 멜로지오",
-            key="keyword_input_field"
-        )
-        submitted = st.form_submit_button("검색")
-
-    if submitted and keyword_input.strip():
-        search_keyword = keyword_input.strip()
-        st.session_state.search_keyword = search_keyword
-        st.session_state.active_mode = "키워드 검색"
-        
-        # 🔥 검색 결과 계산
-        keywords = [k.strip() for k in search_keyword.split(",") if k.strip()]
-        mask = False
-        for kw in keywords:
-            mask |= _norm_series(df_all["product_name"]).str.contains(kw, case=False)
-        candidates_df = df_all[mask].copy()
-        
-        # 🔥 검색 이력에 추가 (중복 검색어는 덮어쓰기)
-        existing_idx = None
-        for idx, history in enumerate(st.session_state.search_history):
-            if history["keyword"] == search_keyword:
-                existing_idx = idx
-                break
-        
-        search_result = {
-            "keyword": search_keyword,
-            "results": sorted(candidates_df["product_name"].unique().tolist()) if not candidates_df.empty else []
-        }
-        
-        if existing_idx is not None:
-            st.session_state.search_history[existing_idx] = search_result
-        else:
-            st.session_state.search_history.append(search_result)
-        
-        st.rerun()
-
-    # 📦 제품 선택 - 검색 이력별로 구획화
-    st.markdown("### 📦 비교할 제품 선택")
-    
-    if not st.session_state.search_history:
-        st.info("검색 결과가 없습니다.")
-    else:
-        # 🔥 검색어를 3개씩 가로로 배열
-        num_cols = 3
-        total_searches = len(st.session_state.search_history)
-        
-        for row_idx in range(0, total_searches, num_cols):
-            cols = st.columns(num_cols)
-            
-            for col_idx in range(num_cols):
-                history_idx = row_idx + col_idx
-                
-                if history_idx >= total_searches:
-                    break
-                
-                history = st.session_state.search_history[history_idx]
-                
-                with cols[col_idx]:
-                    # 🔥 박스 스타일로 표시
-                    with st.container(border=True):
-                        # 검색어 제목과 삭제 버튼
-                        col_title, col_delete = st.columns([4, 1])
-                        
-                        with col_title:
-                            st.markdown(f"**🔍 {history['keyword']}**")
-                        
-                        with col_delete:
-                            if st.button("🗑️", key=f"delete_search_{history_idx}", help="검색 결과 삭제"):
-                                # 해당 검색 결과의 제품들을 선택에서 제거
-                                for pname in history['results']:
-                                    if pname in st.session_state.selected_products:
-                                        st.session_state.selected_products.remove(pname)
-                                
-                                # 검색 이력에서 제거
-                                st.session_state.search_history.pop(history_idx)
-                                st.rerun()
-                        
-                        st.markdown("---")
-                        
-                        if not history['results']:
-                            st.caption("📭 검색 결과 없음")
-                        else:
-                            # 제품 체크박스
-                            for pname in history['results']:
-                                st.checkbox(
-                                    pname,
-                                    value=pname in st.session_state.selected_products,
-                                    key=f"chk_kw_{history_idx}_{pname}",
-                                    on_change=toggle_product,
-                                    args=(pname,)
-                                )
-
-# =========================
-# TAB 2: 필터 선택
-# =========================
-with tab2:
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        brands = options_from(df_all, "brand")
-        sel_brand = st.selectbox(
-            "브랜드",
-            ["(전체)"] + brands,
-            key="filter_brand"
-        )
-
-    df1 = df_all if sel_brand == "(전체)" else df_all[df_all["brand"] == sel_brand]
-
-    with col2:
-        cat1s = options_from(df1, "category1")
-        sel_cat1 = st.selectbox(
-            "카테고리1",
-            ["(전체)"] + cat1s,
-            key="filter_cat1"
-        )
-
-    df2 = df1 if sel_cat1 == "(전체)" else df1[df1["category1"] == sel_cat1]
-
-    with col3:
-        cat2s = options_from(df2, "category2")
-        sel_cat2 = st.selectbox(
-            "카테고리2",
-            ["(전체)"] + cat2s,
-            key="filter_cat2"
-        )
-
-    candidates_df = df2 if sel_cat2 == "(전체)" else df2[df2["category2"] == sel_cat2]
-    
-    # 필터 변경 시 active_mode 업데이트
-    if sel_brand != "(전체)" or sel_cat1 != "(전체)" or sel_cat2 != "(전체)":
-        st.session_state.active_mode = "필터 선택"
-
-    st.markdown("### 📦 비교할 제품 선택")
-
-    with st.expander("목록 펼치기 / 접기", expanded=False):
-        for pname in sorted(candidates_df["product_name"].unique()):
-            st.checkbox(
-                pname,
-                value=pname in st.session_state.selected_products,
-                key=f"chk_filter_{pname}",
-                on_change=toggle_product,
-                args=(pname,)
-            )
-
-# =========================
-# TAB 3: 자연어 질문
-# =========================
-with tab3:
-    st.markdown("### 💬 자연어로 질문하세요")
-    
-    question = st.text_area(
-        "질문 입력",
-        placeholder="예:\n- 네스프레소 중 최저가는?\n- 최근 1개월 할인 제품\n- 에스프레소 품절 제품",
-        height=100,
-        key="insight_question"
+with col_controls:
+    st.markdown("##### 📅 조회 기간")
+    date_from = st.date_input(
+        "시작일",
+        value=datetime.now() - timedelta(days=90),
+        key="date_from",
+        label_visibility="collapsed"
     )
     
-    ask_question = st.button("🔍 질문하기", type="primary", use_container_width=True)
+    date_to = st.date_input(
+        "종료일",
+        value=datetime.now(),
+        key="date_to",
+        label_visibility="collapsed"
+    )
     
-    # 🔥 질문 처리
-    if ask_question and question:
-        st.session_state.active_mode = "자연어 질문"
-        
-        # 🔥 질문 이력에 저장
-        if "question_history" not in st.session_state:
-            st.session_state.question_history = []
-        
-        intent = classify_intent(question)
-        
-        # 🔥 기간 설정 (세션 상태에서 가져오기 또는 기본값 사용)
-        date_from = st.session_state.get("date_from", datetime.now() - timedelta(days=90))
-        date_to = st.session_state.get("date_to", datetime.now())
-        
-        # 날짜 객체로 변환 (필요시)
-        if not isinstance(date_from, datetime):
-            date_from = datetime.combine(date_from, datetime.min.time()) if hasattr(date_from, 'year') else datetime.now() - timedelta(days=90)
-        if not isinstance(date_to, datetime):
-            date_to = datetime.combine(date_to, datetime.min.time()) if hasattr(date_to, 'year') else datetime.now()
-        
-        # 🔥 현재 검색/필터 조건을 반영한 데이터셋 생성
-        filtered_df = df_all.copy()
-        
-        # 질문에서 브랜드 추출하여 필터링
-        brands = options_from(df_all, "brand")
-        for brand in brands:
-            if brand.lower() in question.lower():
-                filtered_df = filtered_df[filtered_df["brand"] == brand]
-                st.info(f"🔍 '{brand}' 브랜드로 필터링된 결과입니다.")
-                break
-        
-        # 필터링된 데이터가 없으면 전체 데이터 사용
-        if filtered_df.empty:
-            filtered_df = df_all.copy()
-            st.warning("⚠️ 필터링 결과가 없어 전체 제품을 대상으로 검색합니다.")
-        elif len(filtered_df) < len(df_all):
-            st.info(f"📊 {len(filtered_df)}개 제품을 대상으로 검색합니다.")
-        
-        # 🔥 조회 기간 적용
-        answer = execute_rule(intent, question, filtered_df, date_from, date_to)
-
-        if answer:
-            save_question_log(question, intent, False)
-            
-            # 🔥 답변을 질문 이력에 저장
-            st.session_state.question_history.append({
-                "question": question,
-                "answer": answer,
-                "intent": intent
-            })
-            
-        else:
-            with st.spinner("분석 중..."):
-                answer = llm_fallback(question, filtered_df)
-                answer = {"type": "text", "text": answer}  # 통일된 형식으로 변환
-            save_question_log(question, intent, True)
-            
-            # 🔥 답변을 질문 이력에 저장
-            st.session_state.question_history.append({
-                "question": question,
-                "answer": answer,
-                "intent": intent
-            })
-        
-        # 🔥 질문 처리 후 입력창 초기화
-        if "insight_question" in st.session_state:
-            del st.session_state.insight_question
-        st.rerun()
+    st.button("📊 조회하기", type="primary", use_container_width=True, key="btn_search_trigger", on_click=lambda: st.session_state.update({"show_results": True}))
     
-    # 🔥 질문 이력 표시
-    if "question_history" in st.session_state and st.session_state.question_history:
-        st.markdown("---")
-        
-        for idx, history in enumerate(reversed(st.session_state.question_history)):
-            with st.container(border=True):
-                col_q, col_del = st.columns([10, 1])
-                
-                with col_q:
-                    st.markdown(f"**Q:** {history['question']}")
-                
-                with col_del:
-                    if st.button("🗑️", key=f"delete_q_{idx}", help="질문 삭제"):
-                        st.session_state.question_history.pop(len(st.session_state.question_history) - 1 - idx)
-                        st.rerun()
-                
-                # 🔥 답변 표시
-                answer_data = history['answer']
-                
-                if isinstance(answer_data, dict) and answer_data.get("type") == "product_list":
-                    # 제품 목록이 있는 경우
-                    st.markdown(f"**A:** {answer_data['text']}")
-                    
-                    # 체크박스 추가
-                    if answer_data.get("products"):
-                        st.markdown("##### 📦 비교할 제품으로 추가")
-                        cols = st.columns(3)
-                        for pidx, pname in enumerate(answer_data["products"]):
-                            with cols[pidx % 3]:
-                                st.checkbox(
-                                    pname,
-                                    value=pname in st.session_state.selected_products,
-                                    key=f"chk_nlp_{idx}_{pidx}_{pname}",
-                                    on_change=toggle_product,
-                                    args=(pname,)
-                                )
-                elif isinstance(answer_data, dict):
-                    # 딕셔너리지만 product_list가 아닌 경우
-                    st.markdown(f"**A:** {answer_data.get('text', str(answer_data))}")
-                else:
-                    # 일반 텍스트 답변
-                    st.markdown(f"**A:** {answer_data}")
-
-st.divider()
-
-
-st.divider()
-
-# =========================
-# 6️⃣ 조회 조건
-# =========================
-st.subheader("🔍 조회 조건")
-
-# 🔥 기간 설정과 버튼을 함께 배치
-col_period, col_buttons = st.columns([4, 1])
-
-with col_period:
-    st.markdown("##### 📅 조회 기간")
-    col_from, col_to = st.columns(2)
-    
-    with col_from:
-        date_from = st.date_input(
-            "시작일",
-            value=datetime.now() - timedelta(days=90),  # 기본 3개월 전
-            key="date_from"
-        )
-    
-    with col_to:
-        date_to = st.date_input(
-            "종료일",
-            value=datetime.now(),
-            key="date_to"
-        )
-
-with col_buttons:
-    st.markdown("##### ⚙️")  # 높이 맞추기용
-    if st.button("📊 조회하기", type="primary", use_container_width=True):
-        st.session_state.show_results = True
-    
-    if st.button("🗑️ 전체 초기화", use_container_width=True):
+    if st.button("🗑️ 전체 초기화", use_container_width=True, key="btn_reset_all"):
         # 🔥 모든 세션 상태 완전 초기화
         st.session_state.selected_products = set()
         st.session_state.keyword_results = {}
@@ -999,6 +703,289 @@ with col_buttons:
         
         st.rerun()
 
+with col_tabs:
+    tab1, tab2, tab3 = st.tabs(["🔍 키워드 검색", "🎛️ 필터 선택", "🤖 자연어 질문"])
+
+    # =========================
+    # TAB 1: 키워드 검색
+    # =========================
+    with tab1:
+        # 🔍 검색 입력 (Enter 가능)
+        with st.form("search_form", clear_on_submit=True):
+            keyword_input = st.text_input(
+                "제품명 검색",
+                placeholder="예: 쥬시, 멜로지오",
+                key="keyword_input_field"
+            )
+            submitted = st.form_submit_button("검색")
+
+        if submitted and keyword_input.strip():
+            search_keyword = keyword_input.strip()
+            st.session_state.search_keyword = search_keyword
+            st.session_state.active_mode = "키워드 검색"
+            
+            # 🔥 검색 결과 계산
+            keywords = [k.strip() for k in search_keyword.split(",") if k.strip()]
+            mask = False
+            for kw in keywords:
+                mask |= _norm_series(df_all["product_name"]).str.contains(kw, case=False)
+            candidates_df = df_all[mask].copy()
+            
+            # 🔥 검색 이력에 추가 (중복 검색어는 덮어쓰기)
+            existing_idx = None
+            for idx, history in enumerate(st.session_state.search_history):
+                if history["keyword"] == search_keyword:
+                    existing_idx = idx
+                    break
+            
+            search_result = {
+                "keyword": search_keyword,
+                "results": sorted(candidates_df["product_name"].unique().tolist()) if not candidates_df.empty else []
+            }
+            
+            if existing_idx is not None:
+                st.session_state.search_history[existing_idx] = search_result
+            else:
+                st.session_state.search_history.append(search_result)
+            
+            st.rerun()
+
+        # 📦 제품 선택 - 검색 이력별로 구획화
+        st.markdown("### 📦 비교할 제품 선택")
+        
+        if not st.session_state.search_history:
+            st.info("검색 결과가 없습니다.")
+        else:
+            # 🔥 검색어를 3개씩 가로로 배열
+            num_cols = 3
+            total_searches = len(st.session_state.search_history)
+            
+            for row_idx in range(0, total_searches, num_cols):
+                cols = st.columns(num_cols)
+                
+                for col_idx in range(num_cols):
+                    history_idx = row_idx + col_idx
+                    
+                    if history_idx >= total_searches:
+                        break
+                    
+                    history = st.session_state.search_history[history_idx]
+                    
+                    with cols[col_idx]:
+                        # 🔥 박스 스타일로 표시
+                        with st.container(border=True):
+                            # 검색어 제목과 삭제 버튼
+                            col_title, col_delete = st.columns([4, 1])
+                            
+                            with col_title:
+                                st.markdown(f"**🔍 {history['keyword']}**")
+                            
+                            with col_delete:
+                                if st.button("🗑️", key=f"delete_search_{history_idx}", help="검색 결과 삭제"):
+                                    # 해당 검색 결과의 제품들을 선택에서 제거
+                                    for pname in history['results']:
+                                        if pname in st.session_state.selected_products:
+                                            st.session_state.selected_products.remove(pname)
+                                    
+                                    # 검색 이력에서 제거
+                                    st.session_state.search_history.pop(history_idx)
+                                    st.rerun()
+                            
+                            st.markdown("---")
+                            
+                            if not history['results']:
+                                st.caption("📭 검색 결과 없음")
+                            else:
+                                # 제품 체크박스
+                                for pname in history['results']:
+                                    st.checkbox(
+                                        pname,
+                                        value=pname in st.session_state.selected_products,
+                                        key=f"chk_kw_{history_idx}_{pname}",
+                                        on_change=toggle_product,
+                                        args=(pname,)
+                                    )
+
+    # =========================
+    # TAB 2: 필터 선택
+    # =========================
+    with tab2:
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            brands = options_from(df_all, "brand")
+            sel_brand = st.selectbox(
+                "브랜드",
+                ["(전체)"] + brands,
+                key="filter_brand"
+            )
+
+        df1 = df_all if sel_brand == "(전체)" else df_all[df_all["brand"] == sel_brand]
+
+        with col2:
+            cat1s = options_from(df1, "category1")
+            sel_cat1 = st.selectbox(
+                "카테고리1",
+                ["(전체)"] + cat1s,
+                key="filter_cat1"
+            )
+
+        df2 = df1 if sel_cat1 == "(전체)" else df1[df1["category1"] == sel_cat1]
+
+        with col3:
+            cat2s = options_from(df2, "category2")
+            sel_cat2 = st.selectbox(
+                "카테고리2",
+                ["(전체)"] + cat2s,
+                key="filter_cat2"
+            )
+
+        candidates_df = df2 if sel_cat2 == "(전체)" else df2[df2["category2"] == sel_cat2]
+        
+        # 필터 변경 시 active_mode 업데이트
+        if sel_brand != "(전체)" or sel_cat1 != "(전체)" or sel_cat2 != "(전체)":
+            st.session_state.active_mode = "필터 선택"
+
+        st.markdown("### 📦 비교할 제품 선택")
+
+        with st.expander("목록 펼치기 / 접기", expanded=False):
+            for pname in sorted(candidates_df["product_name"].unique()):
+                st.checkbox(
+                    pname,
+                    value=pname in st.session_state.selected_products,
+                    key=f"chk_filter_{pname}",
+                    on_change=toggle_product,
+                    args=(pname,)
+                )
+
+    # =========================
+    # TAB 3: 자연어 질문
+    # =========================
+    with tab3:
+        st.markdown("### 💬 자연어로 질문하세요")
+    
+        question = st.text_area(
+            "질문 입력",
+            placeholder="예:\n- 네스프레소 중 최저가는?\n- 최근 1개월 할인 제품\n- 에스프레소 품절 제품",
+            height=100,
+            key="insight_question"
+        )
+    
+        ask_question = st.button("🔍 질문하기", type="primary", use_container_width=True)
+    
+        # 🔥 질문 처리
+        if ask_question and question:
+            st.session_state.active_mode = "자연어 질문"
+        
+            # 🔥 질문 이력에 저장
+            if "question_history" not in st.session_state:
+                st.session_state.question_history = []
+        
+            intent = classify_intent(question)
+        
+            # 🔥 기간 설정 (세션 상태에서 가져오기 또는 기본값 사용)
+            date_from = st.session_state.get("date_from", datetime.now() - timedelta(days=90))
+            date_to = st.session_state.get("date_to", datetime.now())
+        
+            # 날짜 객체로 변환 (필요시)
+            if not isinstance(date_from, datetime):
+                date_from = datetime.combine(date_from, datetime.min.time()) if hasattr(date_from, 'year') else datetime.now() - timedelta(days=90)
+            if not isinstance(date_to, datetime):
+                date_to = datetime.combine(date_to, datetime.min.time()) if hasattr(date_to, 'year') else datetime.now()
+        
+            # 🔥 현재 검색/필터 조건을 반영한 데이터셋 생성
+            filtered_df = df_all.copy()
+        
+            # 질문에서 브랜드 추출하여 필터링
+            brands = options_from(df_all, "brand")
+            for brand in brands:
+                if brand.lower() in question.lower():
+                    filtered_df = filtered_df[filtered_df["brand"] == brand]
+                    st.info(f"🔍 '{brand}' 브랜드로 필터링된 결과입니다.")
+                    break
+        
+            # 필터링된 데이터가 없으면 전체 데이터 사용
+            if filtered_df.empty:
+                filtered_df = df_all.copy()
+                st.warning("⚠️ 필터링 결과가 없어 전체 제품을 대상으로 검색합니다.")
+            elif len(filtered_df) < len(df_all):
+                st.info(f"📊 {len(filtered_df)}개 제품을 대상으로 검색합니다.")
+        
+            # 🔥 조회 기간 적용
+            answer = execute_rule(intent, question, filtered_df, date_from, date_to)
+
+            if answer:
+                save_question_log(question, intent, False)
+            
+                # 🔥 답변을 질문 이력에 저장
+                st.session_state.question_history.append({
+                    "question": question,
+                    "answer": answer,
+                    "intent": intent
+                })
+            
+            else:
+                with st.spinner("분석 중..."):
+                    answer = llm_fallback(question, filtered_df)
+                    answer = {"type": "text", "text": answer}  # 통일된 형식으로 변환
+                save_question_log(question, intent, True)
+            
+                # 🔥 답변을 질문 이력에 저장
+                st.session_state.question_history.append({
+                    "question": question,
+                    "answer": answer,
+                    "intent": intent
+                })
+        
+            # 🔥 질문 처리 후 입력창 초기화
+            if "insight_question" in st.session_state:
+                del st.session_state.insight_question
+            st.rerun()
+    
+        # 🔥 질문 이력 표시
+        if "question_history" in st.session_state and st.session_state.question_history:
+            st.markdown("---")
+        
+            for idx, history in enumerate(reversed(st.session_state.question_history)):
+                with st.container(border=True):
+                    col_q, col_del = st.columns([10, 1])
+                
+                    with col_q:
+                        st.markdown(f"**Q:** {history['question']}")
+                
+                    with col_del:
+                        if st.button("🗑️", key=f"delete_q_{idx}", help="질문 삭제"):
+                            st.session_state.question_history.pop(len(st.session_state.question_history) - 1 - idx)
+                            st.rerun()
+                
+                    # 🔥 답변 표시
+                    answer_data = history['answer']
+                
+                    if isinstance(answer_data, dict) and answer_data.get("type") == "product_list":
+                        # 제품 목록이 있는 경우
+                        st.markdown(f"**A:** {answer_data['text']}")
+                    
+                        # 체크박스 추가
+                        if answer_data.get("products"):
+                            st.markdown("##### 📦 비교할 제품으로 추가")
+                            cols = st.columns(3)
+                            for pidx, pname in enumerate(answer_data["products"]):
+                                with cols[pidx % 3]:
+                                    st.checkbox(
+                                        pname,
+                                        value=pname in st.session_state.selected_products,
+                                        key=f"chk_nlp_{idx}_{pidx}_{pname}",
+                                        on_change=toggle_product,
+                                        args=(pname,)
+                                    )
+                    elif isinstance(answer_data, dict):
+                        # 딕셔너리지만 product_list가 아닌 경우
+                        st.markdown(f"**A:** {answer_data.get('text', str(answer_data))}")
+                    else:
+                        # 일반 텍스트 답변
+                        st.markdown(f"**A:** {answer_data}")
+
+st.divider()
 
 # =========================
 # 8️⃣ 결과 표시
