@@ -1321,6 +1321,38 @@ for pname in selected_products:
         tmp["is_discount"] = tmp["event_type"] == "DISCOUNT"
         tmp["price_status"] = tmp["is_discount"].map({True: "💸 할인 중", False: "정상가"})
         
+        # 🔥 정상가와 할인율 정보 추가 (툴팁용)
+        tmp["normal_price"] = None
+        tmp["discount_rate"] = None
+        tmp["price_detail"] = ""
+        
+        # 할인 중인 행에 대해 정상가 찾기
+        for idx, price_row in tmp[tmp["is_discount"]].iterrows():
+            # 해당 할인일 직전의 정상가 조회
+            normal_price_res = (
+                supabase.table("product_all_events")
+                .select("unit_price")
+                .eq("product_url", row["product_url"])
+                .eq("event_type", "NORMAL")
+                .lt("date", price_row["event_date"].strftime("%Y-%m-%d"))
+                .order("date", desc=True)
+                .limit(1)
+                .execute()
+            )
+            
+            if normal_price_res.data:
+                normal_price = float(normal_price_res.data[0]["unit_price"])
+                tmp.at[idx, "normal_price"] = normal_price
+                discount_rate = ((normal_price - price_row["unit_price"]) / normal_price) * 100
+                tmp.at[idx, "discount_rate"] = discount_rate
+                tmp.at[idx, "price_detail"] = f"정상가: {normal_price:,.1f}원 → 할인가: {price_row['unit_price']:,.1f}원 ({discount_rate:.0f}% 할인)"
+            else:
+                tmp.at[idx, "price_detail"] = f"할인가: {price_row['unit_price']:,.1f}원"
+        
+        # 정상가인 경우
+        for idx, price_row in tmp[~tmp["is_discount"]].iterrows():
+            tmp.at[idx, "price_detail"] = f"정상가: {price_row['unit_price']:,.1f}원"
+        
         # 🔥 lifecycle 데이터 불러오기
         df_life = load_lifecycle_events(row["product_url"])
         
@@ -1345,7 +1377,7 @@ for pname in selected_products:
                     mask = tmp["event_date"] >= out_date
                     tmp.loc[mask, "unit_price"] = None
         
-        timeline_rows.append(tmp[["product_name", "event_date", "unit_price", "price_status"]])
+        timeline_rows.append(tmp[["product_name", "event_date", "unit_price", "price_status", "price_detail"]])
         
 
     # lifecycle 이벤트
@@ -1410,8 +1442,8 @@ if timeline_rows:
                 tooltip=[
                     alt.Tooltip("product_name:N", title="제품"),
                     alt.Tooltip("event_date:T", title="날짜", format="%Y-%m-%d"),
-                    alt.Tooltip("unit_price:Q", title="개당 가격", format=",.1f"),
-                    alt.Tooltip("price_status:N", title="상태"),  # 🔥 할인 여부 추가
+                    alt.Tooltip("price_detail:N", title="가격 정보"),  # 🔥 상세 가격 정보
+                    alt.Tooltip("price_status:N", title="상태"),  # 🔥 할인 여부
                 ],
             )
         )
@@ -1569,9 +1601,9 @@ if timeline_rows:
         from openpyxl.styles import Font, Alignment, PatternFill
         
         # 데이터 준비
-        excel_data = df_chart[["product_name", "event_date", "unit_price", "event_type"]].copy()
+        excel_data = df_chart[["product_name", "event_date", "unit_price", "price_detail"]].copy()
         excel_data["event_date"] = excel_data["event_date"].dt.strftime("%Y-%m-%d")
-        excel_data.columns = ["제품명", "날짜", "개당 가격", "이벤트 유형"]
+        excel_data.columns = ["제품명", "날짜", "개당 가격", "가격 상세"]
         
         # BytesIO 객체 생성
         output = BytesIO()
@@ -1597,7 +1629,7 @@ if timeline_rows:
             worksheet.column_dimensions['A'].width = 50
             worksheet.column_dimensions['B'].width = 15
             worksheet.column_dimensions['C'].width = 15
-            worksheet.column_dimensions['D'].width = 15
+            worksheet.column_dimensions['D'].width = 50
         
         output.seek(0)
         
