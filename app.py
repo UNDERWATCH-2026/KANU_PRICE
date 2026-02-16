@@ -117,10 +117,13 @@ def normalize_brand_name(brand_query: str) -> str:
         "카누": "카누 바리스타",
         "카누바리스타": "카누 바리스타",
         "카누 바리스타": "카누 바리스타",
+        "카누돌체구스토": "카누 돌체구스토",
+        "카누 돌체구스토": "카누 돌체구스토",
         "네스프레소": "네스프레소",
         "스타벅스": "스타벅스",
         "일리": "일리",
         "돌체구스토": "돌체구스토",
+        "네스카페": "네스카페",
     }
     
     # 공백 제거하여 매칭
@@ -130,21 +133,28 @@ def normalize_brand_name(brand_query: str) -> str:
     
     return brand_query
 
-def extract_brand_from_question(q: str, df_all: pd.DataFrame) -> str:
-    """질문에서 브랜드명 추출 (부분 매칭 지원)"""
+def extract_brand_from_question(q: str, df_all: pd.DataFrame) -> list:
+    """질문에서 브랜드명 추출 (부분 매칭 지원, 여러 브랜드 반환 가능)"""
     q_lower = q.lower()
     brands = df_all["brand"].dropna().unique().tolist()
+    matched_brands = []
     
     # 1단계: 완전 매칭
     for brand in brands:
         if brand and brand.lower() in q_lower:
-            return brand
+            matched_brands.append(brand)
+    
+    if matched_brands:
+        return matched_brands
     
     # 2단계: 정규화된 브랜드명으로 매칭
     for brand in brands:
         normalized = normalize_brand_name(q_lower)
         if brand.lower() == normalized.lower():
-            return brand
+            matched_brands.append(brand)
+    
+    if matched_brands:
+        return matched_brands
     
     # 3단계: 부분 매칭 (브랜드명의 일부가 질문에 포함)
     for brand in brands:
@@ -153,18 +163,18 @@ def extract_brand_from_question(q: str, df_all: pd.DataFrame) -> str:
         brand_parts = brand_lower.split()
         for part in brand_parts:
             if len(part) >= 2 and part in q_lower:
-                return brand
+                if brand not in matched_brands:
+                    matched_brands.append(brand)
+                break
     
-    return None
+    return matched_brands if matched_brands else None
 
 def extract_product_name_from_question(q: str) -> list:
     """질문에서 제품명 키워드 추출 (여러 키워드 반환)"""
-    # 제외할 키워드 (검색어로 사용하지 않을 단어들)
+    # 제외할 키워드 (질문 관련 단어만 제외)
     exclude_words = [
-        "할인", "기간", "언제", "얼마", "가격", "제품", "브랜드", 
-        "최저가", "최고가", "신제품", "품절", "복원", "중", "는", "은",
-        "에스프레소", "아메리카노", "카페라떼", "카푸치노", "마키아토", 
-        "룽고", "리스트레또"  # brew_type 관련 단어들
+        "할인", "기간", "언제", "얼마", "가격", "제품", 
+        "최저가", "최고가", "신제품", "품절", "복원", "중", "는", "은", "의"
     ]
     
     words = q.split()
@@ -230,28 +240,27 @@ def extract_brew_type(q: str, df_all: pd.DataFrame):
 def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
     df_work = df_summary.copy()
 
+    # 🔥 키워드 추출 (brew_type은 별도 처리)
     brew_condition = extract_brew_type(question, df_summary)
     if brew_condition:
         df_work = df_work[df_work["brew_type_kr"] == brew_condition]
 
-    # 🔥 브랜드 필터링 (부분 매칭 지원)
-    brand_from_q = extract_brand_from_question(question, df_summary)
-    if brand_from_q:
-        df_work = df_work[df_work["brand"] == brand_from_q]
+    # 🔥 질문에서 의미있는 키워드만 추출
+    all_keywords = extract_product_name_from_question(question)
     
-    # 🔥 제품명 필터링 (여러 키워드 AND 검색 - 모든 키워드가 포함되어야 함)
-    product_keywords = extract_product_name_from_question(question)
-    
-    # 브랜드 단어를 제품명 키워드에서 제거 (중복 필터링 방지)
-    if brand_from_q and product_keywords:
-        brand_words = set(brand_from_q.lower().split())
-        product_keywords = [kw for kw in product_keywords if kw.lower() not in brand_words]
-    
-    if product_keywords:
-        for keyword in product_keywords:
+    # 🔥 키워드가 있으면 모든 필드에서 OR 검색 (키워드 검색과 동일)
+    if all_keywords:
+        mask = False
+        for keyword in all_keywords:
             if len(keyword) >= 2:
-                # 각 키워드를 순차적으로 AND 조건으로 필터링
-                df_work = df_work[df_work["product_name"].str.contains(keyword, case=False, na=False)]
+                # 모든 필드에서 검색 (OR 조건)
+                mask |= _norm_series(df_work["product_name"]).str.contains(keyword, case=False)
+                mask |= _norm_series(df_work["brand"]).str.contains(keyword, case=False)
+                mask |= _norm_series(df_work["category1"]).str.contains(keyword, case=False)
+                mask |= _norm_series(df_work["category2"]).str.contains(keyword, case=False)
+        
+        if mask is not False and mask.any():
+            df_work = df_work[mask]
 
     start_date = extract_period(question)
 
