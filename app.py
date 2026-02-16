@@ -241,6 +241,12 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
     
     # 🔥 제품명 필터링 (여러 키워드 AND 검색 - 모든 키워드가 포함되어야 함)
     product_keywords = extract_product_name_from_question(question)
+    
+    # 브랜드 단어를 제품명 키워드에서 제거 (중복 필터링 방지)
+    if brand_from_q and product_keywords:
+        brand_words = set(brand_from_q.lower().split())
+        product_keywords = [kw for kw in product_keywords if kw.lower() not in brand_words]
+    
     if product_keywords:
         for keyword in product_keywords:
             if len(keyword) >= 2:
