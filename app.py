@@ -1474,7 +1474,7 @@ if timeline_rows:
 
                 # 🔥 아이콘 위치를 가격선에 맞추기 위해 join
                 df_filtered = df_filtered.merge(
-                    df_timeline[["product_name", "event_date", "unit_price"]],
+                    df_timeline[["product_name", "event_date", "unit_price", "price_detail"]],
                     on=["product_name", "event_date"],
                     how="left"
                 )
@@ -1492,6 +1492,7 @@ if timeline_rows:
                             if not product_prices.empty:
                                 closest = product_prices.nsmallest(1, "event_date").iloc[-1]
                                 df_filtered.at[idx, "unit_price"] = closest["unit_price"]
+                                df_filtered.at[idx, "price_detail"] = closest["price_detail"]
                     
                     # 복원 시점: 복원 당일 가격 사용 (이미 있으면 그대로, 없으면 직후 가격)
                     elif event_type == "RESTOCK":
@@ -1506,6 +1507,7 @@ if timeline_rows:
                             if not product_prices.empty:
                                 closest = product_prices.nsmallest(1, "event_date").iloc[0]
                                 df_filtered.at[idx, "unit_price"] = closest["unit_price"]
+                                df_filtered.at[idx, "price_detail"] = closest["price_detail"]
                 
                 else:
                     # NEW 이벤트: 가장 가까운 가격 사용
@@ -1522,6 +1524,7 @@ if timeline_rows:
                             )
                             closest = product_prices.nsmallest(1, "date_diff").iloc[0]
                             df_filtered.at[idx, "unit_price"] = closest["unit_price"]
+                            df_filtered.at[idx, "price_detail"] = closest["price_detail"]
                 
                 # unit_price 없는 lifecycle 제거 (매칭 실패한 경우)
                 df_filtered = df_filtered.dropna(subset=["unit_price"])
@@ -1541,7 +1544,7 @@ if timeline_rows:
                         tooltip=[
                             alt.Tooltip("product_name:N", title="제품"),
                             alt.Tooltip("event_date:T", title="날짜", format="%Y-%m-%d"),
-                            alt.Tooltip("unit_price:Q", title="개당 가격", format=",.1f"),  # 🔥 가격 추가
+                            alt.Tooltip("price_detail:N", title="가격 정보"),  # 🔥 상세 가격 정보
                             alt.Tooltip("lifecycle_event:N", title="이벤트"),
                         ],
                     )
@@ -1600,10 +1603,82 @@ if timeline_rows:
         import openpyxl
         from openpyxl.styles import Font, Alignment, PatternFill
         
-        # 데이터 준비
-        excel_data = df_chart[["product_name", "event_date", "unit_price", "price_detail"]].copy()
+        # 🔥 데이터 준비 - 브랜드, 카테고리 정보 추가
+        excel_data = df_chart[["product_name", "event_date", "unit_price", "price_status"]].copy()
+        
+        # 브랜드, 카테고리 정보 추출 (product_name에서 브랜드 분리)
+        excel_data["brand"] = excel_data["product_name"].str.split(" - ").str[0]
+        excel_data["product_name_only"] = excel_data["product_name"].str.split(" - ").str[1]
+        
+        # 원본 데이터프레임에서 카테고리 정보 가져오기
+        excel_data["category1"] = ""
+        excel_data["category2"] = ""
+        
+        for idx, row in excel_data.iterrows():
+            pname_only = row["product_name_only"]
+            original_row = df_all[df_all["product_name"] == pname_only]
+            if not original_row.empty:
+                excel_data.at[idx, "category1"] = original_row.iloc[0].get("category1", "")
+                excel_data.at[idx, "category2"] = original_row.iloc[0].get("category2", "")
+        
+        # 🔥 이벤트 정보 (할인 중 / 정상가)
+        excel_data["event"] = excel_data["price_status"].map({
+            "💸 할인 중": "할인",
+            "정상가": "정상가"
+        })
+        
+        # 🔥 정상가/할인가 분리
+        excel_data["normal_price"] = None
+        excel_data["discount_price"] = None
+        excel_data["discount_rate"] = None  # 🔥 할인율 추가
+        
+        for idx, row in excel_data.iterrows():
+            if row["price_status"] == "💸 할인 중":
+                # 할인가
+                excel_data.at[idx, "discount_price"] = row["unit_price"]
+                
+                # 정상가 조회
+                pname = row["product_name"]
+                product_url = df_all[df_all["product_name"].apply(lambda x: pname.endswith(x))]["product_url"].iloc[0]
+                
+                normal_price_res = (
+                    supabase.table("product_all_events")
+                    .select("unit_price")
+                    .eq("product_url", product_url)
+                    .eq("event_type", "NORMAL")
+                    .lt("date", row["event_date"].strftime("%Y-%m-%d"))
+                    .order("date", desc=True)
+                    .limit(1)
+                    .execute()
+                )
+                
+                if normal_price_res.data:
+                    normal_price = float(normal_price_res.data[0]["unit_price"])
+                    excel_data.at[idx, "normal_price"] = normal_price
+                    # 🔥 할인율 계산
+                    discount_rate = ((normal_price - row["unit_price"]) / normal_price) * 100
+                    excel_data.at[idx, "discount_rate"] = round(discount_rate, 1)
+            else:
+                # 정상가
+                excel_data.at[idx, "normal_price"] = row["unit_price"]
+        
+        # 날짜 형식 변환
         excel_data["event_date"] = excel_data["event_date"].dt.strftime("%Y-%m-%d")
-        excel_data.columns = ["제품명", "날짜", "개당 가격", "가격 상세"]
+        
+        # 최종 컬럼 선택 및 순서 정렬
+        excel_data = excel_data[[
+            "brand", 
+            "category1", 
+            "category2", 
+            "product_name_only", 
+            "event_date",
+            "event",
+            "normal_price", 
+            "discount_price",
+            "discount_rate"  # 🔥 할인율 추가
+        ]]
+        
+        excel_data.columns = ["브랜드", "카테고리1", "카테고리2", "제품명", "날짜", "이벤트", "정상가", "할인가", "할인율(%)"]
         
         # BytesIO 객체 생성
         output = BytesIO()
@@ -1626,10 +1701,15 @@ if timeline_rows:
                 cell.alignment = Alignment(horizontal="center")
             
             # 열 너비 조정
-            worksheet.column_dimensions['A'].width = 50
-            worksheet.column_dimensions['B'].width = 15
-            worksheet.column_dimensions['C'].width = 15
-            worksheet.column_dimensions['D'].width = 50
+            worksheet.column_dimensions['A'].width = 20  # 브랜드
+            worksheet.column_dimensions['B'].width = 15  # 카테고리1
+            worksheet.column_dimensions['C'].width = 15  # 카테고리2
+            worksheet.column_dimensions['D'].width = 50  # 제품명
+            worksheet.column_dimensions['E'].width = 12  # 날짜
+            worksheet.column_dimensions['F'].width = 12  # 이벤트
+            worksheet.column_dimensions['G'].width = 15  # 정상가
+            worksheet.column_dimensions['H'].width = 15  # 할인가
+            worksheet.column_dimensions['I'].width = 12  # 할인율(%)
         
         output.seek(0)
         
@@ -1827,8 +1907,8 @@ for pname in selected_products:
             display_rows.append({
                 "날짜": f"{row_d['start_date'].date()} ~ {row_d['end_date'].date()}",
                 "날짜_정렬용": row_d['start_date'],
-                "가격 정보": price_text,
-                "이벤트": "💸 할인 기간"
+                "이벤트": "💸 할인 기간",
+                "가격 정보": price_text
             })
 
         icon_map = {
@@ -1839,11 +1919,53 @@ for pname in selected_products:
 
         df_lifecycle_only = df_all_events[df_all_events["event_type"].isin(icon_map.keys())]
         for _, row_l in df_lifecycle_only.iterrows():
+            # 🔥 해당 날짜의 가격 정보 조회
+            price_text = "-"
+            
+            # 해당 날짜의 가격 이벤트 조회
+            price_on_date = (
+                supabase.table("product_all_events")
+                .select("unit_price, event_type")
+                .eq("product_url", p["product_url"])
+                .eq("date", row_l["date"].strftime("%Y-%m-%d"))
+                .execute()
+            )
+            
+            if price_on_date.data:
+                # 해당 날짜에 가격 정보가 있는 경우
+                for price_event in price_on_date.data:
+                    if price_event["event_type"] == "DISCOUNT":
+                        # 할인가인 경우 정상가도 조회
+                        normal_price_res = (
+                            supabase.table("product_all_events")
+                            .select("unit_price")
+                            .eq("product_url", p["product_url"])
+                            .eq("event_type", "NORMAL")
+                            .lt("date", row_l["date"].strftime("%Y-%m-%d"))
+                            .order("date", desc=True)
+                            .limit(1)
+                            .execute()
+                        )
+                        
+                        discount_price = float(price_event["unit_price"])
+                        if normal_price_res.data:
+                            normal_price = float(normal_price_res.data[0]["unit_price"])
+                            discount_rate = ((normal_price - discount_price) / normal_price) * 100
+                            price_text = f"{normal_price:,.0f}원 → {discount_price:,.0f}원 ({discount_rate:.0f}% 할인)"
+                        else:
+                            price_text = f"할인가: {discount_price:,.0f}원"
+                        break
+                    elif price_event["event_type"] == "NORMAL":
+                        # 정상가인 경우
+                        normal_price = float(price_event["unit_price"])
+                        price_text = f"정상가: {normal_price:,.0f}원"
+                        break
+            
             display_rows.append({
                 "날짜": str(row_l["date"].date()),
                 "날짜_정렬용": row_l["date"],  # 🔥 정렬용 컬럼 추가
-                "가격 정보": "-",
-                "이벤트": icon_map.get(row_l["event_type"], row_l["event_type"])
+                "이벤트": icon_map.get(row_l["event_type"], row_l["event_type"]),
+                "가격 정보": price_text
             })
 
         if not display_rows:
