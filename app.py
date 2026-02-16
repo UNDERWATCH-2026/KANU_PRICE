@@ -35,6 +35,7 @@ def load_product_summary():
         "product_event_status",
         "is_new_product",
         "brew_type_kr",
+        "capsule_count",
     ]
     res = supabase.table("product_price_summary_enriched").select(", ".join(cols)).execute()
     return pd.DataFrame(res.data)
@@ -2030,3 +2031,4 @@ for pname in selected_products:
                 "가격 정보": price_text
             })
         
+
