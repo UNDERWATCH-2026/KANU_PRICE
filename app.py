@@ -709,7 +709,7 @@ import re
 
 def clean_product_name(s: str) -> str:
     """
-    깨진 한글( ) 및 자주 발생하는 인코딩 오류 패턴 보정
+    깨진 한글(�) 및 자주 발생하는 인코딩 오류 패턴 보정
     """
     if s is None:
         return ""
@@ -721,15 +721,15 @@ def clean_product_name(s: str) -> str:
 
     # 🔥 자주 깨지는 패턴 사전
     fix_map = {
-        "본   직영": "본사직영",
-        "본  직영": "본사직영",
-        "본 직영": "본사직영",
+        "본���직영": "본사직영",
+        "본��직영": "본사직영",
+        "본�직영": "본사직영",
 
-        "바닐   향": "바닐라향",
-        "바닐  향": "바닐라향",
+        "바닐���향": "바닐라향",
+        "바닐��향": "바닐라향",
 
-        "네스프   ": "네스프레소",
-        "스타   스": "스타벅스",
+        "네스프���": "네스프레소",
+        "스타���스": "스타벅스",
     }
 
     for bad, good in fix_map.items():
@@ -741,7 +741,7 @@ def clean_product_name(s: str) -> str:
     s = re.sub(r"본.*?직영", "본사직영", s)
 
     # 연속된 깨진 문자 제거
-    s = re.sub(r" {1,}", "", s)
+    s = re.sub(r"�{1,}", "", s)
 
     # 공백 정리
     s = re.sub(r"\s{2,}", " ", s).strip()
@@ -752,7 +752,7 @@ def detect_encoding_issues(df: pd.DataFrame):
     if "product_name_raw" not in df.columns:
         return
 
-    mask = df["product_name_raw"].str.contains(" ", na=False)
+    mask = df["product_name_raw"].str.contains("�", na=False)
     issues = df[mask][["product_url", "product_name_raw"]]
 
     if not issues.empty:
@@ -1352,7 +1352,6 @@ filter_date_to = pd.to_datetime(date_to)
 for product_url in selected_products:
     match = df_all[df_all["product_url"] == product_url]
     if match.empty:
-        st.warning(f"⚠️ product_url '{product_url}'를 df_all에서 찾을 수 없습니다.")
         continue
     row = match.iloc[0]
 
@@ -1366,14 +1365,8 @@ for product_url in selected_products:
         tmp["product_url"] = row["product_url"]
         tmp["event_date"] = pd.to_datetime(tmp["date"])
         
-        # 🔥 디버깅: 필터 전 데이터 확인
-        st.info(f"🔍 {display_name}: 필터 전 {len(tmp)}건, 날짜 범위: {tmp['event_date'].min()} ~ {tmp['event_date'].max()}")
-        st.info(f"🔍 필터 기준: {filter_date_from} ~ {filter_date_to}")
-        
         # 🔥 기간 필터 적용
         tmp = tmp[(tmp["event_date"] >= filter_date_from) & (tmp["event_date"] <= filter_date_to)]
-        
-        st.info(f"🔍 {display_name}: 필터 후 {len(tmp)}건")
         
         if tmp.empty:
             continue
@@ -1805,50 +1798,30 @@ st.divider()
 # 8-2️⃣ 제품별 카드
 # =========================
 for product_url in selected_products:
-    match = df_all[df_all["product_url"] == product_url]
-    if match.empty:
-        continue
-    p = match.iloc[0]
+    p = df_all[df_all["product_url"] == product_url].iloc[0]
     st.markdown(f"### {p['brand']} - {p['product_name']}")
 
     c1, c2, c3, c4 = st.columns(4)
 
     with c1:
-        # 🔥 현재 선택된 기간 내에서 정상가 변동 확인
         price_res = (
             supabase.table("raw_daily_prices")
-            .select("normal_price, date")
+            .select("normal_price")
             .eq("product_url", p["product_url"])
-            .gte("date", date_from.strftime("%Y-%m-%d"))
-            .lte("date", date_to.strftime("%Y-%m-%d"))
-            .order("date", desc=False)  # 🔥 오래된 순으로 정렬 (첫번째=시작, 마지막=종료)
+            .eq("date", p["last_seen_date"])
+            .limit(1)
             .execute()
         )
         
-        if price_res.data and len(price_res.data) > 0:
+        if price_res.data:
+            normal_price = price_res.data[0]["normal_price"]
             capsule_count = p.get("capsule_count")
             
-            if not capsule_count or capsule_count <= 0:
-                st.metric("개당 정상가", "-")
+            if normal_price and capsule_count and capsule_count > 0:
+                normal_unit = normal_price / capsule_count
+                st.metric("개당 정상가", f"{normal_unit:,.1f}원")
             else:
-                # 기간 내 첫 정상가와 마지막 정상가
-                first_normal = price_res.data[0]["normal_price"]
-                last_normal = price_res.data[-1]["normal_price"]
-                
-                if not first_normal or not last_normal:
-                    st.metric("개당 정상가", "-")
-                else:
-                    first_unit = first_normal / capsule_count
-                    last_unit = last_normal / capsule_count
-                    
-                    # 기간 내 변동이 있으면 표시
-                    if len(price_res.data) > 1 and abs(first_unit - last_unit) > 0.01:
-                        st.metric(
-                            "개당 정상가",
-                            f"{first_unit:,.1f}원 → {last_unit:,.1f}원"
-                        )
-                    else:
-                        st.metric("개당 정상가", f"{last_unit:,.1f}원")
+                st.metric("개당 정상가", "-")
         else:
             st.metric("개당 정상가", "-")
 
