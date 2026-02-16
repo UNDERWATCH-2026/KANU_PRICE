@@ -645,27 +645,35 @@ except Exception as e:
 # -------------------------
 # 조회 기준 선택 및 조회 조건 통합
 # -------------------------
-st.subheader("🔎 조회 기준")
+col_main_left, col_main_right = st.columns([3, 1])
+
+with col_main_left:
+    st.subheader("🔎 조회 기준")
+
+with col_main_right:
+    st.subheader("📅 조회 기간")
 
 # 🔥 메인 레이아웃: 탭(좌) + 조회조건(우)
 col_tabs, col_controls = st.columns([3, 1])
 
 with col_controls:
-    st.write("📅 조회 기간")
-    
     # 🔥 시작일/종료일을 한 줄에 배치
     col_from, col_to = st.columns(2)
     with col_from:
+        st.write("시작일")
         date_from = st.date_input(
             "시작일",
             value=datetime.now() - timedelta(days=90),
-            key="date_from"
+            key="date_from",
+            label_visibility="collapsed"
         )
     with col_to:
+        st.write("종료일")
         date_to = st.date_input(
             "종료일",
             value=datetime.now(),
-            key="date_to"
+            key="date_to",
+            label_visibility="collapsed"
         )
     
     st.button("📊 조회하기", type="primary", use_container_width=True, key="btn_search_trigger", on_click=lambda: st.session_state.update({"show_results": True}))
