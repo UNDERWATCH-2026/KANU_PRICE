@@ -689,6 +689,8 @@ with col_controls:
         # 🔥 질문 입력창 및 이력 초기화
         if "insight_question" in st.session_state:
             del st.session_state.insight_question
+        if "insight_question_input" in st.session_state:
+            del st.session_state.insight_question_input
         if "question_history" in st.session_state:
             del st.session_state.question_history
         
@@ -874,18 +876,15 @@ with col_tabs:
     with tab3:
         st.markdown("### 💬 자연어로 질문하세요")
     
-        # 🔥 세션 상태에서 질문 값 가져오기 (없으면 빈 문자열)
-        question_value = st.session_state.get("insight_question", "")
-        
-        question = st.text_area(
-            "질문 입력",
-            value=question_value,
-            placeholder="예:\n- 네스프레소 중 최저가는?\n- 최근 1개월 할인 제품\n- 에스프레소 품절 제품",
-            height=100,
-            key="insight_question"
-        )
-    
-        ask_question = st.button("🔍 질문하기", type="primary", use_container_width=True)
+        # 🔥 Form을 사용하여 제출 후 자동으로 입력창 비우기
+        with st.form("question_form", clear_on_submit=True):
+            question = st.text_area(
+                "질문 입력",
+                placeholder="예:\n- 네스프레소 중 최저가는?\n- 최근 1개월 할인 제품\n- 에스프레소 품절 제품",
+                height=100,
+                key="insight_question_input"
+            )
+            ask_question = st.form_submit_button("🔍 질문하기", type="primary", use_container_width=True)
     
         # 🔥 질문 처리
         if ask_question and question:
@@ -951,8 +950,7 @@ with col_tabs:
                     "intent": intent
                 })
         
-            # 🔥 질문 처리 후 입력창 초기화
-            st.session_state.insight_question = ""
+            # 🔥 질문 처리 후 Form이 자동으로 입력창 비움
             st.rerun()
     
         # 🔥 질문 이력 표시
