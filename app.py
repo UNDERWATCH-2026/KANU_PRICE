@@ -131,35 +131,51 @@ def normalize_brand_name(brand_query: str) -> str:
     return brand_query
 
 def extract_brand_from_question(q: str, df_all: pd.DataFrame) -> str:
-    """질문에서 브랜드명 추출"""
+    """질문에서 브랜드명 추출 (부분 매칭 지원)"""
     q_lower = q.lower()
     brands = df_all["brand"].dropna().unique().tolist()
     
+    # 1단계: 완전 매칭
     for brand in brands:
         if brand and brand.lower() in q_lower:
             return brand
     
-    # 정규화된 브랜드명으로 재시도
+    # 2단계: 정규화된 브랜드명으로 매칭
     for brand in brands:
         normalized = normalize_brand_name(q_lower)
         if brand.lower() == normalized.lower():
             return brand
     
+    # 3단계: 부분 매칭 (브랜드명의 일부가 질문에 포함)
+    for brand in brands:
+        brand_lower = brand.lower()
+        # 브랜드명을 공백으로 분리하여 각 단어 검색
+        brand_parts = brand_lower.split()
+        for part in brand_parts:
+            if len(part) >= 2 and part in q_lower:
+                return brand
+    
     return None
 
-def extract_product_name_from_question(q: str) -> str:
-    """질문에서 제품명 키워드 추출"""
-    # 할인, 기간 등의 키워드 제거
-    exclude_words = ["할인", "기간", "언제", "얼마", "가격", "제품", "브랜드", "카누", "바리스타"]
+def extract_product_name_from_question(q: str) -> list:
+    """질문에서 제품명 키워드 추출 (여러 키워드 반환)"""
+    # 제외할 키워드 (검색어로 사용하지 않을 단어들)
+    exclude_words = [
+        "할인", "기간", "언제", "얼마", "가격", "제품", "브랜드", 
+        "최저가", "최고가", "신제품", "품절", "복원", "중", "는", "은",
+        "에스프레소", "아메리카노", "카페라떼", "카푸치노", "마키아토", 
+        "룽고", "리스트레또"  # brew_type 관련 단어들
+    ]
     
     words = q.split()
     product_keywords = []
     
     for word in words:
+        # 2글자 이상이고 제외 단어가 아닌 경우
         if len(word) >= 2 and not any(ex in word for ex in exclude_words):
             product_keywords.append(word)
     
-    return " ".join(product_keywords) if product_keywords else None
+    return product_keywords  # 리스트로 반환
 
 def classify_intent(q: str):
     q = q.lower()
@@ -218,20 +234,18 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
     if brew_condition:
         df_work = df_work[df_work["brew_type_kr"] == brew_condition]
 
-    # 🔥 브랜드 필터링
+    # 🔥 브랜드 필터링 (부분 매칭 지원)
     brand_from_q = extract_brand_from_question(question, df_summary)
     if brand_from_q:
         df_work = df_work[df_work["brand"] == brand_from_q]
     
-    # 🔥 제품명 필터링
+    # 🔥 제품명 필터링 (여러 키워드 AND 검색 - 모든 키워드가 포함되어야 함)
     product_keywords = extract_product_name_from_question(question)
     if product_keywords:
-        mask = False
-        for keyword in product_keywords.split():
+        for keyword in product_keywords:
             if len(keyword) >= 2:
-                mask |= df_work["product_name"].str.contains(keyword, case=False, na=False)
-        if mask is not False:
-            df_work = df_work[mask]
+                # 각 키워드를 순차적으로 AND 조건으로 필터링
+                df_work = df_work[df_work["product_name"].str.contains(keyword, case=False, na=False)]
 
     start_date = extract_period(question)
 
@@ -877,7 +891,7 @@ with col_tabs:
         with st.form("search_form", clear_on_submit=True):
             keyword_input = st.text_input(
                 "제품명 검색",
-                placeholder="예: 쥬시, 멜로지오",
+                placeholder="예: 쥬시, 카누 바리스타, 에스프레소, 커피캡슐",
                 key="keyword_input_field"
             )
             submitted = st.form_submit_button("검색")
@@ -887,11 +901,16 @@ with col_tabs:
             st.session_state.search_keyword = search_keyword
             st.session_state.active_mode = "키워드 검색"
             
-            # 🔥 검색 결과 계산
+            # 🔥 검색 결과 계산 (브랜드명, 제품명, 카테고리, brew_type_kr 모두 검색)
             keywords = [k.strip() for k in search_keyword.split(",") if k.strip()]
             mask = False
             for kw in keywords:
+                # 모든 필드에서 검색
                 mask |= _norm_series(df_all["product_name"]).str.contains(kw, case=False)
+                mask |= _norm_series(df_all["brand"]).str.contains(kw, case=False)
+                mask |= _norm_series(df_all["category1"]).str.contains(kw, case=False)
+                mask |= _norm_series(df_all["category2"]).str.contains(kw, case=False)
+                mask |= _norm_series(df_all["brew_type_kr"]).str.contains(kw, case=False)
             candidates_df = df_all[mask].copy()
             
             # 🔥 키워드 검색 로그 저장
@@ -1059,7 +1078,7 @@ with col_tabs:
         with st.form("question_form", clear_on_submit=True):
             question = st.text_area(
                 "자연어로 질문하세요",
-                placeholder="예:\n- 네스프레소 중 최저가는?\n- 최근 1개월 할인 제품\n- 에스프레소 품절 제품",
+                placeholder="예: 카누 바리스타 밸런스드 디카페인 할인 기간 / 네스프레소 최저가 제품",
                 height=100,
                 key="insight_question_input"
             )
