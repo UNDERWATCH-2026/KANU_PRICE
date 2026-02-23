@@ -1890,6 +1890,7 @@ for product_url in selected_products:
     
     c1, c2, c3, c4 = st.columns(4)
 
+
     card_template = """
     <div style="
         background:{bg};
@@ -1898,14 +1899,11 @@ for product_url in selected_products:
         border-left:6px solid {border};
         min-height:130px;
         box-shadow:0 1px 3px rgba(0,0,0,0.06);
-        display:flex;
-        flex-direction:column;
-        justify-content:center;
     ">
-        <div style="font-weight:600;font-size:15px;margin-bottom:6px;">
+        <div style="font-weight:600;font-size:15px;margin-bottom:8px;">
             {title}
         </div>
-        <div style="font-size:14px;color:#444;">
+        <div style="font-size:14px;color:#444;line-height:1.6;">
             {content}
         </div>
     </div>
@@ -1943,9 +1941,9 @@ for product_url in selected_products:
             content=f"""
             시작: {latest_discount['discount_start_date']}<br>
             종료: {latest_discount['discount_end_date']}
-            """
+            """.strip()
         ))
-    
+            
     # 🆕 신제품
     if not df_life.empty:
         new_events = df_life[df_life["lifecycle_event"] == "NEW_PRODUCT"]
@@ -2109,6 +2107,7 @@ for product_url in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
