@@ -1797,88 +1797,86 @@ if selected_products:   # 🔥 조건 반전
             })
             
             # 🔥 정상가/할인가 분리
-            # 🔥 정상가/할인가 분리 (unit 기준 통일)
+
             excel_data["normal_price"] = None
             excel_data["discount_price"] = None
             excel_data["discount_rate"] = None
-            
+    
             for idx, row in excel_data.iterrows():
-                pname_only = row["product_name_only"]
-            
-                original_row = df_all[df_all["product_name"] == pname_only]
-                if original_row.empty:
-                    continue
-            
-                unit_normal_price = original_row.iloc[0].get("normal_unit_price")
-            
                 if row["price_status"] == "💸 할인 중":
-                    # 할인가 (이미 unit 기준)
-                    discount_price = float(row["unit_price"])
-                    excel_data.at[idx, "discount_price"] = round(discount_price, 1)
-            
-                    # 정상가 (unit 기준)
-                    if unit_normal_price and unit_normal_price > 0:
-                        normal_price = float(unit_normal_price)
+                    excel_data.at[idx, "discount_price"] = round(float(row["unit_price"]), 1)
+    
+                    pname = row["product_name"]
+                    product_url = df_all[df_all["product_name"].apply(lambda x: pname.endswith(x))]["product_url"].iloc[0]
+    
+                    normal_price_res = (
+                        supabase.table("raw_daily_prices")
+                        .select("normal_price")
+                        .eq("product_url", product_url)
+                        .eq("date", row["event_date"].strftime("%Y-%m-%d"))
+                        .limit(1)
+                        .execute()
+                    )
+    
+                    if normal_price_res.data:
+                        normal_price = float(normal_price_res.data[0]["normal_price"])
                         excel_data.at[idx, "normal_price"] = round(normal_price, 1)
-            
-                        discount_rate = ((normal_price - discount_price) / normal_price) * 100
-                        excel_data.at[idx, "discount_rate"] = round(discount_rate, 1)
-            
+                        discount_rate = ((normal_price - float(row["unit_price"])) / normal_price) * 100
+                        excel_data.at[idx, "discount_rate"] = f"{round(discount_rate, 1)}%"  # 🔥 % 포함 문자열
                 else:
-                    # 정상가 상태
                     excel_data.at[idx, "normal_price"] = round(float(row["unit_price"]), 1)
-            
+    
             # 날짜 형식 변환
             excel_data["event_date"] = excel_data["event_date"].dt.strftime("%Y-%m-%d")
-            
-            # 최종 컬럼 선택 및 순서 정렬
+    
+            # 최종 컬럼 선택
             excel_data = excel_data[[
-                "brand", 
-                "category1", 
-                "category2", 
-                "product_name_only", 
-                "event_date",
-                "event",
-                "normal_price", 
-                "discount_price",
-                "discount_rate"  # 🔥 할인율 추가
+                "brand", "category1", "category2", "product_name_only",
+                "event_date", "event", "normal_price", "discount_price", "discount_rate"
             ]]
-            
-            excel_data.columns = ["브랜드", "카테고리1", "카테고리2", "제품명", "날짜", "이벤트", "정상가", "할인가", "할인율(%)"]
-            
-            # BytesIO 객체 생성
+            excel_data.columns = ["브랜드", "카테고리1", "카테고리2", "제품명", "날짜", "이벤트", "정상가", "할인가", "할인율"]
+    
             output = BytesIO()
-            
-            # 엑셀 작성
+    
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                 excel_data.to_excel(writer, sheet_name='가격 데이터', index=False)
-                
-                # 스타일 적용
+    
                 workbook = writer.book
                 worksheet = writer.sheets['가격 데이터']
-                
+    
                 # 헤더 스타일
                 header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
                 header_font = Font(bold=True, color="FFFFFF")
-                
+    
                 for cell in worksheet[1]:
                     cell.fill = header_fill
                     cell.font = header_font
                     cell.alignment = Alignment(horizontal="center")
-                
+    
                 # 열 너비 조정
-                worksheet.column_dimensions['A'].width = 20  # 브랜드
-                worksheet.column_dimensions['B'].width = 15  # 카테고리1
-                worksheet.column_dimensions['C'].width = 15  # 카테고리2
-                worksheet.column_dimensions['D'].width = 50  # 제품명
-                worksheet.column_dimensions['E'].width = 12  # 날짜
-                worksheet.column_dimensions['F'].width = 12  # 이벤트
-                worksheet.column_dimensions['G'].width = 15  # 정상가
-                worksheet.column_dimensions['H'].width = 15  # 할인가
-                worksheet.column_dimensions['I'].width = 12  # 할인율(%)
-            
+                worksheet.column_dimensions['A'].width = 20
+                worksheet.column_dimensions['B'].width = 15
+                worksheet.column_dimensions['C'].width = 15
+                worksheet.column_dimensions['D'].width = 50
+                worksheet.column_dimensions['E'].width = 12
+                worksheet.column_dimensions['F'].width = 12
+                worksheet.column_dimensions['G'].width = 15
+                worksheet.column_dimensions['H'].width = 15
+                worksheet.column_dimensions['I'].width = 12
+    
+                # 🔥 정상가/할인가 소수점 1자리
+                for row in worksheet.iter_rows(min_row=2, min_col=7, max_col=8):
+                    for cell in row:
+                        if cell.value is not None:
+                            cell.number_format = '#,##0.0'
+    
+                # 🔥 할인율 텍스트 형식 (% 문자열 그대로 표시)
+                for row in worksheet.iter_rows(min_row=2, min_col=9, max_col=9):
+                    for cell in row:
+                        cell.number_format = '@'
+    
             output.seek(0)
-            
+    
             st.download_button(
                 label="📥 엑셀 다운로드",
                 data=output.getvalue(),
@@ -1889,7 +1887,6 @@ if selected_products:   # 🔥 조건 반전
     
     else:
         st.info("비교 가능한 이벤트 데이터가 없습니다.")
-    
     
     st.divider()
     
@@ -2151,6 +2148,7 @@ if selected_products:   # 🔥 조건 반전
                 )
             else:
                 st.caption("이벤트 없음")
+
 
 
 
