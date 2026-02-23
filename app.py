@@ -1557,7 +1557,7 @@ if selected_products:   # 🔥 조건 반전
         )
     
         # 4️⃣ NaN 제거 (끊긴 구간은 차트에서 제외)
-        df_chart = df_timeline.dropna(subset=["unit_price"])
+        df_chart = df_timeline.dropna(subset=["unit_price"]).copy()
     
         # =========================
         # 📊 차트와 범례를 분리된 레이아웃으로 표시
@@ -1615,21 +1615,38 @@ if selected_products:   # 🔥 조건 반전
                         on=["product_name", "event_date"],
                         how="left"
                     )
-                    
+                
                     # 🔥 품절/복원 아이콘은 실제 가격선 위에만 표시
                     if event_type in ["OUT_OF_STOCK", "RESTOCK"]:
-                        # 품절 시작점: 품절 직전 가격 사용
+                    
+                        # =========================
+                        # ❌ 품절 처리
+                        # =========================
                         if event_type == "OUT_OF_STOCK":
+                    
+                            # 품절 시작점: 직전 가격을 y좌표로 사용
                             for idx, row in df_filtered[df_filtered["unit_price"].isna()].iterrows():
                                 product_prices = df_timeline[
                                     (df_timeline["product_name"] == row["product_name"]) &
                                     (df_timeline["event_date"] < row["event_date"]) &
                                     (df_timeline["unit_price"].notna())
                                 ]
+                    
                                 if not product_prices.empty:
                                     closest = product_prices.nsmallest(1, "event_date").iloc[-1]
                                     df_filtered.at[idx, "unit_price"] = closest["unit_price"]
-                                    df_filtered.at[idx, "price_detail"] = closest["price_detail"]
+                    
+
+                            # 🔥 아이콘 툴팁 가격 숨김
+                            df_filtered["price_detail"] = "-"
+                        
+                            # 🔥 상태도 강제로 품절로 고정
+                            df_filtered["price_status"] = "품절"
+                    
+                    
+                        # =========================
+                        # 🔄 복원 처리
+                        # =========================
                         
                         # 복원 시점: 복원 당일 가격 사용 (이미 있으면 그대로, 없으면 직후 가격)
                         elif event_type == "RESTOCK":
@@ -1666,8 +1683,15 @@ if selected_products:   # 🔥 조건 반전
                     # unit_price 없는 lifecycle 제거 (매칭 실패한 경우)
                     df_filtered = df_filtered.dropna(subset=["unit_price"])
     
-                    
-    
+                    df_filtered = df_filtered.copy()
+
+                    event_label_map = {
+                        "NEW_PRODUCT": "신제품",
+                        "OUT_OF_STOCK": "품절",
+                        "RESTOCK": "복원",
+                    }
+                    df_filtered["event_label"] = df_filtered["lifecycle_event"].map(event_label_map).fillna(df_filtered["lifecycle_event"])
+
                     point_layer = (
                        alt.Chart(df_filtered)
                         .mark_point(
@@ -1682,7 +1706,7 @@ if selected_products:   # 🔥 조건 반전
                                 alt.Tooltip("product_name:N", title="제품"),
                                 alt.Tooltip("event_date:T", title="날짜", format="%Y-%m-%d"),
                                 alt.Tooltip("price_detail:N", title="가격 정보"),  # 🔥 상세 가격 정보
-                                alt.Tooltip("lifecycle_event:N", title="이벤트"),
+                                alt.Tooltip("event_label:N", title="이벤트"),
                             ],
                         )
                     )
@@ -2127,6 +2151,7 @@ if selected_products:   # 🔥 조건 반전
                 )
             else:
                 st.caption("이벤트 없음")
+
 
 
 
