@@ -1306,20 +1306,10 @@ st.divider()
 # =========================
 selected_products = list(st.session_state.selected_products)
 
-# 🔥 자연어 질문 모드가 아닐 때만 제품 선택 확인
-if st.session_state.get("active_mode") != "자연어 질문":
-    if not selected_products:
-        st.info("제품을 선택하세요.")
-        st.stop()
-
-    if not st.session_state.show_results:
-        st.info("제품을 선택한 뒤 '조회하기'를 클릭하세요.")
-        st.stop()
-else:
-    # 자연어 질문 모드에서는 제품 선택 없이도 진행
-    if not selected_products:
-        st.stop()  # 조용히 중단
-
+if not selected_products:
+    st.info("제품을 선택하세요.")
+    st.stop()
+    
 st.divider()
 
 # 🔥 제목과 다운로드 버튼을 한 줄에 배치
@@ -1990,6 +1980,7 @@ for pname in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
