@@ -879,33 +879,6 @@ if "search_history" not in st.session_state:
 # =========================
 st.title("☕ Capsule Price Intelligence")
 
-st.markdown("""
-<style>
-
-/* remove_product_ 버튼만 타겟 */
-div[data-testid="stButton"]:has(button[id*="remove_product_"]) button {
-    width: 22px !important;
-    height: 22px !important;
-    padding: 0 !important;
-    font-size: 12px !important;
-    line-height: 1 !important;
-
-    border-radius: 50% !important;       /* 동그라미 */
-    border: none !important;
-    background-color: #e5e7eb !important; /* 연한 회색 */
-    color: #555 !important;
-}
-
-/* hover 시 살짝 진하게 */
-div[data-testid="stButton"]:has(button[id*="remove_product_"]) button:hover {
-    background-color: #d1d5db !important;
-    color: #111 !important;
-}
-
-</style>
-""", unsafe_allow_html=True)
-
-
 # -------------------------
 # 데이터 로딩 (탭 이전에 로드)
 # -------------------------
@@ -2175,7 +2148,6 @@ if selected_products:   # 🔥 조건 반전
                 )
             else:
                 st.caption("이벤트 없음")
-
 
 
 
