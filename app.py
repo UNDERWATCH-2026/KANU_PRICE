@@ -1888,24 +1888,12 @@ for product_url in selected_products:
     # C2 이벤트 카드
     # =========================
     with c2:
-
+    
         cards = []
-
+    
         # 💸 할인
-        discount_res = supabase.rpc(
-            "get_discount_periods_in_range",
-            {
-                "p_product_url": p["product_url"],
-                "p_date_from": filter_date_from.strftime("%Y-%m-%d"),
-                "p_date_to": filter_date_to.strftime("%Y-%m-%d"),
-            }
-        ).execute()
-
-        discount_rows = discount_res.data if discount_res.data else []
-
         if discount_rows:
             latest_discount = discount_rows[0]
-
             cards.append(f"""
             <div style="background:#e8f5e9;padding:12px;border-radius:8px;border-left:5px solid #2e7d32;">
             💸 <b>할인 진행</b><br>
@@ -1913,83 +1901,58 @@ for product_url in selected_products:
             종료: {latest_discount['discount_end_date']}
             </div>
             """)
-
+    
         # ❌ 품절
         if not df_life.empty:
-            out_events = df_life[
-                df_life["lifecycle_event"] == "OUT_OF_STOCK"
-            ]
-
+            out_events = df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]
             if not out_events.empty:
                 latest_out = out_events.sort_values("date", ascending=False).iloc[0]
-
                 cards.append(f"""
                 <div style="background:#e3f2fd;padding:12px;border-radius:8px;border-left:5px solid #1565c0;">
-                ❌ <b>품절 발생</b><br>
+                ❌ <b>품절</b><br>
                 날짜: {latest_out['date'].date()}
                 </div>
                 """)
-
+    
         # 🆕 신제품
         if not df_life.empty:
-            new_events = df_life[
-                df_life["lifecycle_event"] == "NEW_PRODUCT"
-            ]
-
+            new_events = df_life[df_life["lifecycle_event"] == "NEW_PRODUCT"]
             if not new_events.empty:
                 latest_new = new_events.sort_values("date", ascending=False).iloc[0]
-
                 cards.append(f"""
                 <div style="background:#fff8e1;padding:12px;border-radius:8px;border-left:5px solid #f9a825;">
                 🆕 <b>신제품</b><br>
                 발견일: {latest_new['date'].date()}
                 </div>
                 """)
-
+    
         # 🔄 복원
         if not df_life.empty:
-            restore_events = df_life[
-                df_life["lifecycle_event"] == "RESTOCK"
-            ]
-
+            restore_events = df_life[df_life["lifecycle_event"] == "RESTOCK"]
             if not restore_events.empty:
                 latest_restore = restore_events.sort_values("date", ascending=False).iloc[0]
-
                 cards.append(f"""
                 <div style="background:#f3e5f5;padding:12px;border-radius:8px;border-left:5px solid #6a1b9a;">
                 🔄 <b>복원</b><br>
                 날짜: {latest_restore['date'].date()}
                 </div>
                 """)
-
-        if cards:
-            for card in cards:
-                st.markdown(card, unsafe_allow_html=True)
-                st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
-        else:
-            st.markdown("""
+    
+        # 📊 특이 이벤트 없음
+        if not cards:
+            cards.append("""
             <div style="background:#f5f5f5;padding:12px;border-radius:8px;border-left:5px solid #9e9e9e;">
             📊 <b>특이 이벤트 없음</b>
             </div>
-            """, unsafe_allow_html=True)
-
-    # =========================
-    # C3 / C4
-    # =========================
-    with c3:
-        if p["is_new_product"]:
-            st.warning("🆕 신제품")
-        else:
-            st.caption(f"관측 시작일\n{p['first_seen_date']}")
-
-    with c4:
-        st.caption(f"마지막 관측일\n{p['last_seen_date']}")
-
-    if p["product_event_status"] == "NO_EVENT_STABLE":
-        st.info("📊 가격 변동 없음")
-    else:
-        st.success(f"📈 가격 이벤트 {p['event_count']}건")
-
+            """)
+    
+        # 🔥 3개씩 정렬
+        for i in range(0, len(cards), 3):
+            cols = st.columns(3)
+            for j, col in enumerate(cols):
+                if i + j < len(cards):
+                    with col:
+                        st.markdown(cards[i + j], unsafe_allow_html=True)
    
     with st.expander("📅 이벤트 히스토리"):
         display_rows = []
@@ -2081,6 +2044,7 @@ for product_url in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
