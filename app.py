@@ -1957,7 +1957,7 @@ for product_url in selected_products:
         new_events = df_life[df_life["lifecycle_event"] == "NEW_PRODUCT"]
         if not new_events.empty:
             latest_new = new_events.sort_values("date", ascending=False).iloc[0]
-            cards.append(card_template.format(
+            cards.append(render_card(
                 bg="#f6f1e6",
                 border="#c88a00",
                 title="🆕 신제품",
@@ -1969,7 +1969,7 @@ for product_url in selected_products:
         out_events = df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]
         if not out_events.empty:
             latest_out = out_events.sort_values("date", ascending=False).iloc[0]
-            cards.append(card_template.format(
+            cards.append(render_card(
                 bg="#e8f0f8",
                 border="#2c5aa0",
                 title="❌ 품절",
@@ -1992,7 +1992,7 @@ for product_url in selected_products:
             border = "#1d4ed8"
             icon = "📉 정상가 하락"
     
-        cards.append(card_template.format(
+        cards.append(render_card(
             bg=bg,
             border=border,
             title=icon,
@@ -2022,7 +2022,7 @@ for product_url in selected_products:
             if i < len(cards):
                 st.markdown(cards[i], unsafe_allow_html=True)
 
-    st.markdown("<div style='margin-bottom:32px;'></div>", unsafe_allow_html=True)
+    st.markdown("<br><br>", unsafe_allow_html=True)
 
 
     # =========================
@@ -2117,6 +2117,7 @@ for product_url in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
