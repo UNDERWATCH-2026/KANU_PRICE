@@ -1962,7 +1962,7 @@ for product_url in selected_products:
     
     st.markdown("<div style='margin-bottom:28px;'></div>", unsafe_allow_html=True)
     
-    with st.expander("📅 이벤트 히스토리"):
+
     # =========================
    
     with st.expander("📅 이벤트 히스토리"):
@@ -2055,6 +2055,7 @@ for product_url in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
