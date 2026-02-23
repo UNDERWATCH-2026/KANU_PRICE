@@ -19,15 +19,7 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # =========================
 # 2️⃣ 데이터 로딩
 # =========================
-if normal_price_res.data:
-    pack_normal_price = float(normal_price_res.data[0]["normal_price"])
-    
-    # capsule_count 가져오기 (이미 df_all에 있음)
-    capsule_count = float(p["capsule_count"]) if p.get("capsule_count") else 1
-    
-    normal_price = round(pack_normal_price / capsule_count, 1)
-else:
-    normal_price = Non
+
 @st.cache_data(ttl=300)
 def load_product_summary():
     cols = [
@@ -2034,6 +2026,7 @@ for pname in selected_products:
             use_container_width=True,
             hide_index=True
         )
+
 
 
 
