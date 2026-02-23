@@ -1593,7 +1593,7 @@ if selected_products:   # 🔥 조건 반전
                     x=alt.X("event_date:T", title="날짜", axis=alt.Axis(format="%m/%d")),  # 🔥 월/일 형식으로 고정
                     y=alt.Y("unit_price:Q", title="개당 가격 (원)"),
                     color=alt.Color("product_name:N", title="제품", legend=None),  # 🔥 범례 제거
-                    detail="segment:N",  # 🔥 이게 핵심 (선 완전 분리)
+                    
                     tooltip=[
                         alt.Tooltip("tooltip_text:N", title="", format="html")
                     ]
@@ -2164,6 +2164,7 @@ if selected_products:   # 🔥 조건 반전
                 )
             else:
                 st.caption("이벤트 없음")
+
 
 
 
