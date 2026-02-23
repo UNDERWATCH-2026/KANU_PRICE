@@ -812,7 +812,10 @@ def format_product_label(row):
 
 import re
 
+
+
 def render_card(bg, border, title, content):
+    print("render_card 호출됨")
     return f"""
     <div style="
         background:{bg};
@@ -2166,6 +2169,7 @@ if selected_products:   # 🔥 조건 반전
                 )
             else:
                 st.caption("이벤트 없음")
+
 
 
 
