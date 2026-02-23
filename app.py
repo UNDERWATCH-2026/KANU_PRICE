@@ -1620,28 +1620,31 @@ if selected_products:   # 🔥 조건 반전
                     )
                     
                     # 🔥 품절/복원 아이콘은 실제 가격선 위에만 표시
+                    # 🔥 품절/복원 아이콘은 실제 가격선 위에만 표시
                     if event_type in ["OUT_OF_STOCK", "RESTOCK"]:
-                        # 품절 시작점: 품절 직전 가격 사용
+                    
+                        # 품절 시작점: 품절 직전 가격 사용 (y좌표용)
                         if event_type == "OUT_OF_STOCK":
-                            for idx, row in df_filtered[df_filtered["unit_price"].isna()].iterrows():
+                            for idx, row2 in df_filtered[df_filtered["unit_price"].isna()].iterrows():
                                 product_prices = df_timeline[
-                                    (df_timeline["product_name"] == row["product_name"]) &
-                                    (df_timeline["event_date"] < row["event_date"]) &
+                                    (df_timeline["product_name"] == row2["product_name"]) &
+                                    (df_timeline["event_date"] < row2["event_date"]) &
                                     (df_timeline["unit_price"].notna())
                                 ]
                                 if not product_prices.empty:
                                     closest = product_prices.nsmallest(1, "event_date").iloc[-1]
-                                    df_filtered.at[idx, "unit_price"] = closest["unit_price"]
-                                    df_filtered.at[idx, "price_detail"] = closest["price_detail"]
-                        
+                                    df_filtered.at[idx, "unit_price"] = closest["unit_price"]  # ✅ y좌표용
+                                    # price_detail은 아래에서 통째로 "-"로 덮어쓸 거라 여기서 굳이 안 써도 됨
+                    
+                            # ✅ OUT_OF_STOCK 아이콘은 툴팁 가격 무조건 숨김
+                            df_filtered["price_detail"] = "-"
+                    
                         # 복원 시점: 복원 당일 가격 사용 (이미 있으면 그대로, 없으면 직후 가격)
                         elif event_type == "RESTOCK":
-                            # 복원 날짜는 가격선에 포함되므로 대부분 unit_price가 이미 있음
-                            # 없는 경우에만 직후 가격 사용
-                            for idx, row in df_filtered[df_filtered["unit_price"].isna()].iterrows():
+                            for idx, row2 in df_filtered[df_filtered["unit_price"].isna()].iterrows():
                                 product_prices = df_timeline[
-                                    (df_timeline["product_name"] == row["product_name"]) &
-                                    (df_timeline["event_date"] >= row["event_date"]) &
+                                    (df_timeline["product_name"] == row2["product_name"]) &
+                                    (df_timeline["event_date"] >= row2["event_date"]) &
                                     (df_timeline["unit_price"].notna())
                                 ]
                                 if not product_prices.empty:
@@ -2130,6 +2133,7 @@ if selected_products:   # 🔥 조건 반전
                 )
             else:
                 st.caption("이벤트 없음")
+
 
 
 
