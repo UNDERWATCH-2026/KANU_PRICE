@@ -18,7 +18,8 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # =========================
 # 2️⃣ 데이터 로딩
-# =========================if normal_price_res.data:
+# =========================
+if normal_price_res.data:
     pack_normal_price = float(normal_price_res.data[0]["normal_price"])
     
     # capsule_count 가져오기 (이미 df_all에 있음)
@@ -2033,5 +2034,6 @@ for pname in selected_products:
             use_container_width=True,
             hide_index=True
         )
+
 
 
