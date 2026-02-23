@@ -1220,7 +1220,14 @@ with col_tabs:
 
         with st.expander("목록 펼치기 / 접기", expanded=False):
         
-            unique_df = candidates_df.drop_duplicates(subset=["product_url"])
+            unique_df = (
+                candidates_df
+                .fillna("")
+                .drop_duplicates(subset=["product_url"])
+                .sort_values(
+                    by=["brand", "category1", "category2", "product_name"]
+                )
+            )
         
             for _, row in unique_df.iterrows():
         
@@ -2286,6 +2293,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
