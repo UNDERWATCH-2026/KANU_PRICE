@@ -809,7 +809,13 @@ def format_product_label(row):
 
 
 
+import re
+
 def render_card(bg, border, title, content):
+
+    # 🔥 div 태그 방어 제거
+    content = re.sub(r"</?div[^>]*>", "", str(content), flags=re.IGNORECASE)
+
     return f"""
     <div style="
         background:{bg};
@@ -2117,6 +2123,7 @@ for product_url in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
