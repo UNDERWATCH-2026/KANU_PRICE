@@ -1006,7 +1006,8 @@ with col_controls:
                 "FormSubmitter:question_form"
             ))
         ]
-        
+        # 🔥 여기 추가
+        st.write("삭제 대상 키:", keys_to_delete)
         for key in keys_to_delete:
             del st.session_state[key]
         
@@ -2152,6 +2153,7 @@ if selected_products:   # 🔥 조건 반전
                 )
             else:
                 st.caption("이벤트 없음")
+
 
 
 
