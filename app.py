@@ -813,29 +813,21 @@ def format_product_label(row):
 
 import re
 
-def render_card(title, content, border_color="#e5e7eb"):
+def render_card(bg, border, title, content):
+
     return f"""
     <div style="
-        background:#ffffff;
-        padding:14px 16px;
-        border-radius:10px;
-        border-left:4px solid {border_color};
-        border:1px solid #f1f1f1;
+        background:{bg};
+        padding:18px;
+        border-radius:12px;
+        border-left:6px solid {border};
+        min-height:120px;
+        box-shadow:0 1px 3px rgba(0,0,0,0.06);
     ">
-        <div style="
-            font-weight:600;
-            font-size:14px;
-            margin-bottom:6px;
-        ">
+        <div style="font-weight:600;font-size:15px;margin-bottom:8px;">
             {title}
         </div>
-        <div style="
-            font-size:13px;
-            line-height:1.5;
-            color:#374151;
-        ">
-            {content}
-        </div>
+        {content}
     </div>
     """
 # =========================
@@ -2005,21 +1997,22 @@ if selected_products:   # 🔥 조건 반전
         if discount_rows:
             latest_discount = discount_rows[0]
             cards.append(render_card(
-                title="💸 할인 진행",
-                border_color="#16a34a",
-                content=(
-                    f"{latest_discount['discount_start_date']} ~ "
-                    f"{latest_discount['discount_end_date']}"
-                )
-            ))        
+                "#e9f3ec",
+                "#2f7d32",
+                "💸 할인 진행",
+                f"시작: {latest_discount['discount_start_date']}<br>"
+                f"종료: {latest_discount['discount_end_date']}"
+            ))
+                        
         # 🆕 신제품
         if not df_life.empty:
             new_events = df_life[df_life["lifecycle_event"] == "NEW_PRODUCT"]
             if not new_events.empty:
                 latest_new = new_events.sort_values("date", ascending=False).iloc[0]
                 cards.append(render_card(
+                    bg="#f6f1e6",
+                    border="#c88a00",
                     title="🆕 신제품",
-                    border_color="#ca8a04",
                     content=f"발견일: {latest_new['date'].date()}"
                 ))
         
@@ -2056,12 +2049,13 @@ if selected_products:   # 🔥 조건 반전
                 icon = "📉 정상가 하락"
         
             cards.append(render_card(
+                bg=bg,
+                border=border,
                 title=icon,
-                border_color=border,
                 content=(
+                    f"날짜: {latest_change['date']}<br>"
                     f"{prev_price:,.0f}원 → {current_price:,.0f}원 "
-                    f"<strong>({diff_rate:+.1f}%)</strong><br>"
-                    f"<span style='color:#6b7280'>날짜: {latest_change['date']}</span>"
+                    f"({diff_rate:+.1f}%)"
                 )
             ))
         
@@ -2278,8 +2272,6 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
-
-
 
 
 
