@@ -1919,39 +1919,27 @@ for product_url in selected_products:
     
     c1, c2, c3, c4 = st.columns(4)
 
-    # 🔥 여기에서 먼저 정상가 계산
-    normal_unit = None
-
-    normal_res = (
-        supabase.table("raw_daily_prices")
-        .select("normal_price")
-        .eq("product_url", p["product_url"])
-        .order("date", desc=True)
-        .limit(1)
-        .execute()
-    )
-
-    if normal_res.data:
-        normal_price = float(normal_res.data[0]["normal_price"])
-        normal_unit = normal_price / float(p["capsule_count"])
 
     # =========================
     # C1 가격
     # =========================
     with c1:
-        if normal_unit:
-            st.metric(
-                "개당 정상가",
-                f"{normal_unit:,.1f}원"
-            )
+        normal_value = p.get("normal_unit_price")
+    
+        if normal_value is not None and pd.notna(normal_value):
+    
+            if float(normal_value) == 0:
+                st.metric("개당 정상가", "품절", delta="재고 없음")
+            else:
+                st.metric(
+                    "개당 정상가",
+                    f"{float(normal_value):,.1f}원"
+                )
+    
         else:
-            st.metric(
-                "개당 정상가",
-                "-"
-            )
+            st.metric("개당 정상가", "-")
     
     cards = []
-    
     # 💸 할인
     discount_res = supabase.rpc(
         "get_discount_periods_in_range",
@@ -2139,6 +2127,7 @@ for product_url in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
