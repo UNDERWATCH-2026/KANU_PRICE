@@ -1909,7 +1909,6 @@ if selected_products:   # 🔥 조건 반전
     else:
         st.info("비교 가능한 이벤트 데이터가 없습니다.")
     
-    st.divider()
     
     
     # =========================
@@ -2169,6 +2168,7 @@ if selected_products:   # 🔥 조건 반전
                 )
             else:
                 st.caption("이벤트 없음")
+
 
 
 
