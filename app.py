@@ -1041,7 +1041,7 @@ with col_tabs:
             else:
                 st.session_state.search_history.append(search_result)
             
-            st.rerun()
+
 
         # 📦 제품 선택 - 검색 이력별로 구획화
         st.markdown("### 📦 비교할 제품 선택")
@@ -1782,155 +1782,95 @@ for pname in selected_products:
 
 
     with c2:
-
-        summary_lines = []
+    
+        cards = []
     
         # =========================
-        # 💸 할인 구간
+        # 💸 할인 카드
         # =========================
-        discount_res = supabase.rpc(
-            "get_discount_periods_in_range",
-            {
-                "p_product_url": p["product_url"],
-                "p_date_from": filter_date_from.strftime("%Y-%m-%d"),
-                "p_date_to": filter_date_to.strftime("%Y-%m-%d"),
-            }
-        ).execute()
-    
-        discount_rows = discount_res.data if discount_res.data else []
-        discount_rate = None
-    
         if discount_rows:
             latest_discount = discount_rows[0]
     
-            lowest_res = (
-                supabase.table("product_all_events")
-                .select("unit_price")
-                .eq("product_url", p["product_url"])
-                .eq("event_type", "DISCOUNT")
-                .gte("date", latest_discount["discount_start_date"])
-                .lte("date", latest_discount["discount_end_date"])
-                .order("unit_price", desc=False)
-                .limit(1)
-                .execute()
-            )
-    
-            if lowest_res.data:
-                lowest_price = float(lowest_res.data[0]["unit_price"])
-    
-                normal_res = (
-                    supabase.table("product_all_events")
-                    .select("unit_price")
-                    .eq("product_url", p["product_url"])
-                    .eq("event_type", "NORMAL")
-                    .lt("date", latest_discount["discount_start_date"])
-                    .order("date", desc=True)
-                    .limit(1)
-                    .execute()
-                )
-    
-                normal_price = float(normal_res.data[0]["unit_price"]) if normal_res.data else None
-    
-                if normal_price and normal_price > 0:
-                    discount_rate = ((normal_price - lowest_price) / normal_price) * 100
-    
             if discount_rate is not None:
-                summary_lines.append(
-                    f"💸 할인: {latest_discount['discount_start_date']} ~ "
-                    f"{latest_discount['discount_end_date']} "
-                    f"(최대 {discount_rate:.0f}%)"
-                )
+                cards.append(f"""
+                <div style="background:#e8f5e9;padding:12px;border-radius:8px;border-left:5px solid #2e7d32;">
+                💸 <b>할인</b><br>
+                기간: {latest_discount['discount_start_date']} ~ {latest_discount['discount_end_date']}<br>
+                최대 {discount_rate:.0f}% 할인
+                </div>
+                """)
             else:
-                summary_lines.append(
-                    f"💸 할인: {latest_discount['discount_start_date']} ~ "
-                    f"{latest_discount['discount_end_date']}"
-                )
+                cards.append(f"""
+                <div style="background:#e8f5e9;padding:12px;border-radius:8px;border-left:5px solid #2e7d32;">
+                💸 <b>할인</b><br>
+                기간: {latest_discount['discount_start_date']} ~ {latest_discount['discount_end_date']}
+                </div>
+                """)
     
         # =========================
-        # ❌ 품절 구간
+        # ❌ 품절 카드
         # =========================
-        df_life = load_lifecycle_events(p["product_url"])
+        for start, end in out_periods:
+            cards.append(f"""
+            <div style="background:#e3f2fd;padding:12px;border-radius:8px;border-left:5px solid #1565c0;">
+            ❌ <b>품절</b><br>
+            기간: {start} ~ {end}
+            </div>
+            """)
     
+        # =========================
+        # 🆕 신제품 카드
+        # =========================
         if not df_life.empty:
-            df_life["date"] = pd.to_datetime(df_life["date"])
-            df_life = df_life.sort_values("date")
-    
-            out_dates = df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]["date"].tolist()
-            restore_dates = df_life[df_life["lifecycle_event"] == "RESTOCK"]["date"].tolist()
-    
-            for out_date in out_dates:
-                restore_after = [d for d in restore_dates if d > out_date]
-                restore_date = min(restore_after) if restore_after else filter_date_to
-    
-                if out_date <= filter_date_to and restore_date >= filter_date_from:
-                    summary_lines.append(
-                        f"❌ 품절: {out_date.date()} ~ {restore_date.date()}"
-                    )
+            new_dates = df_life[df_life["lifecycle_event"] == "NEW_PRODUCT"]["date"]
+            for d in new_dates:
+                if filter_date_from <= d <= filter_date_to:
+                    cards.append(f"""
+                    <div style="background:#fff8e1;padding:12px;border-radius:8px;border-left:5px solid #f9a825;">
+                    🆕 <b>신제품</b><br>
+                    발견일: {pd.to_datetime(d).date()}
+                    </div>
+                    """)
     
         # =========================
-        # 🔄 복원 (발견 날짜)
+        # 🔄 복원 카드
         # =========================
         restore_dates = df_life[df_life["lifecycle_event"] == "RESTOCK"]["date"] if not df_life.empty else []
-    
         if not df_life.empty and not restore_dates.empty:
             for d in restore_dates:
                 if filter_date_from <= d <= filter_date_to:
-                    summary_lines.append(f"🔄 복원: {d.date()}")
+                    cards.append(f"""
+                    <div style="background:#f3e5f5;padding:12px;border-radius:8px;border-left:5px solid #6a1b9a;">
+                    🔄 <b>복원</b><br>
+                    발견일: {pd.to_datetime(d).date()}
+                    </div>
+                    """)
     
         # =========================
-        # 🆕 신제품 (발견 날짜)
+        # 📈 정상가 변동 카드
         # =========================
-        new_dates = df_life[df_life["lifecycle_event"] == "NEW_PRODUCT"]["date"] if not df_life.empty else []
-    
-        if not df_life.empty and not new_dates.empty:
-            for d in new_dates:
-                if filter_date_from <= d <= filter_date_to:
-                    summary_lines.append(f"🆕 신제품: {d.date()}")
-    
-        # =========================
-        # 📈 정상가 변동
-        # =========================
-        df_changes_res = (
-            supabase.table("product_price_change_events")
-            .select("*")
-            .eq("product_url", p["product_url"])
-            .gte("date", filter_date_from.strftime("%Y-%m-%d"))
-            .lte("date", filter_date_to.strftime("%Y-%m-%d"))
-            .execute()
-        )
-    
-        df_changes = pd.DataFrame(df_changes_res.data)
-    
-        normal_change_dates = []
-    
-        if not df_changes.empty:
-            for _, row in df_changes.iterrows():
-                if row["price_change_type"] in ["NORMAL_UP", "NORMAL_DOWN"]:
-                    normal_change_dates.append(pd.to_datetime(row["date"]).date())
-    
         if normal_change_dates:
             change_dates_str = ", ".join(sorted({str(d) for d in normal_change_dates}))
-            summary_lines.append(f"📈 정상가 변동: {change_dates_str}")
+            cards.append(f"""
+            <div style="background:#eeeeee;padding:12px;border-radius:8px;border-left:5px solid #424242;">
+            📈 <b>정상가 변동</b><br>
+            날짜: {change_dates_str}
+            </div>
+            """)
     
         # =========================
-        # 최종 출력
+        # 출력
         # =========================
-        if summary_lines:
-            st.markdown(
-                "<div style='background:#eef4ff;padding:14px;border-radius:8px;'>"
-                "<b>📊 조회 기간 요약</b><br>"
-                + "<br>".join(summary_lines) +
-                "</div>",
-                unsafe_allow_html=True
-            )
+        if cards:
+            for card in cards:
+                st.markdown(card, unsafe_allow_html=True)
+                st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
         else:
-            st.markdown(
-                "<div style='background:#f5f5f5;padding:14px;border-radius:8px;'>"
-                "<b>📊 조회 기간 요약</b><br>"
-                "특이 이벤트 없음"
-                "</div>",
-                unsafe_allow_html=True
-            )
+            st.markdown("""
+            <div style="background:#f5f5f5;padding:12px;border-radius:8px;border-left:5px solid #9e9e9e;">
+            📊 <b>특이 이벤트 없음</b>
+            </div>
+            """, unsafe_allow_html=True)
                     
     with c3:
         df_life = load_lifecycle_events(p["product_url"])
@@ -2040,6 +1980,7 @@ for pname in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
