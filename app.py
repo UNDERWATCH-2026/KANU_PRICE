@@ -1773,8 +1773,14 @@ if selected_products:   # 🔥 조건 반전
             from openpyxl.styles import Font, Alignment, PatternFill
             
             # 🔥 데이터 준비 - 브랜드, 카테고리 정보 추가
-            excel_data = df_chart[["product_name", "event_date", "unit_price", "price_status"]].copy()
-            
+            excel_data = df_chart[[
+                "product_url",
+                "product_name",
+                "event_date",
+                "unit_price",
+                "price_status"
+            ]].copy()
+                        
             # 브랜드, 카테고리 정보 추출 (product_name에서 브랜드 분리)
             excel_data["brand"] = excel_data["product_name"].str.split(" - ").str[0]
             excel_data["product_name_only"] = excel_data["product_name"].str.split(" - ").str[1]
@@ -1795,47 +1801,62 @@ if selected_products:   # 🔥 조건 반전
                 "💸 할인 중": "할인",
                 "정상가": "정상가"
             })
-            
-            # 🔥 정상가/할인가 분리
 
+            # 🔥 정상가/할인가 분리 (unit 기준)
+            
             excel_data["normal_price"] = None
             excel_data["discount_price"] = None
             excel_data["discount_rate"] = None
-    
+            
             for idx, row in excel_data.iterrows():
+            
+                # 🔥 날짜 문자열 변환 (DB 비교용)
+                event_date_str = pd.to_datetime(row["event_date"]).strftime("%Y-%m-%d")
+            
                 if row["price_status"] == "💸 할인 중":
-                    excel_data.at[idx, "discount_price"] = round(float(row["unit_price"]), 1)
-    
-                    pname = row["product_name"]
-                    product_url = df_all[df_all["product_name"].apply(lambda x: pname.endswith(x))]["product_url"].iloc[0]
-    
+            
+                    # 현재 unit 할인가
+                    discount_price = float(row["unit_price"])
+                    excel_data.at[idx, "discount_price"] = round(discount_price, 1)
+            
+                    # ✅ unit 정상가 조회
                     normal_price_res = (
-                        supabase.table("raw_daily_prices")
-                        .select("normal_price")
-                        .eq("product_url", product_url)
-                        .eq("date", row["event_date"].strftime("%Y-%m-%d"))
+                        supabase.table("raw_daily_prices_unit")
+                        .select("unit_normal_price")
+                        .eq("product_url", row["product_url"])
+                        .eq("date", event_date_str)
                         .limit(1)
                         .execute()
                     )
-    
+            
                     if normal_price_res.data:
-                        normal_price = float(normal_price_res.data[0]["normal_price"])
+                        normal_price = float(normal_price_res.data[0]["unit_normal_price"])
                         excel_data.at[idx, "normal_price"] = round(normal_price, 1)
-                        discount_rate = ((normal_price - float(row["unit_price"])) / normal_price) * 100
-                        excel_data.at[idx, "discount_rate"] = f"{round(discount_rate, 1)}%"  # 🔥 % 포함 문자열
+            
+                        # 할인율 계산
+                        discount_rate = ((normal_price - discount_price) / normal_price) * 100
+                        excel_data.at[idx, "discount_rate"] = f"{round(discount_rate, 1)}%"
+            
                 else:
+                    # 정상가 상태일 때는 unit_price 자체가 정상가
                     excel_data.at[idx, "normal_price"] = round(float(row["unit_price"]), 1)
-    
+            
+            
             # 날짜 형식 변환
-            excel_data["event_date"] = excel_data["event_date"].dt.strftime("%Y-%m-%d")
-    
+            excel_data["event_date"] = pd.to_datetime(excel_data["event_date"]).dt.strftime("%Y-%m-%d")
+            
+            
             # 최종 컬럼 선택
             excel_data = excel_data[[
                 "brand", "category1", "category2", "product_name_only",
                 "event_date", "event", "normal_price", "discount_price", "discount_rate"
             ]]
-            excel_data.columns = ["브랜드", "카테고리1", "카테고리2", "제품명", "날짜", "이벤트", "정상가", "할인가", "할인율"]
-    
+            
+            excel_data.columns = [
+                "브랜드", "카테고리1", "카테고리2", "제품명",
+                "날짜", "이벤트", "정상가", "할인가", "할인율"
+            ]
+                
             output = BytesIO()
     
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -2148,6 +2169,7 @@ if selected_products:   # 🔥 조건 반전
                 )
             else:
                 st.caption("이벤트 없음")
+
 
 
 
