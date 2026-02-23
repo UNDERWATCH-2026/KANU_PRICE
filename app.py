@@ -1147,7 +1147,7 @@ with col_tabs:
                                     label = format_product_label(row)
                                     
                                     st.checkbox(
-                                        label,,
+                                        label,
                                         key=f"tab1_kw_{product_url}", 
                                         on_change=toggle_product,
                                         args=(product_url,)
@@ -2134,6 +2134,7 @@ if selected_products:   # 🔥 조건 반전
                 )
             else:
                 st.caption("이벤트 없음")
+
 
 
 
