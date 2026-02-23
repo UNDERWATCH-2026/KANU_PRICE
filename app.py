@@ -993,23 +993,14 @@ with col_controls:
 
         # 🔥 모든 체크박스, 버튼, form 입력 키 삭제
         keys_to_delete = [
-            key for key in list(st.session_state.keys())  # 🔥 list() 필수
-            if key.startswith((
-                "tab1_kw_",          # 키워드 검색 체크박스
-                "tab2_filter_",      # 필터 선택 체크박스
-                "tab3_nlp_",         # 자연어 질문 체크박스
-                "remove_product_",   # 차트 제거 버튼
-                "delete_search_",    
-                "delete_q_",
-                "keyword_input_field",
-                "FormSubmitter:search_form",
-                "FormSubmitter:question_form"
-            ))
+            key for key in list(st.session_state.keys())
+            if key.startswith(("tab", "remove_product_", "delete_"))
         ]
-        # 🔥 여기 추가
-        st.write("현재 session_state 전체 키:", list(st.session_state.keys()))
+        
         for key in keys_to_delete:
             del st.session_state[key]
+
+        st.rerun
         
 
 
@@ -2152,6 +2143,7 @@ if selected_products:   # 🔥 조건 반전
                 )
             else:
                 st.caption("이벤트 없음")
+
 
 
 
