@@ -806,7 +806,27 @@ def format_product_label(row):
     parts.append(product_name)
 
     return " - ".join(parts)
-    
+
+
+
+def render_card(bg, border, title, content):
+    return f"""
+    <div style="
+        background:{bg};
+        padding:18px;
+        border-radius:12px;
+        border-left:6px solid {border};
+        min-height:130px;
+        box-shadow:0 1px 3px rgba(0,0,0,0.06);
+    ">
+        <div style="font-weight:600;font-size:15px;margin-bottom:8px;">
+            {title}
+        </div>
+        <div style="font-size:14px;color:#444;line-height:1.6;">
+            {content}
+        </div>
+    </div>
+    """
 # =========================
 # 🔧 제품 선택 토글 함수 (안정화)
 # =========================
@@ -1898,24 +1918,6 @@ for product_url in selected_products:
     c1, c2, c3, c4 = st.columns(4)
 
 
-        def render_card(bg, border, title, content):
-        return f"""
-        <div style="
-            background:{bg};
-            padding:18px;
-            border-radius:12px;
-            border-left:6px solid {border};
-            min-height:110px;
-            box-shadow:0 1px 3px rgba(0,0,0,0.06);
-        ">
-            <div style="font-weight:600;font-size:15px;margin-bottom:8px;">
-                {title}
-            </div>
-            <div style="font-size:14px;color:#444;line-height:1.6;">
-                {content}
-            </div>
-        </div>
-        """
 
     # =========================
     # C1 가격
@@ -2115,6 +2117,7 @@ for product_url in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
