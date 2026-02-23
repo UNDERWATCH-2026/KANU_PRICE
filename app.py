@@ -1868,116 +1868,109 @@ for pname in selected_products:
     else:
         st.success(f"📈 가격 이벤트 {p['event_count']}건")
 
+
     with st.expander("📅 이벤트 히스토리"):
+    
         df_price = load_events(p["product_url"])
         df_life = load_lifecycle_events(p["product_url"])
-
+    
         frames = []
-
-        # 1) 가격 이벤트 정제
+    
+        # 1️⃣ 가격 이벤트 (DISCOUNT만 사용)
         if not df_price.empty:
             df_price = df_price.copy()
             df_price["date"] = pd.to_datetime(df_price["date"])
-            df_price = df_price[df_price["event_type"] != "NORMAL"]
+            df_price = df_price[df_price["event_type"] == "DISCOUNT"]
+    
             if not df_price.empty:
                 frames.append(df_price[["date", "unit_price", "event_type"]])
-
-        # 2) Lifecycle 이벤트
+    
+        # 2️⃣ Lifecycle 이벤트
         if not df_life.empty:
             df_life = df_life[df_life["lifecycle_event"].notna()]
             df_life = df_life.rename(columns={"lifecycle_event": "event_type"})
             df_life["unit_price"] = None
             df_life["date"] = pd.to_datetime(df_life["date"])
             frames.append(df_life[["date", "unit_price", "event_type"]])
-
+    
         if not frames:
             st.caption("이벤트 없음")
             continue
-
+    
         df_all_events = pd.concat(frames, ignore_index=True)
         df_all_events = df_all_events.drop_duplicates(subset=["date", "event_type"])
-
-        # 4) 할인 구간 묶기
+    
+        # =========================
+        # 🔥 할인 구간 묶기
+        # =========================
+        discount_periods = []
+    
         if not df_price.empty:
-            df_discount = df_price[df_price["event_type"] == "DISCOUNT"]
-            if not df_discount.empty:
-                df_discount = df_discount.sort_values("date")
-                df_discount["gap"] = df_discount["date"].diff().dt.days.fillna(1)
-                df_discount["group"] = (df_discount["gap"] > 1).cumsum()
-
-                discount_periods = (
-                    df_discount.groupby("group")
-                    .agg(
-                        start_date=("date", "min"),
-                        end_date=("date", "max"),
-                        unit_price=("unit_price", "first")
-                    )
-                    .reset_index(drop=True)
+            df_discount = df_price.sort_values("date")
+            df_discount["gap"] = df_discount["date"].diff().dt.days.fillna(1)
+            df_discount["group"] = (df_discount["gap"] > 1).cumsum()
+    
+            discount_periods = (
+                df_discount.groupby("group")
+                .agg(
+                    start_date=("date", "min"),
+                    end_date=("date", "max"),
+                    discount_price=("unit_price", "first")
                 )
-            else:
-                discount_periods = pd.DataFrame()
-        else:
-            discount_periods = pd.DataFrame()
-
+                .reset_index(drop=True)
+            )
+    
         display_rows = []
-
+    
+        # =========================
+        # 🔥 할인 이벤트 표시
+        # =========================
         for _, row_d in discount_periods.iterrows():
-            discount_price = round(float(row_d["unit_price"]), 1) if pd.notna(row_d["unit_price"]) else None
-            
-            if not discount_price:
-                continue
-            
-            # 🔥 정상가 조회 - 할인 당일의 정상가 (RAW_DAILY_PRICES에서)
-            normal_price_res = (
-                supabase.table("raw_daily_prices")
-                .select("normal_price")
+    
+            discount_price = float(row_d["discount_price"])
+    
+            # 🔥 할인 시작 직전 NORMAL 가격 조회 (개당 기준)
+            normal_res = (
+                supabase.table("product_all_events")
+                .select("unit_price")
                 .eq("product_url", p["product_url"])
-                .eq("date", row_d['start_date'].strftime("%Y-%m-%d"))
+                .eq("event_type", "NORMAL")
+                .lt("date", row_d["start_date"].strftime("%Y-%m-%d"))
+                .order("date", desc=True)
                 .limit(1)
                 .execute()
             )
-            
-            normal_price = None
-            if normal_price_res.data:
-                normal_price = round(float(normal_price_res.data[0]["normal_price"]), 1)
-            
-            # 가격 정보 구성
-            if normal_price and discount_price:
+    
+            normal_price = float(normal_res.data[0]["unit_price"]) if normal_res.data else None
+    
+            if normal_price:
                 discount_rate = ((normal_price - discount_price) / normal_price) * 100
                 price_text = f"{normal_price:,.1f}원 → {discount_price:,.1f}원 ({discount_rate:.0f}% 할인)"
             else:
-                # 🔥 정상가를 찾지 못한 경우 (이론상 발생하지 않아야 함)
-                price_text = f"{discount_price:,.1f}원" if discount_price else "-"
-            
+                price_text = f"{discount_price:,.1f}원"
+    
             display_rows.append({
                 "날짜": f"{row_d['start_date'].date()} ~ {row_d['end_date'].date()}",
                 "날짜_정렬용": row_d['start_date'],
                 "이벤트": "💸 할인",
                 "가격 정보": price_text
             })
-
+    
+        # =========================
+        # 🔥 Lifecycle 이벤트 처리
+        # =========================
         icon_map = {
             "NEW_PRODUCT": "🆕 신제품",
             "OUT_OF_STOCK": "❌ 품절",
             "RESTOCK": "🔄 복원",
         }
-
+    
         df_lifecycle_only = df_all_events[df_all_events["event_type"].isin(icon_map.keys())]
+    
         for _, row_l in df_lifecycle_only.iterrows():
+    
             event_date_str = row_l["date"].strftime("%Y-%m-%d")
-
-            # 그 날짜 raw에서 정상가 확보 (있으면 1순위)
-            raw_res = (
-                supabase.table("raw_daily_prices")
-                .select("normal_price, sale_price")
-                .eq("product_url", p["product_url"])
-                .eq("date", event_date_str)
-                .limit(1)
-                .execute()
-            )
-            raw_normal = float(raw_res.data[0]["normal_price"]) if raw_res.data and raw_res.data[0].get("normal_price") is not None else None
-
-            # 그 날짜 이벤트 테이블에서 가격 이벤트 확인
+    
             price_on_date = (
                 supabase.table("product_all_events")
                 .select("unit_price, event_type")
@@ -1985,48 +1978,58 @@ for pname in selected_products:
                 .eq("date", event_date_str)
                 .execute()
             )
-
+    
             price_text = "-"
+    
             if price_on_date.data:
-                # 우선 DISCOUNT를 먼저 잡고, 없으면 NORMAL
+    
                 discount_event = next((e for e in price_on_date.data if e["event_type"] == "DISCOUNT"), None)
                 normal_event = next((e for e in price_on_date.data if e["event_type"] == "NORMAL"), None)
-
+    
                 if discount_event:
                     discount_price = float(discount_event["unit_price"])
-                    if raw_normal:
-                        discount_rate = ((raw_normal - discount_price) / raw_normal) * 100
-                        price_text = f"{raw_normal:,.1f}원 → {discount_price:,.1f}원 ({discount_rate:.0f}% 할인)"
+    
+                    normal_res = (
+                        supabase.table("product_all_events")
+                        .select("unit_price")
+                        .eq("product_url", p["product_url"])
+                        .eq("event_type", "NORMAL")
+                        .lt("date", event_date_str)
+                        .order("date", desc=True)
+                        .limit(1)
+                        .execute()
+                    )
+    
+                    normal_price = float(normal_res.data[0]["unit_price"]) if normal_res.data else None
+    
+                    if normal_price:
+                        discount_rate = ((normal_price - discount_price) / normal_price) * 100
+                        price_text = f"{normal_price:,.1f}원 → {discount_price:,.1f}원 ({discount_rate:.0f}% 할인)"
                     else:
                         price_text = f"할인가: {discount_price:,.1f}원"
+    
                 elif normal_event:
                     normal_price = float(normal_event["unit_price"])
-                    # raw_normal이 있으면 그걸 우선 표기(데이터 일관성)
-                    price_text = f"정상가: {(raw_normal if raw_normal else normal_price):,.1f}원"
-            
+                    price_text = f"정상가: {normal_price:,.1f}원"
+    
             display_rows.append({
                 "날짜": str(row_l["date"].date()),
-                "날짜_정렬용": row_l["date"],  # 🔥 정렬용 컬럼 추가
+                "날짜_정렬용": row_l["date"],
                 "이벤트": icon_map.get(row_l["event_type"], row_l["event_type"]),
                 "가격 정보": price_text
             })
-
+    
         if not display_rows:
             st.caption("실제 변화 이벤트 없음")
             continue
-
+    
         df_display = pd.DataFrame(display_rows)
-        
-        # 🔥 정렬용 컬럼으로 정렬 후 제거
+    
         df_display = df_display.sort_values("날짜_정렬용", ascending=False)
         df_display = df_display.drop(columns=["날짜_정렬용"])
-
+    
         st.dataframe(
             df_display,
             use_container_width=True,
             hide_index=True
         )
-
-
-
-
