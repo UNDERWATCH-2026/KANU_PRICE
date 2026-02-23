@@ -813,14 +813,13 @@ def format_product_label(row):
 import re
 
 def render_card(bg, border, title, content):
-
     return f"""
     <div style="
         background:{bg};
         padding:18px;
         border-radius:12px;
         border-left:6px solid {border};
-        height:120px;                 /* 🔥 높이 고정 */
+        height:120px;
         display:flex;
         flex-direction:column;
         box-shadow:0 1px 3px rgba(0,0,0,0.06);
@@ -837,7 +836,7 @@ def render_card(bg, border, title, content):
         <div style="
             font-size:14px;
             line-height:1.4;
-            overflow-y:auto;          /* 🔥 내부 세로 스크롤 */
+            overflow-y:auto;
             overflow-x:hidden;
             flex-grow:1;
         ">
@@ -2167,6 +2166,7 @@ if selected_products:   # 🔥 조건 반전
                 )
             else:
                 st.caption("이벤트 없음")
+
 
 
 
