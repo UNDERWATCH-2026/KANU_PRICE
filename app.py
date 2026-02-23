@@ -1455,7 +1455,7 @@ for product_url in selected_products:
             tmp.at[idx, "price_detail"] = f"정상가: {price_row['unit_price']:,.1f}원"
         
         # 🔥 lifecycle 데이터 불러오기
-        df_life = load_lifecycle_events(p["product_url"])
+        df_life = load_lifecycle_events(row["product_url"])
         
         if not df_life.empty:
             df_life["date"] = pd.to_datetime(df_life["date"], errors="coerce")
@@ -2082,5 +2082,6 @@ for product_url in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
