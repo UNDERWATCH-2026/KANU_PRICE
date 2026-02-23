@@ -1771,23 +1771,28 @@ st.divider()
 # =========================
 # 8-2️⃣ 제품별 카드
 # =========================
+
 for pname in selected_products:
     p = df_all[df_all["product_name"] == pname].iloc[0]
     st.markdown(f"### {p['product_name']}")
 
+    # 🔥 데이터 로딩 + 안전 처리
+    df_life = load_lifecycle_events(p["product_url"])
+
+    out_periods = calculate_out_periods(
+        p["product_url"], filter_date_from, filter_date_to
+    ) or []
+
+    normal_change_dates = get_normal_price_change_dates(
+        p["product_url"], filter_date_from, filter_date_to
+    ) or []
+
     c1, c2, c3, c4 = st.columns(4)
 
-    with c1:
-        st.metric("개당 가격", f"{float(p['current_unit_price']):,.1f}원")
-
-
     with c2:
-    
         cards = []
 
-        # =========================
-        # 💸 할인 구간 계산
-        # =========================
+        # 💸 할인 RPC
         discount_res = supabase.rpc(
             "get_discount_periods_in_range",
             {
@@ -1995,6 +2000,7 @@ for pname in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
