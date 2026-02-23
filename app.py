@@ -1436,32 +1436,32 @@ if selected_products:   # 🔥 조건 반전
             
             # 할인 중인 행에 대해 정상가 찾기
             for idx, price_row in tmp[tmp["is_discount"]].iterrows():
-                # ✅ 정상가는 "할인 당일" raw_daily_prices.normal_price 1순위
+            
+                # 🔥 개당 정상가 조회 (unit 기준)
                 normal_price_res = (
                     supabase.table("raw_daily_prices_unit")
-                    .select("normal_price")
+                    .select("unit_normal_price")
                     .eq("product_url", row["product_url"])
                     .eq("date", price_row["event_date"].strftime("%Y-%m-%d"))
                     .limit(1)
                     .execute()
                 )
-    
-                discount_price = float(price_row["unit_price"]) if pd.notna(price_row["unit_price"]) else None
-                normal_price = float(normal_price_res.data[0]["normal_price"]) if normal_price_res.data else None
-    
-                ## 할인 가격 (개당 단가)
-                discount_price = float(price_row["unit_price"]) if pd.notna(price_row["unit_price"]) else None
-                
-                # 정상가 (개당 기준)
+            
                 normal_price = (
-                    float(normal_price_res.data[0]["normal_price"])
+                    float(normal_price_res.data[0]["unit_normal_price"])
                     if normal_price_res.data
                     else None
                 )
-                
+            
+                discount_price = (
+                    float(price_row["unit_price"])
+                    if pd.notna(price_row["unit_price"])
+                    else None
+                )
+            
                 if normal_price and discount_price:
                     discount_rate = ((normal_price - discount_price) / normal_price) * 100
-                
+            
                     tmp.at[idx, "normal_price"] = normal_price
                     tmp.at[idx, "discount_rate"] = discount_rate
                     tmp.at[idx, "price_detail"] = (
@@ -1469,10 +1469,10 @@ if selected_products:   # 🔥 조건 반전
                         f"할인가: {discount_price:,.1f}원 "
                         f"({discount_rate:.0f}% 할인)"
                     )
-                
+            
                 elif discount_price:
                     tmp.at[idx, "price_detail"] = f"할인가: {discount_price:,.1f}원"
-                
+            
                 else:
                     tmp.at[idx, "price_detail"] = "-"
             # 정상가인 경우
@@ -2127,6 +2127,7 @@ if selected_products:   # 🔥 조건 반전
                 )
             else:
                 st.caption("이벤트 없음")
+
 
 
 
