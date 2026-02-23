@@ -1007,7 +1007,7 @@ with col_controls:
             ))
         ]
         # 🔥 여기 추가
-        st.write("삭제 대상 키:", keys_to_delete)
+        st.write("현재 session_state 전체 키:", list(st.session_state.keys()))
         for key in keys_to_delete:
             del st.session_state[key]
         
@@ -2153,6 +2153,7 @@ if selected_products:   # 🔥 조건 반전
                 )
             else:
                 st.caption("이벤트 없음")
+
 
 
 
