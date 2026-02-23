@@ -18,7 +18,15 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # =========================
 # 2️⃣ 데이터 로딩
-# =========================
+# =========================if normal_price_res.data:
+    pack_normal_price = float(normal_price_res.data[0]["normal_price"])
+    
+    # capsule_count 가져오기 (이미 df_all에 있음)
+    capsule_count = float(p["capsule_count"]) if p.get("capsule_count") else 1
+    
+    normal_price = round(pack_normal_price / capsule_count, 1)
+else:
+    normal_price = Non
 @st.cache_data(ttl=300)
 def load_product_summary():
     cols = [
@@ -1780,10 +1788,8 @@ for pname in selected_products:
     with c1:
         st.metric("개당 가격", f"{float(p['current_unit_price']):,.1f}원")
 
-
     with c2:
     
-        # 🔥 현재 선택된 기간 가져오기
         date_from = df_timeline["event_date"].min().date()
         date_to = df_timeline["event_date"].max().date()
     
@@ -1799,27 +1805,12 @@ for pname in selected_products:
         discount_rows = res.data if res.data else []
     
         if discount_rows:
-            # 🔥 할인 기간 중 가장 최근 것의 가격 정보 조회
             latest_discount = discount_rows[0]
-            
-            # 할인가 조회
-            discount_price_res = (
+    
+            # 🔥 할인 당일 기준 가격 1건 조회
+            price_res = (
                 supabase.table("product_all_events")
-                .select("unit_price")
-                .eq("product_url", p["product_url"])
-                .eq("event_type", "DISCOUNT")
-                .gte("date", latest_discount["discount_start_date"])
-                .lte("date", latest_discount["discount_end_date"])
-                .limit(1)
-                .execute()
-            )
-            
-            discount_price = float(discount_price_res.data[0]["unit_price"]) if discount_price_res.data else None
-            
-            # 🔥 정상가 조회 - 할인 당일의 정상가 (RAW_DAILY_PRICES에서)
-            normal_price_res = (
-                supabase.table("raw_daily_prices")
-                .select("normal_price")
+                .select("date, unit_price, event_type")
                 .eq("product_url", p["product_url"])
                 .gte("date", latest_discount["discount_start_date"])
                 .lte("date", latest_discount["discount_end_date"])
@@ -1827,10 +1818,28 @@ for pname in selected_products:
                 .limit(1)
                 .execute()
             )
-            
-            normal_price = float(normal_price_res.data[0]["normal_price"]) if normal_price_res.data else None
-            
-            # 가격 정보 구성
+    
+            if price_res.data:
+                discount_price = float(price_res.data[0]["unit_price"])
+    
+                # 🔥 같은 날짜의 정상가 조회 (할인 시작 직전 NORMAL 가격)
+                normal_res = (
+                    supabase.table("product_all_events")
+                    .select("unit_price")
+                    .eq("product_url", p["product_url"])
+                    .eq("event_type", "NORMAL")
+                    .lt("date", latest_discount["discount_start_date"])
+                    .order("date", desc=True)
+                    .limit(1)
+                    .execute()
+                )
+    
+                normal_price = float(normal_res.data[0]["unit_price"]) if normal_res.data else None
+    
+            else:
+                discount_price = None
+                normal_price = None
+    
             if normal_price and discount_price:
                 discount_rate = ((normal_price - discount_price) / normal_price) * 100
                 st.success(
@@ -1842,11 +1851,13 @@ for pname in selected_products:
             elif discount_price:
                 st.success(f"💸 할인 중 | 할인가: {discount_price:,.1f}원")
             else:
-                st.success(f"💸 할인 {latest_discount['discount_start_date']} ~ {latest_discount['discount_end_date']}")
+                st.success(
+                    f"💸 할인 {latest_discount['discount_start_date']} ~ "
+                    f"{latest_discount['discount_end_date']}"
+                )
     
         else:
             st.info("정상가")
-
 
     with c3:
         df_life = load_lifecycle_events(p["product_url"])
@@ -2022,4 +2033,5 @@ for pname in selected_products:
             use_container_width=True,
             hide_index=True
         )
+
 
