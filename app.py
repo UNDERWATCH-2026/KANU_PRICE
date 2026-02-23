@@ -813,8 +813,15 @@ import re
 
 def render_card(bg, border, title, content):
 
-    # 🔥 div 태그 방어 제거
     content = re.sub(r"</?div[^>]*>", "", str(content), flags=re.IGNORECASE)
+
+    content_block = ""
+    if content.strip():   # 🔥 내용이 있을 때만 div 생성
+        content_block = f"""
+        <div style="font-size:14px;color:#444;line-height:1.6;">
+            {content}
+        </div>
+        """
 
     return f"""
     <div style="
@@ -822,15 +829,13 @@ def render_card(bg, border, title, content):
         padding:18px;
         border-radius:12px;
         border-left:6px solid {border};
-        min-height:130px;
+        min-height:110px;
         box-shadow:0 1px 3px rgba(0,0,0,0.06);
     ">
         <div style="font-weight:600;font-size:15px;margin-bottom:8px;">
             {title}
         </div>
-        <div style="font-size:14px;color:#444;line-height:1.6;">
-            {content}
-        </div>
+        {content_block}
     </div>
     """
 # =========================
@@ -2123,6 +2128,7 @@ for product_url in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
