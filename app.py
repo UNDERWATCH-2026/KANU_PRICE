@@ -2032,7 +2032,11 @@ if selected_products:   # 🔥 조건 반전
         if normal_change_rows:
             latest_change = normal_change_rows[0]
         
-            diff = float(latest_change["price_diff"])
+            prev_price = float(latest_change["prev_price"])
+            current_price = float(latest_change["normal_price"])
+        
+            diff = current_price - prev_price
+            diff_rate = (diff / prev_price) * 100 if prev_price != 0 else 0
         
             # 상승/하락 색상 구분
             if diff > 0:
@@ -2050,9 +2054,8 @@ if selected_products:   # 🔥 조건 반전
                 title=icon,
                 content=(
                     f"날짜: {latest_change['date']}<br>"
-                    f"{float(latest_change['prev_price']):,.0f}원 → "
-                    f"{float(latest_change['normal_price']):,.0f}원<br>"
-                    f"({diff:+,.0f}원)"
+                    f"{prev_price:,.0f}원 → {current_price:,.0f}원 "
+                    f"({diff_rate:+.1f}%)"
                 )
             ))
         
@@ -2269,6 +2272,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
