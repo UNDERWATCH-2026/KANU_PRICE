@@ -1011,8 +1011,7 @@ with col_controls:
         for key in keys_to_delete:
             del st.session_state[key]
         
-        st.session_state.clear()
-        st.rerun()
+
 
 with col_tabs:
     tab1, tab2, tab3 = st.tabs(["🔍 키워드 검색", "🎛️ 필터 선택", "🤖 자연어 질문"])
@@ -2153,6 +2152,7 @@ if selected_products:   # 🔥 조건 반전
                 )
             else:
                 st.caption("이벤트 없음")
+
 
 
 
