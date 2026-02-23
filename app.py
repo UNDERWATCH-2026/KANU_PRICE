@@ -1945,10 +1945,13 @@ for pname in selected_products:
     
             if normal_price:
                 discount_rate = ((normal_price - discount_price) / normal_price) * 100
-                price_text = f"{normal_price:,.1f}원 → {discount_price:,.1f}원 ({discount_rate:.0f}% 할인)"
+                price_text = (
+                    f"할인가: {discount_price:,.1f}원 "
+                    f"({discount_rate:.0f}% 할인)"
+                )
             else:
-                price_text = f"{discount_price:,.1f}원"
-    
+                price_text = f"할인가: {discount_price:,.1f}원"
+                
             display_rows.append({
                 "날짜": f"{row_d['start_date'].date()} ~ {row_d['end_date'].date()}",
                 "날짜_정렬용": row_d['start_date'],
@@ -2004,7 +2007,10 @@ for pname in selected_products:
     
                     if normal_price:
                         discount_rate = ((normal_price - discount_price) / normal_price) * 100
-                        price_text = f"{normal_price:,.1f}원 → {discount_price:,.1f}원 ({discount_rate:.0f}% 할인)"
+                        price_text = (
+                            f"할인가: {discount_price:,.1f}원 "
+                            f"({discount_rate:.0f}% 할인)"
+                        )
                     else:
                         price_text = f"할인가: {discount_price:,.1f}원"
     
