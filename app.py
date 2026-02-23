@@ -1114,7 +1114,7 @@ with col_tabs:
                                     st.checkbox(
                                         label,
                                         value=product_url in st.session_state.selected_products,
-                                        key=f"chk_kw_{product_url}",
+                                        key=f"tab1_kw_{product_url}", 
                                         on_change=toggle_product,
                                         args=(product_url,)
                                     )
@@ -1193,7 +1193,7 @@ with col_tabs:
                 st.checkbox(
                     label,
                     value=product_url in st.session_state.selected_products,
-                    key=f"filter_{product_url}",   # prefix 단순화
+                    key=f"tab2_filter_{product_url}", 
                     on_change=toggle_product,
                     args=(product_url,)
                 )
@@ -1316,7 +1316,7 @@ with col_tabs:
                                     st.checkbox(
                                         label,
                                         value=product_url in st.session_state.selected_products,
-                                        key=f"nlp_{product_url}",
+                                        key=f"tab3_nlp_{idx}_{product_url}", 
                                         on_change=toggle_product,
                                         args=(product_url,)
                                     )
@@ -2061,6 +2061,7 @@ for product_url in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
