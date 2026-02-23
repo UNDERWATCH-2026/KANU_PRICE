@@ -1902,7 +1902,9 @@ for product_url in selected_products:
     if discount_rows:
         latest_discount = discount_rows[0]
         cards.append(f"""
-        <div style="height:120px;background:#e8f5e9;padding:12px;border-radius:8px;border-left:5px solid #2e7d32;">
+        <div style="height:120px;background:#e8f5e9;padding:12px;
+        border-radius:8px;border-left:5px solid #2e7d32;
+        margin-bottom:12px;">
         💸 <b>할인 진행</b><br>
         시작: {latest_discount['discount_start_date']}<br>
         종료: {latest_discount['discount_end_date']}
@@ -1915,7 +1917,9 @@ for product_url in selected_products:
         if not new_events.empty:
             latest_new = new_events.sort_values("date", ascending=False).iloc[0]
             cards.append(f"""
-            <div style="height:120px;background:#fff8e1;padding:12px;border-radius:8px;border-left:5px solid #f9a825;">
+            <div style="height:120px;background:#e8f5e9;padding:12px;
+            border-radius:8px;border-left:5px solid #2e7d32;
+            margin-bottom:12px;">
             🆕 <b>신제품</b><br>
             발견일: {latest_new['date'].date()}
             </div>
@@ -1927,7 +1931,9 @@ for product_url in selected_products:
         if not out_events.empty:
             latest_out = out_events.sort_values("date", ascending=False).iloc[0]
             cards.append(f"""
-            <div style="height:120px;background:#e3f2fd;padding:12px;border-radius:8px;border-left:5px solid #1565c0;">
+            <div style="height:120px;background:#e8f5e9;padding:12px;
+            border-radius:8px;border-left:5px solid #2e7d32;
+            margin-bottom:12px;">
             ❌ <b>품절</b><br>
             날짜: {latest_out['date'].date()}
             </div>
@@ -1936,7 +1942,9 @@ for product_url in selected_products:
     # 카드가 없으면
     if not cards:
         cards.append("""
-        <div style="height:120px;background:#f5f5f5;padding:12px;border-radius:8px;border-left:5px solid #9e9e9e;">
+        <div style="height:120px;background:#e8f5e9;padding:12px;
+        border-radius:8px;border-left:5px solid #2e7d32;
+        margin-bottom:12px;">
         📊 <b>특이 이벤트 없음</b>
         </div>
         """)
@@ -1950,7 +1958,11 @@ for product_url in selected_products:
         with card_columns[i]:
             if i < len(cards):
                 st.markdown(cards[i], unsafe_allow_html=True)
-
+    # 카드 출력 끝
+    
+    st.markdown("<div style='margin-bottom:28px;'></div>", unsafe_allow_html=True)
+    
+    with st.expander("📅 이벤트 히스토리"):
     # =========================
    
     with st.expander("📅 이벤트 히스토리"):
@@ -2043,6 +2055,7 @@ for product_url in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
