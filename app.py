@@ -1466,15 +1466,34 @@ for product_url in selected_products:
             discount_price = float(price_row["unit_price"]) if pd.notna(price_row["unit_price"]) else None
             normal_price = float(normal_price_res.data[0]["normal_price"]) if normal_price_res.data else None
 
+            # 🔥 capsule_count 가져오기
+            capsule_count = row["capsule_count"]
+            
+            # 할인 가격 (개당 단가)
+            discount_price = float(price_row["unit_price"]) if pd.notna(price_row["unit_price"]) else None
+            
+            # 정상가 (팩 기준)
+            normal_price_pack = float(normal_price_res.data[0]["normal_price"]) if normal_price_res.data else None
+            
+            # 🔥 정상가를 개당 기준으로 변환
+            normal_price = None
+            if normal_price_pack and capsule_count:
+                normal_price = normal_price_pack / float(capsule_count)
+            
             if normal_price and discount_price:
                 discount_rate = ((normal_price - discount_price) / normal_price) * 100
+            
                 tmp.at[idx, "normal_price"] = normal_price
                 tmp.at[idx, "discount_rate"] = discount_rate
                 tmp.at[idx, "price_detail"] = (
-                    f"정상가: {normal_price:,.1f}원 → 할인가: {discount_price:,.1f}원 ({discount_rate:.0f}% 할인)"
+                    f"정상가: {normal_price:,.1f}원 → "
+                    f"할인가: {discount_price:,.1f}원 "
+                    f"({discount_rate:.0f}% 할인)"
                 )
+            
             elif discount_price:
                 tmp.at[idx, "price_detail"] = f"할인가: {discount_price:,.1f}원"
+            
             else:
                 tmp.at[idx, "price_detail"] = "-"
         
@@ -2127,6 +2146,7 @@ for product_url in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
