@@ -1872,9 +1872,24 @@ for product_url in selected_products:
         df_life = df_life[
             df_life["date"].between(filter_date_from, filter_date_to)
         ]
+
+    # 🔥 정상가 변동 조회 (카드용)
+    normal_change_res = (
+        supabase.table("product_normal_price_events")
+        .select("date, prev_price, normal_price, price_diff")
+        .eq("product_url", p["product_url"])
+        .gte("date", filter_date_from.strftime("%Y-%m-%d"))
+        .lte("date", filter_date_to.strftime("%Y-%m-%d"))
+        .order("date", desc=True)
+        .limit(1)
+        .execute()
+    )
+
+    normal_change_rows = normal_change_res.data if normal_change_res.data else []
+
     
     c1, c2, c3, c4 = st.columns(4)
-    
+
     # =========================
     # C1 가격
     # =========================
@@ -1884,7 +1899,6 @@ for product_url in selected_products:
             f"{float(p['current_unit_price']):,.1f}원"
         )
     
-    # 🔥 카드 리스트 만들기
     cards = []
     
     # 💸 할인
@@ -1901,56 +1915,79 @@ for product_url in selected_products:
     
     if discount_rows:
         latest_discount = discount_rows[0]
-        cards.append(f"""
-        <div style="height:120px;background:#e8f5e9;padding:12px;
-        border-radius:8px;border-left:5px solid #2e7d32;
-        margin-bottom:12px;">
-        💸 <b>할인 진행</b><br>
-        시작: {latest_discount['discount_start_date']}<br>
-        종료: {latest_discount['discount_end_date']}
-        </div>
-        """)
+        cards.append(card_template.format(
+            bg="#e9f3ec",
+            border="#2f7d32",
+            title="💸 할인 진행",
+            content=f"""
+            시작: {latest_discount['discount_start_date']}<br>
+            종료: {latest_discount['discount_end_date']}
+            """
+        ))
     
     # 🆕 신제품
     if not df_life.empty:
         new_events = df_life[df_life["lifecycle_event"] == "NEW_PRODUCT"]
         if not new_events.empty:
             latest_new = new_events.sort_values("date", ascending=False).iloc[0]
-            cards.append(f"""
-            <div style="height:120px;background:#e8f5e9;padding:12px;
-            border-radius:8px;border-left:5px solid #2e7d32;
-            margin-bottom:12px;">
-            🆕 <b>신제품</b><br>
-            발견일: {latest_new['date'].date()}
-            </div>
-            """)
+            cards.append(card_template.format(
+                bg="#f6f1e6",
+                border="#c88a00",
+                title="🆕 신제품",
+                content=f"발견일: {latest_new['date'].date()}"
+            ))
     
     # ❌ 품절
     if not df_life.empty:
         out_events = df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]
         if not out_events.empty:
             latest_out = out_events.sort_values("date", ascending=False).iloc[0]
-            cards.append(f"""
-            <div style="height:120px;background:#e8f5e9;padding:12px;
-            border-radius:8px;border-left:5px solid #2e7d32;
-            margin-bottom:12px;">
-            ❌ <b>품절</b><br>
-            날짜: {latest_out['date'].date()}
-            </div>
-            """)
+            cards.append(card_template.format(
+                bg="#e8f0f8",
+                border="#2c5aa0",
+                title="❌ 품절",
+                content=f"날짜: {latest_out['date'].date()}"
+            ))
     
-    # 카드가 없으면
+    # 📈 정상가 변동
+    if normal_change_rows:
+        latest_change = normal_change_rows[0]
+    
+        diff = float(latest_change["price_diff"])
+    
+        # 상승/하락 색상 구분
+        if diff > 0:
+            bg = "#fdecea"
+            border = "#b91c1c"
+            icon = "📈 정상가 상승"
+        else:
+            bg = "#eaf2ff"
+            border = "#1d4ed8"
+            icon = "📉 정상가 하락"
+    
+        cards.append(card_template.format(
+            bg=bg,
+            border=border,
+            title=icon,
+            content=f"""
+            날짜: {latest_change['date']}<br>
+            {float(latest_change['prev_price']):,.0f}원 →
+            {float(latest_change['normal_price']):,.0f}원
+            ({diff:+,.0f}원)
+            """
+        ))
+    
+    # 📊 특이 이벤트 없음
     if not cards:
-        cards.append("""
-        <div style="height:120px;background:#e8f5e9;padding:12px;
-        border-radius:8px;border-left:5px solid #2e7d32;
-        margin-bottom:12px;">
-        📊 <b>특이 이벤트 없음</b>
-        </div>
-        """)
+        cards.append(card_template.format(
+            bg="#f3f4f6",
+            border="#9aa0a6",
+            title="📊 특이 이벤트 없음",
+            content=""
+        ))
     
     # =========================
-    # C2, C3, C4에 카드 배치
+    # C2~C4에 카드 배치 (3등분 유지)
     # =========================
     card_columns = [c2, c3, c4]
     
@@ -1958,10 +1995,6 @@ for product_url in selected_products:
         with card_columns[i]:
             if i < len(cards):
                 st.markdown(cards[i], unsafe_allow_html=True)
-    # 카드 출력 끝
-    
-    st.markdown("<div style='margin-bottom:28px;'></div>", unsafe_allow_html=True)
-    
 
     # =========================
    
@@ -2055,6 +2088,7 @@ for product_url in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
