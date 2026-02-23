@@ -1318,7 +1318,7 @@ with col_tabs:
                                     st.checkbox(
                                         label,
                                         value=product_url in st.session_state.selected_products,
-                                        key=f"chk_nlp_{idx}_{pidx}_{product_url}",
+                                        key=f"nlp_{product_url}",
                                         on_change=toggle_product,
                                         args=(product_url,)
                                     )
@@ -2063,6 +2063,7 @@ for product_url in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
