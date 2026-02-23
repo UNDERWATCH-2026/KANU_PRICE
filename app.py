@@ -1367,7 +1367,7 @@ with col_tabs:
                     else:
                         st.markdown(f"**A:** {answer_data}")
 
-st.divider()
+# st.divider()
 
 # =========================
 # 8️⃣ 결과 표시
@@ -2078,106 +2078,130 @@ if selected_products:   # 🔥 조건 반전
         
         # =========================
 
-    
-   
+
         with st.expander("📅 이벤트 히스토리"):
     
-
-            display_rows = []
+        display_rows = []
     
-            # =========================
-            # 1️⃣ 가격 변동 이벤트
-            # =========================
-            df_changes_res = (
-                supabase.table("product_price_change_events")
-                .select("*")
-                .eq("product_url", p["product_url"])
-                .order("date", desc=True)
-                .execute()
+        # =========================
+        # 1️⃣ 가격 변동 이벤트
+        # =========================
+        df_changes_res = (
+            supabase.table("product_price_change_events")
+            .select("*")
+            .eq("product_url", p["product_url"])
+            .order("date", desc=True)
+            .execute()
+        )
+    
+        df_changes = pd.DataFrame(df_changes_res.data)
+    
+        if not df_changes.empty:
+    
+            icon_map = {
+                "DISCOUNT_DOWN": "💸 할인가 하락",
+                "DISCOUNT_UP": "💸 할인가 상승",
+                "NORMAL_UP": "📈 정상가 상승",
+                "NORMAL_DOWN": "📉 정상가 하락",
+            }
+    
+            for _, row in df_changes.iterrows():
+    
+                prev_price = float(row["prev_price"]) if row["prev_price"] else 0
+                current_price = float(row["unit_price"]) if row["unit_price"] else 0
+    
+                if prev_price > 0:
+                    diff = current_price - prev_price
+                    diff_rate = (diff / prev_price) * 100
+                    rate_text = f"({diff_rate:+.1f}%)"
+                else:
+                    rate_text = ""
+    
+                display_rows.append({
+                    "날짜": row["date"],
+                    "이벤트": icon_map.get(row["price_change_type"], ""),
+                    "가격 정보": (
+                        f"{prev_price:,.1f}원 → "
+                        f"{current_price:,.1f}원 "
+                        f"{rate_text}"
+                    )
+                })
+    
+        # =========================
+        # 2️⃣ 할인 시작 / 종료 이벤트
+        # =========================
+        discount_res = supabase.rpc(
+            "get_discount_periods_in_range",
+            {
+                "p_product_url": p["product_url"],
+                "p_date_from": filter_date_from.strftime("%Y-%m-%d"),
+                "p_date_to": filter_date_to.strftime("%Y-%m-%d"),
+            }
+        ).execute()
+    
+        discount_rows = discount_res.data if discount_res.data else []
+    
+        for row in discount_rows:
+            display_rows.append({
+                "날짜": row["discount_start_date"],
+                "이벤트": "💸 할인 시작",
+                "가격 정보": ""
+            })
+            display_rows.append({
+                "날짜": row["discount_end_date"],
+                "이벤트": "💸 할인 종료",
+                "가격 정보": ""
+            })
+    
+        # =========================
+        # 3️⃣ Lifecycle 이벤트
+        # =========================
+        df_life = load_lifecycle_events(p["product_url"])
+    
+        lifecycle_map = {
+            "NEW_PRODUCT": "🆕 신제품",
+            "OUT_OF_STOCK": "❌ 품절",
+            "RESTOCK": "🔄 복원",
+        }
+    
+        if not df_life.empty:
+            for _, row in df_life.iterrows():
+                display_rows.append({
+                    "날짜": row["date"],
+                    "이벤트": lifecycle_map.get(row["lifecycle_event"], ""),
+                    "가격 정보": ""
+                })
+    
+        # =========================
+        # 4️⃣ 정렬 및 색상 강조
+        # =========================
+        if display_rows:
+    
+            df_display = pd.DataFrame(display_rows)
+    
+            df_display["날짜_정렬용"] = pd.to_datetime(
+                df_display["날짜"], errors="coerce"
             )
     
-
-            
-            df_changes = pd.DataFrame(df_changes_res.data)
-            
-            if not df_changes.empty:
-            
-                icon_map = {
-                    "DISCOUNT_DOWN": "💸 할인가 하락",
-                    "DISCOUNT_UP": "💸 할인가 상승",
-                    "NORMAL_UP": "📈 정상가 상승",
-                    "NORMAL_DOWN": "📉 정상가 하락",
-                }
-            
-                for _, row in df_changes.iterrows():
-            
-                    diff = row["unit_price"] - row["prev_price"]
-                    diff_rate = (diff / row["prev_price"]) * 100
-            
-                    display_rows.append({
-                        "날짜": row["date"],
-                        "이벤트": icon_map.get(row["price_change_type"], ""),
-                        "가격 정보": (
-                            f"{row['prev_price']:,.1f}원 → "
-                            f"{row['unit_price']:,.1f}원 "
-                            f"({diff_rate:+.1f}%)"
-                        )
-                    })
-                df_changes = df_changes.sort_values("date")
-                
-                for i in range(len(df_changes) - 1):
-                
-                    current_row = df_changes.iloc[i]
-                    next_row = df_changes.iloc[i + 1]
-                
-                    current_date = pd.to_datetime(current_row["date"])
-                    next_date = pd.to_datetime(next_row["date"])
-                
+            df_display = df_display.sort_values("날짜_정렬용", ascending=False)
+            df_display = df_display.drop(columns=["날짜_정렬용"])
     
-            # =========================
-            # 2️⃣ Lifecycle 이벤트
-            # =========================
-            df_life = load_lifecycle_events(p["product_url"])
-            
-            lifecycle_map = {
-                "NEW_PRODUCT": "🆕 신제품",
-                "OUT_OF_STOCK": "❌ 품절",
-                "RESTOCK": "🔄 복원",
-            }
-            
-            if not df_life.empty:
-                for _, row in df_life.iterrows():
-                    display_rows.append({
-                        "날짜": row["date"],
-                        "이벤트": lifecycle_map.get(row["lifecycle_event"], ""),
-                        "가격 정보": ""
-                    })
-            
-            # =========================
-            # 3️⃣ 정렬
-            # =========================
-            if display_rows:
-            
-                df_display = pd.DataFrame(display_rows)
-            
-                df_display["날짜_정렬용"] = pd.to_datetime(
-                    df_display["날짜"], errors="coerce"
-                )
-            
-                df_display = df_display.sort_values("날짜_정렬용", ascending=False)
-                df_display = df_display.drop(columns=["날짜_정렬용"])
-            
-                st.dataframe(
-                    df_display,
-                    use_container_width=True,
-                    hide_index=True
-                )
-            else:
-                st.caption("이벤트 없음")
-
-
-
-
-
-
-
+            # 🔥 정상가 색상 강조
+            def highlight_event(row):
+                if "정상가 상승" in row["이벤트"]:
+                    return ["color: red" if col == "이벤트" else "" for col in row.index]
+                elif "정상가 하락" in row["이벤트"]:
+                    return ["color: blue" if col == "이벤트" else "" for col in row.index]
+                else:
+                    return [""] * len(row)
+    
+            styled_df = df_display.style.apply(highlight_event, axis=1)
+    
+            st.dataframe(
+                styled_df,
+                use_container_width=True,
+                hide_index=True
+            )
+    
+        else:
+            st.caption("이벤트 없음")
