@@ -2252,8 +2252,8 @@ if selected_products:   # 🔥 조건 반전
                         "이벤트": "💸 할인 종료",
                         "가격 정보": f"종료가 {discount_end_price:,.1f}원" if discount_end_price else ""
                     })
-      
-            # 3️⃣ Lifecycle 이벤트 (신제품/품절 보정)
+  
+            # 3️⃣ Lifecycle 이벤트 (히스토리용 보정)
             # =========================
             df_life = load_lifecycle_events(p["product_url"])
             
@@ -2261,14 +2261,12 @@ if selected_products:   # 🔥 조건 반전
             
                 df_life["date"] = pd.to_datetime(df_life["date"], errors="coerce")
             
-                # 🔥 전체 가격 데이터 기준 첫날/마지막날 계산
+                # 🔥 전체 가격 데이터 기준 마지막날 계산
                 df_price_all = load_events(p["product_url"])
                 if not df_price_all.empty:
                     df_price_all["date"] = pd.to_datetime(df_price_all["date"])
-                    first_date = df_price_all["date"].min()
                     last_date = df_price_all["date"].max()
                 else:
-                    first_date = None
                     last_date = None
             
                 lifecycle_map = {
@@ -2282,16 +2280,12 @@ if selected_products:   # 🔥 조건 반전
                     event_date = pd.to_datetime(row["date"])
                     event_type = row["lifecycle_event"]
             
-                    # 🔥 첫날 신제품 제외
-                    if event_type == "NEW_PRODUCT" and first_date and event_date == first_date:
-                        continue
-            
-                    # 🔥 마지막날 품절 제외
+                    # 🔥 마지막날 품절 제거
                     if event_type == "OUT_OF_STOCK" and last_date and event_date == last_date:
                         continue
             
                     display_rows.append({
-                        "날짜": row["date"],
+                        "날짜": event_date.strftime("%Y-%m-%d"),  # 🔥 날짜만 표시
                         "이벤트": lifecycle_map.get(event_type, ""),
                         "가격 정보": ""
                     })
@@ -2318,6 +2312,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
