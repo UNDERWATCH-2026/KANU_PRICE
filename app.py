@@ -1434,8 +1434,42 @@ if selected_products:   # 🔥 조건 반전
             tmp["discount_rate"] = None
             tmp["price_detail"] = ""
             
+            ### =========================
+            ### START: 품절 마스크(out_mask) 선계산 + 품절 선처리
+            ### =========================
+            out_mask = pd.Series(False, index=tmp.index)
+            
+            df_life = load_lifecycle_events(row["product_url"])
+            if not df_life.empty:
+                df_life["date"] = pd.to_datetime(df_life["date"], errors="coerce")
+                df_life = df_life[df_life["date"].between(filter_date_from, filter_date_to)]
+                df_life = df_life.dropna(subset=["date"])
+            
+                out_dates = df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]["date"].tolist()
+                restore_dates = df_life[df_life["lifecycle_event"] == "RESTOCK"]["date"].tolist()
+            
+                for out_date in out_dates:
+                    restore_after = [d for d in restore_dates if d > out_date]
+            
+                    if restore_after:
+                        restore_date = min(restore_after)
+                        mask = (tmp["event_date"] >= out_date) & (tmp["event_date"] < restore_date)
+                    else:
+                        mask = tmp["event_date"] >= out_date
+            
+                    out_mask |= mask  # 🔥 누적
+            
+                # 🔥 품절 구간 선처리
+                tmp.loc[out_mask, "unit_price"] = None
+                tmp.loc[out_mask, "price_detail"] = "-"
+                tmp.loc[out_mask, "price_status"] = "품절"
+                tmp.loc[out_mask, "is_discount"] = False
+            ### =========================
+            ### END: 품절 마스크(out_mask) 선계산 + 품절 선처리
+            ### =========================
+            
             # 할인 중인 행에 대해 정상가 찾기
-            for idx, price_row in tmp[tmp["is_discount"]].iterrows():
+            for idx, price_row in tmp[tmp["is_discount"] & ~out_mask].iterrows():
             
                 # 🔥 개당 정상가 조회 (unit 기준)
                 normal_price_res = (
@@ -1476,41 +1510,10 @@ if selected_products:   # 🔥 조건 반전
                 else:
                     tmp.at[idx, "price_detail"] = "-"
             # 정상가인 경우
-            for idx, price_row in tmp[~tmp["is_discount"]].iterrows():
+            for idx, price_row in tmp[(~tmp["is_discount"]) & ~out_mask].iterrows():
                 tmp.at[idx, "price_detail"] = f"정상가: {price_row['unit_price']:,.1f}원"
-            
-            # 🔥 lifecycle 데이터 불러오기
-            df_life = load_lifecycle_events(row["product_url"])
-            
-            if not df_life.empty:
-                df_life["date"] = pd.to_datetime(df_life["date"], errors="coerce")
-            
-                # 🔥 기간 필터 적용 (이 줄이 핵심)
-                df_life = df_life[
-                    df_life["date"].between(filter_date_from, filter_date_to)
-                ]
-            
-                # 🔥 NaT 제거
-                df_life = df_life.dropna(subset=["date"])
-            
-                # 품절/복원 구간 계산
-                out_dates = df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]["date"].tolist()
-                restore_dates = df_life[df_life["lifecycle_event"] == "RESTOCK"]["date"].tolist()
-            
-                for out_date in out_dates:
-                    # 해당 품절 이후 첫 복원 날짜 찾기
-                    restore_after = [d for d in restore_dates if d > out_date]
-                    if restore_after:
-                        restore_date = min(restore_after)
-            
-                        # 🔥 품절(포함) ~ 복원(제외) 사이 가격 제거
-                        mask = (tmp["event_date"] >= out_date) & (tmp["event_date"] < restore_date)
-                        tmp.loc[mask, "unit_price"] = None
-                    else:
-                        # 복원 이벤트가 없으면 품절 이후 모든 데이터 제거
-                        mask = tmp["event_date"] >= out_date
-                        tmp.loc[mask, "unit_price"] = None
-            
+
+                       
             tmp["product_url"] = row["product_url"]
     
             timeline_rows.append(
@@ -2127,6 +2130,7 @@ if selected_products:   # 🔥 조건 반전
                 )
             else:
                 st.caption("이벤트 없음")
+
 
 
 
