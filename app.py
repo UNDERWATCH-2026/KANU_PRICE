@@ -1781,11 +1781,13 @@ for pname in selected_products:
     with c1:
         st.metric("개당 가격", f"{float(p['current_unit_price']):,.1f}원")
 
+    
     with c2:
     
         date_from = df_timeline["event_date"].min().date()
         date_to = df_timeline["event_date"].max().date()
     
+        # 🔥 할인 구간 조회
         res = supabase.rpc(
             "get_discount_periods_in_range",
             {
@@ -1798,60 +1800,67 @@ for pname in selected_products:
         discount_rows = res.data if res.data else []
     
         if discount_rows:
+    
             latest_discount = discount_rows[0]
     
-            # 🔥 할인 당일 기준 가격 1건 조회
-            price_res = (
+            # 🔥 할인 기간 중 최저가 + 해당 날짜 조회
+            discount_res = (
                 supabase.table("product_all_events")
-                .select("date, unit_price, event_type")
+                .select("date, unit_price")
                 .eq("product_url", p["product_url"])
+                .eq("event_type", "DISCOUNT")
                 .gte("date", latest_discount["discount_start_date"])
                 .lte("date", latest_discount["discount_end_date"])
-                .order("date", desc=False)
+                .order("unit_price", desc=False)
                 .limit(1)
                 .execute()
             )
     
-            if price_res.data:
-                discount_price = float(price_res.data[0]["unit_price"])
-    
-                # 🔥 같은 날짜의 정상가 조회 (할인 시작 직전 NORMAL 가격)
-                normal_res = (
-                    supabase.table("product_all_events")
-                    .select("unit_price")
-                    .eq("product_url", p["product_url"])
-                    .eq("event_type", "NORMAL")
-                    .lt("date", latest_discount["discount_start_date"])
-                    .order("date", desc=True)
-                    .limit(1)
-                    .execute()
-                )
-    
-                normal_price = float(normal_res.data[0]["unit_price"]) if normal_res.data else None
-    
+            if discount_res.data:
+                lowest_discount_price = float(discount_res.data[0]["unit_price"])
+                lowest_discount_date = discount_res.data[0]["date"]
             else:
-                discount_price = None
-                normal_price = None
+                lowest_discount_price = None
+                lowest_discount_date = None
     
-            if normal_price and discount_price:
-                discount_rate = ((normal_price - discount_price) / normal_price) * 100
-                st.success(
-                    f"💸 할인 중\n"
-                    f"정상가: {normal_price:,.1f}원\n"
-                    f"할인가: {discount_price:,.1f}원\n"
-                    f"({discount_rate:.0f}% 할인)"
-                )
-            elif discount_price:
-                st.success(f"💸 할인 중 | 할인가: {discount_price:,.1f}원")
+            # 🔥 할인 시작 직전 정상가
+            normal_res = (
+                supabase.table("product_all_events")
+                .select("unit_price")
+                .eq("product_url", p["product_url"])
+                .eq("event_type", "NORMAL")
+                .lt("date", latest_discount["discount_start_date"])
+                .order("date", desc=True)
+                .limit(1)
+                .execute()
+            )
+    
+            normal_price = float(normal_res.data[0]["unit_price"]) if normal_res.data else None
+    
+            # 🔥 최대 할인율 계산
+            if normal_price and lowest_discount_price:
+                discount_rate = ((normal_price - lowest_discount_price) / normal_price) * 100
             else:
-                st.success(
-                    f"💸 할인 {latest_discount['discount_start_date']} ~ "
-                    f"{latest_discount['discount_end_date']}"
-                )
+                discount_rate = None
+    
+            # 🔥 카드 출력
+            text_block = "💸 할인\n"
+            text_block += f"기간: {latest_discount['discount_start_date']} ~ {latest_discount['discount_end_date']}\n"
+    
+            if lowest_discount_price:
+                text_block += f"최저가: {lowest_discount_price:,.1f}원"
+                if lowest_discount_date:
+                    text_block += f" ({lowest_discount_date})"
+                text_block += "\n"
+    
+            if discount_rate:
+                text_block += f"정상가 대비 최대 {discount_rate:.0f}% 할인"
+    
+            st.success(text_block)
     
         else:
             st.info("정상가")
-
+        
     with c3:
         df_life = load_lifecycle_events(p["product_url"])
         has_new = (not df_life.empty) and (df_life["lifecycle_event"] == "NEW_PRODUCT").any()
@@ -1869,173 +1878,49 @@ for pname in selected_products:
         st.success(f"📈 가격 이벤트 {p['event_count']}건")
 
 
+   
     with st.expander("📅 이벤트 히스토리"):
     
-        df_price = load_events(p["product_url"])
-        df_life = load_lifecycle_events(p["product_url"])
-    
-        frames = []
-    
-        # 1️⃣ 가격 이벤트 (DISCOUNT만 사용)
-        if not df_price.empty:
-            df_price = df_price.copy()
-            df_price["date"] = pd.to_datetime(df_price["date"])
-            df_price = df_price[df_price["event_type"] == "DISCOUNT"]
-    
-            if not df_price.empty:
-                frames.append(df_price[["date", "unit_price", "event_type"]])
-    
-        # 2️⃣ Lifecycle 이벤트
-        if not df_life.empty:
-            df_life = df_life[df_life["lifecycle_event"].notna()]
-            df_life = df_life.rename(columns={"lifecycle_event": "event_type"})
-            df_life["unit_price"] = None
-            df_life["date"] = pd.to_datetime(df_life["date"])
-            frames.append(df_life[["date", "unit_price", "event_type"]])
-    
-        if not frames:
-            st.caption("이벤트 없음")
-            continue
-    
-        df_all_events = pd.concat(frames, ignore_index=True)
-        df_all_events = df_all_events.drop_duplicates(subset=["date", "event_type"])
-    
-        # =========================
-        # 🔥 할인 구간 묶기
-        # =========================
-        discount_periods = []
-    
-        if not df_price.empty:
-            df_discount = df_price.sort_values("date")
-            df_discount["gap"] = df_discount["date"].diff().dt.days.fillna(1)
-            df_discount["group"] = (df_discount["gap"] > 1).cumsum()
-    
-            discount_periods = (
-                df_discount.groupby("group")
-                .agg(
-                    start_date=("date", "min"),
-                    end_date=("date", "max"),
-                    discount_price=("unit_price", "first")
-                )
-                .reset_index(drop=True)
-            )
-    
-        display_rows = []
-    
-        # =========================
-        # 🔥 할인 이벤트 표시
-        # =========================
-        for _, row_d in discount_periods.iterrows():
-    
-            discount_price = float(row_d["discount_price"])
-    
-            # 🔥 할인 시작 직전 NORMAL 가격 조회 (개당 기준)
-            normal_res = (
-                supabase.table("product_all_events")
-                .select("unit_price")
-                .eq("product_url", p["product_url"])
-                .eq("event_type", "NORMAL")
-                .lt("date", row_d["start_date"].strftime("%Y-%m-%d"))
-                .order("date", desc=True)
-                .limit(1)
-                .execute()
-            )
-    
-            normal_price = float(normal_res.data[0]["unit_price"]) if normal_res.data else None
-    
-            if normal_price:
-                discount_rate = ((normal_price - discount_price) / normal_price) * 100
-                price_text = (
-                    f"할인가: {discount_price:,.1f}원 "
-                    f"({discount_rate:.0f}% 할인)"
-                )
-            else:
-                price_text = f"할인가: {discount_price:,.1f}원"
-                
-            display_rows.append({
-                "날짜": f"{row_d['start_date'].date()} ~ {row_d['end_date'].date()}",
-                "날짜_정렬용": row_d['start_date'],
-                "이벤트": "💸 할인",
-                "가격 정보": price_text
-            })
-    
-        # =========================
-        # 🔥 Lifecycle 이벤트 처리
-        # =========================
-        icon_map = {
-            "NEW_PRODUCT": "🆕 신제품",
-            "OUT_OF_STOCK": "❌ 품절",
-            "RESTOCK": "🔄 복원",
-        }
-    
-        df_lifecycle_only = df_all_events[df_all_events["event_type"].isin(icon_map.keys())]
-    
-        for _, row_l in df_lifecycle_only.iterrows():
-    
-            event_date_str = row_l["date"].strftime("%Y-%m-%d")
-    
-            price_on_date = (
-                supabase.table("product_all_events")
-                .select("unit_price, event_type")
-                .eq("product_url", p["product_url"])
-                .eq("date", event_date_str)
-                .execute()
-            )
-    
-            price_text = "-"
-    
-            if price_on_date.data:
-    
-                discount_event = next((e for e in price_on_date.data if e["event_type"] == "DISCOUNT"), None)
-                normal_event = next((e for e in price_on_date.data if e["event_type"] == "NORMAL"), None)
-    
-                if discount_event:
-                    discount_price = float(discount_event["unit_price"])
-    
-                    normal_res = (
-                        supabase.table("product_all_events")
-                        .select("unit_price")
-                        .eq("product_url", p["product_url"])
-                        .eq("event_type", "NORMAL")
-                        .lt("date", event_date_str)
-                        .order("date", desc=True)
-                        .limit(1)
-                        .execute()
-                    )
-    
-                    normal_price = float(normal_res.data[0]["unit_price"]) if normal_res.data else None
-    
-                    if normal_price:
-                        discount_rate = ((normal_price - discount_price) / normal_price) * 100
-                        price_text = (
-                            f"할인가: {discount_price:,.1f}원 "
-                            f"({discount_rate:.0f}% 할인)"
-                        )
-                    else:
-                        price_text = f"할인가: {discount_price:,.1f}원"
-    
-                elif normal_event:
-                    normal_price = float(normal_event["unit_price"])
-                    price_text = f"정상가: {normal_price:,.1f}원"
-    
-            display_rows.append({
-                "날짜": str(row_l["date"].date()),
-                "날짜_정렬용": row_l["date"],
-                "이벤트": icon_map.get(row_l["event_type"], row_l["event_type"]),
-                "가격 정보": price_text
-            })
-    
-        if not display_rows:
-            st.caption("실제 변화 이벤트 없음")
-            continue
-    
-        df_display = pd.DataFrame(display_rows)
-    
-        df_display = df_display.sort_values("날짜_정렬용", ascending=False)
-        df_display = df_display.drop(columns=["날짜_정렬용"])
-    
-        st.dataframe(
-            df_display,
-            use_container_width=True,
-            hide_index=True
+        df_changes_res = (
+            supabase.table("product_price_change_events")
+            .select("*")
+            .eq("product_url", p["product_url"])
+            .order("date", desc=True)
+            .execute()
         )
+    
+        df_changes = pd.DataFrame(df_changes_res.data)
+    
+        if df_changes.empty:
+            st.caption("가격 변동 이벤트 없음")
+        else:
+    
+            display_rows = []
+    
+            icon_map = {
+                "DISCOUNT_DOWN": "💸 할인가 하락",
+                "DISCOUNT_UP": "💸 할인가 상승",
+                "NORMAL_UP": "📈 정상가 상승",
+                "NORMAL_DOWN": "📉 정상가 하락",
+            }
+    
+            for _, row in df_changes.iterrows():
+    
+                diff = row["unit_price"] - row["prev_price"]
+                diff_rate = (diff / row["prev_price"]) * 100
+    
+                display_rows.append({
+                    "날짜": row["date"],
+                    "이벤트": icon_map.get(row["price_change_type"], ""),
+                    "가격 정보": (
+                        f"{row['prev_price']:,.1f}원 → "
+                        f"{row['unit_price']:,.1f}원 "
+                        f"({diff:+,.1f}원, {diff_rate:+.1f}%)"
+                    )
+                })
+    
+            st.dataframe(
+                pd.DataFrame(display_rows),
+                use_container_width=True,
+                hide_index=True
+            )
