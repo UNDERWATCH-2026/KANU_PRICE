@@ -1898,7 +1898,8 @@ for product_url in selected_products:
     c1, c2, c3, c4 = st.columns(4)
 
 
-    card_template = """
+    def render_card(bg, border, title, content):
+    return f"""
     <div style="
         background:{bg};
         padding:18px;
@@ -1941,16 +1942,14 @@ for product_url in selected_products:
     
     if discount_rows:
         latest_discount = discount_rows[0]
-        cards.append(card_template.format(
-            bg="#e9f3ec",
-            border="#2f7d32",
-            title="💸 할인 진행",
-            content=f"""
-            시작: {latest_discount['discount_start_date']}<br>
-            종료: {latest_discount['discount_end_date']}
-            """.strip()
+        cards.append(render_card(
+            "#e9f3ec",
+            "#2f7d32",
+            "💸 할인 진행",
+            f"시작: {latest_discount['discount_start_date']}<br>"
+            f"종료: {latest_discount['discount_end_date']}"
         ))
-            
+                    
     # 🆕 신제품
     if not df_life.empty:
         new_events = df_life[df_life["lifecycle_event"] == "NEW_PRODUCT"]
@@ -2005,13 +2004,12 @@ for product_url in selected_products:
     
     # 📊 특이 이벤트 없음
     if not cards:
-        cards.append(card_template.format(
-            bg="#f3f4f6",
-            border="#9aa0a6",
-            title="📊 특이 이벤트 없음",
-            content=""
+        cards.append(render_card(
+            "#f3f4f6",
+            "#9aa0a6",
+            "📊 특이 이벤트 없음",
+            ""
         ))
-    
     # =========================
     # C2~C4에 카드 배치 (3등분 유지)
     # =========================
@@ -2117,6 +2115,7 @@ for product_url in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
