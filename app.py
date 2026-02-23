@@ -1566,7 +1566,7 @@ if selected_products:   # 🔥 조건 반전
         )
     
         # 4️⃣ NaN 제거 (끊긴 구간은 차트에서 제외)
-        df_chart = df_timeline.dropna(subset=["unit_price"])
+        df_chart = df_timeline.dropna(subset=["unit_price"]).copy()
         st.write("df_timeline rows:", len(df_timeline))
         st.write("df_chart rows:", len(df_chart))
         st.write("df_chart unit_price nulls:", int(df_timeline["unit_price"].isna().sum()))
@@ -1579,6 +1579,13 @@ if selected_products:   # 🔥 조건 반전
             # =========================
             # 📈 가격 선 차트 (범례 없음)
             # =========================
+            df_chart = df_chart.copy()
+            df_chart["tooltip_text"] = (
+                "제품: " + df_chart["product_name"].astype(str) + "<br>" +
+                "날짜: " + df_chart["event_date"].dt.strftime("%Y-%m-%d") + "<br>" +
+                "가격: " + df_chart["price_detail"].astype(str) + "<br>" +
+                "상태: " + df_chart["price_status"].astype(str)
+            )
             base_line = (
                 alt.Chart(df_chart)
                 .mark_line(point=True)
@@ -2157,6 +2164,7 @@ if selected_products:   # 🔥 조건 반전
                 )
             else:
                 st.caption("이벤트 없음")
+
 
 
 
