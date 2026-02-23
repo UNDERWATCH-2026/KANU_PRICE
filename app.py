@@ -1872,98 +1872,86 @@ for product_url in selected_products:
         df_life = df_life[
             df_life["date"].between(filter_date_from, filter_date_to)
         ]
-
+    
     c1, c2, c3, c4 = st.columns(4)
-
+    
     # =========================
-    # C1 가격 카드
+    # C1 가격
     # =========================
     with c1:
         st.metric(
             "개당 가격",
             f"{float(p['current_unit_price']):,.1f}원"
         )
+    
+    # 🔥 카드 리스트 만들기
+    cards = []
+    
+    # 💸 할인
+    discount_res = supabase.rpc(
+        "get_discount_periods_in_range",
+        {
+            "p_product_url": p["product_url"],
+            "p_date_from": filter_date_from.strftime("%Y-%m-%d"),
+            "p_date_to": filter_date_to.strftime("%Y-%m-%d"),
+        }
+    ).execute()
+    
+    discount_rows = discount_res.data if discount_res.data else []
+    
+    if discount_rows:
+        latest_discount = discount_rows[0]
+        cards.append(f"""
+        <div style="height:120px;background:#e8f5e9;padding:12px;border-radius:8px;border-left:5px solid #2e7d32;">
+        💸 <b>할인 진행</b><br>
+        시작: {latest_discount['discount_start_date']}<br>
+        종료: {latest_discount['discount_end_date']}
+        </div>
+        """)
+    
+    # 🆕 신제품
+    if not df_life.empty:
+        new_events = df_life[df_life["lifecycle_event"] == "NEW_PRODUCT"]
+        if not new_events.empty:
+            latest_new = new_events.sort_values("date", ascending=False).iloc[0]
+            cards.append(f"""
+            <div style="height:120px;background:#fff8e1;padding:12px;border-radius:8px;border-left:5px solid #f9a825;">
+            🆕 <b>신제품</b><br>
+            발견일: {latest_new['date'].date()}
+            </div>
+            """)
+    
+    # ❌ 품절
+    if not df_life.empty:
+        out_events = df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]
+        if not out_events.empty:
+            latest_out = out_events.sort_values("date", ascending=False).iloc[0]
+            cards.append(f"""
+            <div style="height:120px;background:#e3f2fd;padding:12px;border-radius:8px;border-left:5px solid #1565c0;">
+            ❌ <b>품절</b><br>
+            날짜: {latest_out['date'].date()}
+            </div>
+            """)
+    
+    # 카드가 없으면
+    if not cards:
+        cards.append("""
+        <div style="height:120px;background:#f5f5f5;padding:12px;border-radius:8px;border-left:5px solid #9e9e9e;">
+        📊 <b>특이 이벤트 없음</b>
+        </div>
+        """)
+    
+    # =========================
+    # C2, C3, C4에 카드 배치
+    # =========================
+    card_columns = [c2, c3, c4]
+    
+    for i in range(3):
+        with card_columns[i]:
+            if i < len(cards):
+                st.markdown(cards[i], unsafe_allow_html=True)
 
     # =========================
-    # C2 이벤트 카드
-    # =========================
-    with c2:
-        cards = []
-    
-        # ✅ 할인 구간 RPC (discount_rows 반드시 여기서 정의)
-        discount_res = supabase.rpc(
-            "get_discount_periods_in_range",
-            {
-                "p_product_url": p["product_url"],
-                "p_date_from": filter_date_from.strftime("%Y-%m-%d"),
-                "p_date_to": filter_date_to.strftime("%Y-%m-%d"),
-            }
-        ).execute()
-    
-        discount_rows = discount_res.data if discount_res.data else []
-    
-        # 💸 할인
-        if discount_rows:
-            latest_discount = discount_rows[0]
-            cards.append(f"""
-            <div style="background:#e8f5e9;padding:12px;border-radius:8px;border-left:5px solid #2e7d32;">
-            💸 <b>할인 진행</b><br>
-            시작: {latest_discount['discount_start_date']}<br>
-            종료: {latest_discount['discount_end_date']}
-            </div>
-            """)
-    
-        # ❌ 품절
-        if not df_life.empty:
-            out_events = df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]
-            if not out_events.empty:
-                latest_out = out_events.sort_values("date", ascending=False).iloc[0]
-                cards.append(f"""
-                <div style="background:#e3f2fd;padding:12px;border-radius:8px;border-left:5px solid #1565c0;">
-                ❌ <b>품절</b><br>
-                날짜: {latest_out['date'].date()}
-                </div>
-                """)
-    
-        # 🆕 신제품
-        if not df_life.empty:
-            new_events = df_life[df_life["lifecycle_event"] == "NEW_PRODUCT"]
-            if not new_events.empty:
-                latest_new = new_events.sort_values("date", ascending=False).iloc[0]
-                cards.append(f"""
-                <div style="background:#fff8e1;padding:12px;border-radius:8px;border-left:5px solid #f9a825;">
-                🆕 <b>신제품</b><br>
-                발견일: {latest_new['date'].date()}
-                </div>
-                """)
-    
-        # 🔄 복원
-        if not df_life.empty:
-            restore_events = df_life[df_life["lifecycle_event"] == "RESTOCK"]
-            if not restore_events.empty:
-                latest_restore = restore_events.sort_values("date", ascending=False).iloc[0]
-                cards.append(f"""
-                <div style="background:#f3e5f5;padding:12px;border-radius:8px;border-left:5px solid #6a1b9a;">
-                🔄 <b>복원</b><br>
-                날짜: {latest_restore['date'].date()}
-                </div>
-                """)
-    
-        # 📊 특이 이벤트 없음
-        if not cards:
-            cards.append("""
-            <div style="background:#f5f5f5;padding:12px;border-radius:8px;border-left:5px solid #9e9e9e;">
-            📊 <b>특이 이벤트 없음</b>
-            </div>
-            """)
-    
-        # 🔥 3개씩 정렬
-        for i in range(0, len(cards), 3):
-            cols = st.columns(3)
-            for j, col in enumerate(cols):
-                if i + j < len(cards):
-                    with col:
-                        st.markdown(cards[i + j], unsafe_allow_html=True)
    
     with st.expander("📅 이벤트 히스토리"):
         display_rows = []
@@ -2055,6 +2043,7 @@ for product_url in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
