@@ -1093,7 +1093,7 @@ with col_tabs:
                                     st.checkbox(
                                         pname,
                                         value=pname in st.session_state.selected_products,
-                                        key=f"chk_kw_{history_idx}_{pname}",
+                                        key=f"chk_kw_{pname}_{p['product_url']}",
                                         on_change=toggle_product,
                                         args=(pname,)
                                     )
@@ -1842,26 +1842,27 @@ for pname in selected_products:
                 discount_rate = ((normal_price - lowest_discount_price) / normal_price) * 100
             else:
                 discount_rate = None
-    
+
             # 🔥 카드 출력
             if lowest_discount_price:
-            
-                text_block = (
-                    f"💸 할인\n"
-                    f"기간: {latest_discount['discount_start_date']} ~ "
-                    f"{latest_discount['discount_end_date']}\n"
-                    f"최저가: {lowest_discount_price:,.1f}원"
+
+                st.markdown(
+                    f"""
+                    <div style="
+                        background-color:#e8f3ed;
+                        padding:12px 14px;
+                        border-radius:8px;
+                        border-left:5px solid #2e8b57;
+                        font-size:14px;
+                    ">
+                        <strong>💸 할인</strong><br>
+                        기간: {latest_discount['discount_start_date']} ~ {latest_discount['discount_end_date']}<br>
+                        최저가: {lowest_discount_price:,.1f}원 ({lowest_discount_date})<br>
+                        정상가 대비 최대 {discount_rate:.0f}% 할인
+                    </div>
+                    """,
+                    unsafe_allow_html=True
                 )
-            
-                if lowest_discount_date:
-                    text_block += f" ({lowest_discount_date})"
-            
-                text_block += "\n"
-            
-                if discount_rate is not None:
-                    text_block += f"정상가 대비 최대 {discount_rate:.0f}% 할인"
-            
-                st.success(text_block)
             
             else:
                 st.info("정상가")
@@ -1923,6 +1924,23 @@ for pname in selected_products:
                         f"({diff_rate:+.1f}%)"
                     )
                 })
+            df_changes = df_changes.sort_values("date")
+                
+                for i in range(len(df_changes) - 1):
+                
+                    current_row = df_changes.iloc[i]
+                    next_row = df_changes.iloc[i + 1]
+                
+                    current_date = pd.to_datetime(current_row["date"])
+                    next_date = pd.to_datetime(next_row["date"])
+                
+                    # 하루 이상 차이나면 유지 구간 존재
+                    if (next_date - current_date).days > 1:
+                        display_rows.append({
+                            "날짜": f"{(current_date + pd.Timedelta(days=1)).date()} ~ {(next_date - pd.Timedelta(days=1)).date()}",
+                            "이벤트": "💸 할인 유지",
+                            "가격 정보": f"{current_row['unit_price']:,.1f}원"
+                        })
         
         # =========================
         # 2️⃣ Lifecycle 이벤트
@@ -1964,3 +1982,4 @@ for pname in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
