@@ -1824,8 +1824,18 @@ st.divider()
 # =========================
 
 for product_url in selected_products:
-    p = df_all[df_all["product_url"] == product_url].iloc[0]
-    st.markdown(f"### {p['product_name']}")
+
+    product_row = df_all[df_all["product_url"] == product_url]
+
+    if product_row.empty:
+        # 세션에 남아있지만 현재 데이터에 없는 경우 정리
+        st.session_state.selected_products.discard(product_url)
+        continue
+
+    p = product_row.iloc[0]
+
+    label = format_product_label(p)
+    st.markdown(f"### {label}")
 
     # 🔥 데이터 로딩 + 안전 처리
     df_life = load_lifecycle_events(p["product_url"])
@@ -2071,6 +2081,7 @@ for product_url in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
