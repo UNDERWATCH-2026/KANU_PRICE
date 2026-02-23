@@ -1925,8 +1925,8 @@ for product_url in selected_products:
     # =========================
     with c1:
         st.metric(
-            "개당 가격",
-            f"{float(p['current_unit_price']):,.1f}원"
+            "개당 정상가",
+            f"{float(p['normal_unit_price']):,.1f}원"
         )
     
     cards = []
@@ -2118,6 +2118,7 @@ for product_url in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
