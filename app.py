@@ -813,16 +813,6 @@ import re
 
 def render_card(bg, border, title, content):
 
-    content = re.sub(r"</?div[^>]*>", "", str(content), flags=re.IGNORECASE)
-
-    content_block = ""
-    if content.strip():   # 🔥 내용이 있을 때만 div 생성
-        content_block = f"""
-        <div style="font-size:14px;color:#444;line-height:1.6;">
-            {content}
-        </div>
-        """
-
     return f"""
     <div style="
         background:{bg};
@@ -835,7 +825,7 @@ def render_card(bg, border, title, content):
         <div style="font-weight:600;font-size:15px;margin-bottom:8px;">
             {title}
         </div>
-        {content_block}
+        {content}
     </div>
     """
 # =========================
@@ -2128,6 +2118,7 @@ for product_url in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
