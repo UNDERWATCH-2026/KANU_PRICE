@@ -833,12 +833,6 @@ def render_card(bg, border, title, content):
 # 🔧 제품 선택 토글 함수 (안정화)
 # =========================
 def toggle_product(product_url):
-    if "selected_products" not in st.session_state:
-        st.session_state.selected_products = set()
-
-    if not product_url:
-        return
-
     if product_url in st.session_state.selected_products:
         st.session_state.selected_products.remove(product_url)
     else:
@@ -1153,8 +1147,7 @@ with col_tabs:
                                     label = format_product_label(row)
                                     
                                     st.checkbox(
-                                        label,
-                                        value=product_url in st.session_state.selected_products,
+                                        label,,
                                         key=f"tab1_kw_{product_url}", 
                                         on_change=toggle_product,
                                         args=(product_url,)
@@ -1235,7 +1228,6 @@ with col_tabs:
         
                 st.checkbox(
                     label,
-                    value=product_url in st.session_state.selected_products,
                     key=f"tab2_filter_{product_url}",
                     on_change=toggle_product,
                     args=(product_url,)
@@ -1358,7 +1350,6 @@ with col_tabs:
                                 with cols[pidx % 3]:
                                     st.checkbox(
                                         label,
-                                        value=product_url in st.session_state.selected_products,
                                         key=f"tab3_nlp_{idx}_{product_url}", 
                                         on_change=toggle_product,
                                         args=(product_url,)
@@ -2143,6 +2134,7 @@ if selected_products:   # 🔥 조건 반전
                 )
             else:
                 st.caption("이벤트 없음")
+
 
 
 
