@@ -708,9 +708,10 @@ def llm_fallback(question: str, df_summary: pd.DataFrame):
 
 import re
 
+
 def clean_product_name(s: str) -> str:
     """
-    깨진 한글( ) 및 자주 발생하는 인코딩 오류 패턴 보정
+    깨진 한글 및 자주 발생하는 인코딩 오류 패턴 보정
     """
     if s is None:
         return ""
@@ -725,10 +726,8 @@ def clean_product_name(s: str) -> str:
         "본   직영": "본사직영",
         "본  직영": "본사직영",
         "본 직영": "본사직영",
-
         "바닐   향": "바닐라향",
         "바닐  향": "바닐라향",
-
         "네스프   ": "네스프레소",
         "스타   스": "스타벅스",
     }
@@ -741,10 +740,7 @@ def clean_product_name(s: str) -> str:
     s = re.sub(r"바닐.*?향", "바닐라향", s)
     s = re.sub(r"본.*?직영", "본사직영", s)
 
-    # 연속된 깨진 문자 제거
-    s = re.sub(r" {1,}", "", s)
-
-    # 공백 정리
+    # 🔥 여러 공백을 한 칸으로
     s = re.sub(r"\s{2,}", " ", s).strip()
 
     return s
@@ -2044,6 +2040,7 @@ for pname in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
