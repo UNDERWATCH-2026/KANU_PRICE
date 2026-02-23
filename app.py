@@ -2052,113 +2052,115 @@ for product_url in selected_products:
                 st.markdown(cards[i], unsafe_allow_html=True)
 
     st.markdown("<br><br>", unsafe_allow_html=True)
-
     
     # =========================
-    st.write("p 존재 여부:", "p" in locals())
-    with st.expander("📅 이벤트 히스토리"):
-        capsule_count = p["capsule_count"]  # 🔥 여기서 정의
-        display_rows = []
-        
-        # =========================
-        # 1️⃣ 가격 변동 이벤트
-        # =========================
-        df_changes_res = (
-            supabase.table("product_price_change_events")
-            .select("*")
-            .eq("product_url", p["product_url"])
-            .order("date", desc=True)
-            .execute()
-        )
-        
-        df_changes = pd.DataFrame(df_changes_res.data)
-        
-        if not df_changes.empty:
-        
-            icon_map = {
-                "DISCOUNT_DOWN": "💸 할인가 하락",
-                "DISCOUNT_UP": "💸 할인가 상승",
-                "NORMAL_UP": "📈 정상가 상승",
-                "NORMAL_DOWN": "📉 정상가 하락",
+    if not df_selected.empty:
+    
+        p = df_selected.iloc[0]   # 🔥 단일 제품 기준
+    
+        with st.expander("📅 이벤트 히스토리"):
+    
+            capsule_count = p["capsule_count"]
+            display_rows = []
+    
+            # =========================
+            # 1️⃣ 가격 변동 이벤트
+            # =========================
+            df_changes_res = (
+                supabase.table("product_price_change_events")
+                .select("*")
+                .eq("product_url", p["product_url"])
+                .order("date", desc=True)
+                .execute()
+            )
+    
+
+            
+            df_changes = pd.DataFrame(df_changes_res.data)
+            
+            if not df_changes.empty:
+            
+                icon_map = {
+                    "DISCOUNT_DOWN": "💸 할인가 하락",
+                    "DISCOUNT_UP": "💸 할인가 상승",
+                    "NORMAL_UP": "📈 정상가 상승",
+                    "NORMAL_DOWN": "📉 정상가 하락",
+                }
+            
+                for _, row in df_changes.iterrows():
+            
+                    diff = row["unit_price"] - row["prev_price"]
+                    diff_rate = (diff / row["prev_price"]) * 100
+            
+                    display_rows.append({
+                        "날짜": row["date"],
+                        "이벤트": icon_map.get(row["price_change_type"], ""),
+                        "가격 정보": (
+                            f"{row['prev_price']:,.1f}원 → "
+                            f"{row['unit_price']:,.1f}원 "
+                            f"({diff_rate:+.1f}%)"
+                        )
+                    })
+                df_changes = df_changes.sort_values("date")
+                
+                for i in range(len(df_changes) - 1):
+                
+                    current_row = df_changes.iloc[i]
+                    next_row = df_changes.iloc[i + 1]
+                
+                    current_date = pd.to_datetime(current_row["date"])
+                    next_date = pd.to_datetime(next_row["date"])
+                
+    
+            # =========================
+            # 2️⃣ Lifecycle 이벤트
+            # =========================
+            df_life = load_lifecycle_events(p["product_url"])
+            
+            lifecycle_map = {
+                "NEW_PRODUCT": "🆕 신제품",
+                "OUT_OF_STOCK": "❌ 품절",
+                "RESTOCK": "🔄 복원",
             }
-        
-            for _, row in df_changes.iterrows():
-        
-                diff = row["unit_price"] - row["prev_price"]
-                diff_rate = (diff / row["prev_price"]) * 100
-        
-                display_rows.append({
-                    "날짜": row["date"],
-                    "이벤트": icon_map.get(row["price_change_type"], ""),
-                    "가격 정보": (
-                        f"{row['prev_price']:,.1f}원 → "
-                        f"{row['unit_price']:,.1f}원 "
-                        f"({diff_rate:+.1f}%)"
-                    )
-                })
-            df_changes = df_changes.sort_values("date")
             
-            for i in range(len(df_changes) - 1):
+            if not df_life.empty:
+                for _, row in df_life.iterrows():
+                    display_rows.append({
+                        "날짜": row["date"],
+                        "이벤트": lifecycle_map.get(row["lifecycle_event"], ""),
+                        "가격 정보": ""
+                    })
             
-                current_row = df_changes.iloc[i]
-                next_row = df_changes.iloc[i + 1]
+            # =========================
+            # 3️⃣ 정렬
+            # =========================
+            if display_rows:
             
-                current_date = pd.to_datetime(current_row["date"])
-                next_date = pd.to_datetime(next_row["date"])
+                df_display = pd.DataFrame(display_rows)
             
-
-        # =========================
-        # 2️⃣ Lifecycle 이벤트
-        # =========================
-        df_life = load_lifecycle_events(p["product_url"])
-        
-        lifecycle_map = {
-            "NEW_PRODUCT": "🆕 신제품",
-            "OUT_OF_STOCK": "❌ 품절",
-            "RESTOCK": "🔄 복원",
-        }
-        
-        if not df_life.empty:
-            for _, row in df_life.iterrows():
-                display_rows.append({
-                    "날짜": row["date"],
-                    "이벤트": lifecycle_map.get(row["lifecycle_event"], ""),
-                    "가격 정보": ""
-                })
-        
-        # =========================
-        # 3️⃣ 정렬
-        # =========================
-        if display_rows:
-        
-            df_display = pd.DataFrame(display_rows)
-        
-            df_display["날짜_정렬용"] = pd.to_datetime(
-                df_display["날짜"], errors="coerce"
-            )
-        
-            df_display = df_display.sort_values("날짜_정렬용", ascending=False)
-            df_display = df_display.drop(columns=["날짜_정렬용"])
-        
-            st.dataframe(
-                df_display,
-                use_container_width=True,
-                hide_index=True
-            )
-        else:
-            st.caption("이벤트 없음")
-
-
-
-
-
-
-
-
-
-
-
-
+                df_display["날짜_정렬용"] = pd.to_datetime(
+                    df_display["날짜"], errors="coerce"
+                )
+            
+                df_display = df_display.sort_values("날짜_정렬용", ascending=False)
+                df_display = df_display.drop(columns=["날짜_정렬용"])
+            
+                st.dataframe(
+                    df_display,
+                    use_container_width=True,
+                    hide_index=True
+                )
+            else:
+                st.caption("이벤트 없음")
+    
+    
+    
+    
+     
+    
+    
+    
+    
 
 
 
