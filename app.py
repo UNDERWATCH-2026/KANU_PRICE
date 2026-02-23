@@ -820,13 +820,19 @@ def render_card(bg, border, title, content):
         padding:18px;
         border-radius:12px;
         border-left:6px solid {border};
-        min-height:110px;
+        height:120px;                 /* 🔥 높이 고정 */
+        display:flex;                 /* 🔥 flex 적용 */
+        flex-direction:column;
+        justify-content:flex-start;
         box-shadow:0 1px 3px rgba(0,0,0,0.06);
+        overflow:hidden;              /* 🔥 넘치면 잘림 */
     ">
         <div style="font-weight:600;font-size:15px;margin-bottom:8px;">
             {title}
         </div>
-        {content}
+        <div style="font-size:14px; line-height:1.4;">
+            {content}
+        </div>
     </div>
     """
 # =========================
@@ -1671,11 +1677,18 @@ if selected_products:   # 🔥 조건 반전
                     
                     # unit_price 없는 lifecycle 제거 (매칭 실패한 경우)
                     df_filtered = df_filtered.dropna(subset=["unit_price"])
-    
                     
-    
+                    # 🔥 tooltip_text 생성 (HTML 줄바꿈)
+                    df_filtered = df_filtered.copy()  # SettingWithCopyWarning 방지
+                    df_filtered["tooltip_text"] = (
+                        "제품: " + df_filtered["product_name"].astype(str) + "<br>" +
+                        "날짜: " + df_filtered["event_date"].dt.strftime("%Y-%m-%d") + "<br>" +
+                        "가격: " + df_filtered["price_detail"].astype(str) + "<br>" +
+                        "이벤트: " + df_filtered["lifecycle_event"].astype(str)
+                    )
+                    
                     point_layer = (
-                       alt.Chart(df_filtered)
+                        alt.Chart(df_filtered)
                         .mark_point(
                             size=150,
                             shape="triangle-up",
@@ -1683,12 +1696,9 @@ if selected_products:   # 🔥 조건 반전
                         )
                         .encode(
                             x="event_date:T",
-                            y="unit_price:Q",   # 🔥 반드시 추가
+                            y="unit_price:Q",
                             tooltip=[
-                                alt.Tooltip("product_name:N", title="제품"),
-                                alt.Tooltip("event_date:T", title="날짜", format="%Y-%m-%d"),
-                                alt.Tooltip("price_detail:N", title="가격 정보"),  # 🔥 상세 가격 정보
-                                alt.Tooltip("lifecycle_event:N", title="이벤트"),
+                                alt.Tooltip("tooltip_text:N", title="", format="html")  # ✅ 여기!
                             ],
                         )
                     )
@@ -2133,6 +2143,7 @@ if selected_products:   # 🔥 조건 반전
                 )
             else:
                 st.caption("이벤트 없음")
+
 
 
 
