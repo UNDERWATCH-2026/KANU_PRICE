@@ -1789,10 +1789,23 @@ for pname in selected_products:
 
     c1, c2, c3, c4 = st.columns(4)
 
-    with c2:
-        cards = []
+    # =========================
+    # C1 가격 카드 (복구)
+    # =========================
+    with c1:
+        st.metric(
+            "개당 가격",
+            f"{float(p['current_unit_price']):,.1f}원"
+        )
 
-        # 💸 할인 RPC
+
+    with c2:
+
+        cards = []
+    
+        # =========================
+        # 💸 할인 카드 (최근 할인 시작 기준)
+        # =========================
         discount_res = supabase.rpc(
             "get_discount_periods_in_range",
             {
@@ -1801,80 +1814,87 @@ for pname in selected_products:
                 "p_date_to": filter_date_to.strftime("%Y-%m-%d"),
             }
         ).execute()
-        
+    
         discount_rows = discount_res.data if discount_res.data else []
-        discount_rate = None
-            
-        # =========================
-        # 💸 할인 카드
-        # =========================
+    
         if discount_rows:
             latest_discount = discount_rows[0]
     
-            if discount_rate is not None:
-                cards.append(f"""
-                <div style="background:#e8f5e9;padding:12px;border-radius:8px;border-left:5px solid #2e7d32;">
-                💸 <b>할인</b><br>
-                기간: {latest_discount['discount_start_date']} ~ {latest_discount['discount_end_date']}<br>
-                최대 {discount_rate:.0f}% 할인
-                </div>
-                """)
-            else:
-                cards.append(f"""
-                <div style="background:#e8f5e9;padding:12px;border-radius:8px;border-left:5px solid #2e7d32;">
-                💸 <b>할인</b><br>
-                기간: {latest_discount['discount_start_date']} ~ {latest_discount['discount_end_date']}
-                </div>
-                """)
-    
-        # =========================
-        # ❌ 품절 카드
-        # =========================
-        for start, end in out_periods:
             cards.append(f"""
-            <div style="background:#e3f2fd;padding:12px;border-radius:8px;border-left:5px solid #1565c0;">
-            ❌ <b>품절</b><br>
-            기간: {start} ~ {end}
+            <div style="background:#e8f5e9;padding:12px;border-radius:8px;border-left:5px solid #2e7d32;">
+            💸 <b>할인 진행</b><br>
+            시작: {latest_discount['discount_start_date']}<br>
+            종료: {latest_discount['discount_end_date']}
             </div>
             """)
     
         # =========================
-        # 🆕 신제품 카드
+        # ❌ 품절 이벤트 (최근 1건만)
         # =========================
         if not df_life.empty:
-            new_dates = df_life[df_life["lifecycle_event"] == "NEW_PRODUCT"]["date"]
-            for d in new_dates:
-                if filter_date_from <= d <= filter_date_to:
-                    cards.append(f"""
-                    <div style="background:#fff8e1;padding:12px;border-radius:8px;border-left:5px solid #f9a825;">
-                    🆕 <b>신제품</b><br>
-                    발견일: {pd.to_datetime(d).date()}
-                    </div>
-                    """)
+            out_events = df_life[
+                (df_life["lifecycle_event"] == "OUT_OF_STOCK") &
+                (df_life["date"].between(filter_date_from, filter_date_to))
+            ]
+    
+            if not out_events.empty:
+                latest_out = out_events.sort_values("date", ascending=False).iloc[0]
+    
+                cards.append(f"""
+                <div style="background:#e3f2fd;padding:12px;border-radius:8px;border-left:5px solid #1565c0;">
+                ❌ <b>품절 발생</b><br>
+                날짜: {pd.to_datetime(latest_out['date']).date()}
+                </div>
+                """)
     
         # =========================
-        # 🔄 복원 카드
+        # 🆕 신제품
         # =========================
-        restore_dates = df_life[df_life["lifecycle_event"] == "RESTOCK"]["date"] if not df_life.empty else []
-        if not df_life.empty and not restore_dates.empty:
-            for d in restore_dates:
-                if filter_date_from <= d <= filter_date_to:
-                    cards.append(f"""
-                    <div style="background:#f3e5f5;padding:12px;border-radius:8px;border-left:5px solid #6a1b9a;">
-                    🔄 <b>복원</b><br>
-                    발견일: {pd.to_datetime(d).date()}
-                    </div>
-                    """)
+        if not df_life.empty:
+            new_events = df_life[
+                (df_life["lifecycle_event"] == "NEW_PRODUCT") &
+                (df_life["date"].between(filter_date_from, filter_date_to))
+            ]
+    
+            if not new_events.empty:
+                latest_new = new_events.sort_values("date", ascending=False).iloc[0]
+    
+                cards.append(f"""
+                <div style="background:#fff8e1;padding:12px;border-radius:8px;border-left:5px solid #f9a825;">
+                🆕 <b>신제품</b><br>
+                발견일: {pd.to_datetime(latest_new['date']).date()}
+                </div>
+                """)
     
         # =========================
-        # 📈 정상가 변동 카드
+        # 🔄 복원
+        # =========================
+        if not df_life.empty:
+            restore_events = df_life[
+                (df_life["lifecycle_event"] == "RESTOCK") &
+                (df_life["date"].between(filter_date_from, filter_date_to))
+            ]
+    
+            if not restore_events.empty:
+                latest_restore = restore_events.sort_values("date", ascending=False).iloc[0]
+    
+                cards.append(f"""
+                <div style="background:#f3e5f5;padding:12px;border-radius:8px;border-left:5px solid #6a1b9a;">
+                🔄 <b>복원</b><br>
+                날짜: {pd.to_datetime(latest_restore['date']).date()}
+                </div>
+                """)
+    
+        # =========================
+        # 📈 정상가 변동
         # =========================
         if normal_change_dates:
-            change_dates_str = ", ".join(sorted({str(d) for d in normal_change_dates}))
+            latest_change = sorted(normal_change_dates)[-1]
+    
             cards.append(f"""
             <div style="background:#eeeeee;padding:12px;border-radius:8px;border-left:5px solid #424242;">
             📈 <b>정상가 변동</b><br>
-            날짜: {change_dates_str}
+            날짜: {latest_change}
             </div>
             """)
     
@@ -2000,6 +2020,7 @@ for pname in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
