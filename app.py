@@ -2161,6 +2161,7 @@ if selected_products:   # 🔥 조건 반전
                         f"({diff_rate:+.1f}%)"
                     )
                 })
+
             # =========================
             # 2️⃣ 할인 시작 / 종료 이벤트 (가격 포함)
             # =========================
@@ -2172,12 +2173,25 @@ if selected_products:   # 🔥 조건 반전
                     "p_date_to": filter_date_to.strftime("%Y-%m-%d"),
                 }
             ).execute()
-        
+            
             discount_rows = discount_res.data if discount_res.data else []
-        
+            
+            # 🔥 품절 날짜 미리 가져오기
+            df_life = load_lifecycle_events(p["product_url"])
+            out_dates = []
+            if not df_life.empty:
+                out_dates = pd.to_datetime(
+                    df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]["date"]
+                ).tolist()
+            
             for row in discount_rows:
-        
-                # 🔥 할인 시작일 할인가 조회
+            
+                discount_start = pd.to_datetime(row["discount_start_date"])
+                discount_end = pd.to_datetime(row["discount_end_date"])
+            
+                # -------------------------
+                # 💸 할인 시작
+                # -------------------------
                 discount_price_res = (
                     supabase.table("product_all_events")
                     .select("unit_price")
@@ -2187,40 +2201,50 @@ if selected_products:   # 🔥 조건 반전
                     .limit(1)
                     .execute()
                 )
-        
+            
                 discount_price = (
                     float(discount_price_res.data[0]["unit_price"])
                     if discount_price_res.data else None
                 )
-        
+            
                 display_rows.append({
                     "날짜": row["discount_start_date"],
                     "이벤트": "💸 할인 시작",
                     "가격 정보": f"할인가 {discount_price:,.1f}원" if discount_price else ""
                 })
-        
-                # 🔥 할인 종료 직전 할인가 조회
-                discount_end_price_res = (
-                    supabase.table("product_all_events")
-                    .select("unit_price")
-                    .eq("product_url", p["product_url"])
-                    .eq("event_type", "DISCOUNT")
-                    .eq("date", row["discount_end_date"])
-                    .limit(1)
-                    .execute()
-                )
-        
-                discount_end_price = (
-                    float(discount_end_price_res.data[0]["unit_price"])
-                    if discount_end_price_res.data else None
-                )
-        
-                display_rows.append({
-                    "날짜": row["discount_end_date"],
-                    "이벤트": "💸 할인 종료",
-                    "가격 정보": f"종료가 {discount_end_price:,.1f}원" if discount_end_price else ""
-                })
-        
+            
+                # -------------------------
+                # 🔥 할인 종료 조건 체크
+                # -------------------------
+                show_discount_end = True
+            
+                for out_date in out_dates:
+                    if discount_end + pd.Timedelta(days=1) == out_date:
+                        show_discount_end = False
+                        break
+            
+                if show_discount_end:
+            
+                    discount_end_price_res = (
+                        supabase.table("product_all_events")
+                        .select("unit_price")
+                        .eq("product_url", p["product_url"])
+                        .eq("event_type", "DISCOUNT")
+                        .eq("date", row["discount_end_date"])
+                        .limit(1)
+                        .execute()
+                    )
+            
+                    discount_end_price = (
+                        float(discount_end_price_res.data[0]["unit_price"])
+                        if discount_end_price_res.data else None
+                    )
+            
+                    display_rows.append({
+                        "날짜": row["discount_end_date"],
+                        "이벤트": "💸 할인 종료",
+                        "가격 정보": f"종료가 {discount_end_price:,.1f}원" if discount_end_price else ""
+                    })
             # =========================
             # 3️⃣ Lifecycle 이벤트
             # =========================
@@ -2272,6 +2296,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
