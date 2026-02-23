@@ -994,7 +994,7 @@ with col_controls:
         for key in keys_to_delete:
             del st.session_state[key]
 
-        st.rerun
+        st.rerun()
         
 
 
@@ -2134,6 +2134,7 @@ if selected_products:   # 🔥 조건 반전
                 )
             else:
                 st.caption("이벤트 없음")
+
 
 
 
