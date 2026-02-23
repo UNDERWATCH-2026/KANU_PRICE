@@ -1919,16 +1919,36 @@ for product_url in selected_products:
     
     c1, c2, c3, c4 = st.columns(4)
 
+    # 🔥 여기에서 먼저 정상가 계산
+    normal_unit = None
 
+    normal_res = (
+        supabase.table("raw_daily_prices")
+        .select("normal_price")
+        .eq("product_url", p["product_url"])
+        .order("date", desc=True)
+        .limit(1)
+        .execute()
+    )
+
+    if normal_res.data:
+        normal_price = float(normal_res.data[0]["normal_price"])
+        normal_unit = normal_price / float(p["capsule_count"])
 
     # =========================
     # C1 가격
     # =========================
     with c1:
-        st.metric(
-            "개당 정상가",
-            f"{float(p['normal_unit_price']):,.1f}원"
-        )
+        if normal_unit:
+            st.metric(
+                "개당 정상가",
+                f"{normal_unit:,.1f}원"
+            )
+        else:
+            st.metric(
+                "개당 정상가",
+                "-"
+            )
     
     cards = []
     
@@ -2119,6 +2139,7 @@ for product_url in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
