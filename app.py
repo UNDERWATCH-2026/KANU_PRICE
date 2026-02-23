@@ -1449,19 +1449,15 @@ if selected_products:   # 🔥 조건 반전
                 discount_price = float(price_row["unit_price"]) if pd.notna(price_row["unit_price"]) else None
                 normal_price = float(normal_price_res.data[0]["normal_price"]) if normal_price_res.data else None
     
-                # 🔥 capsule_count 가져오기
-                capsule_count = p["capsule_count"]
-                
-                # 할인 가격 (개당 단가)
+                ## 할인 가격 (개당 단가)
                 discount_price = float(price_row["unit_price"]) if pd.notna(price_row["unit_price"]) else None
                 
-                # 정상가 (팩 기준)
-                normal_price_pack = float(normal_price_res.data[0]["normal_price"]) if normal_price_res.data else None
-                
-                # 🔥 정상가를 개당 기준으로 변환
-                normal_price = None
-                if normal_price_pack and capsule_count:
-                    normal_price = normal_price_pack / float(capsule_count)
+                # 정상가 (개당 기준)
+                normal_price = (
+                    float(normal_price_res.data[0]["normal_price"])
+                    if normal_price_res.data
+                    else None
+                )
                 
                 if normal_price and discount_price:
                     discount_rate = ((normal_price - discount_price) / normal_price) * 100
@@ -1479,7 +1475,6 @@ if selected_products:   # 🔥 조건 반전
                 
                 else:
                     tmp.at[idx, "price_detail"] = "-"
-            
             # 정상가인 경우
             for idx, price_row in tmp[~tmp["is_discount"]].iterrows():
                 tmp.at[idx, "price_detail"] = f"정상가: {price_row['unit_price']:,.1f}원"
@@ -2042,7 +2037,7 @@ if selected_products:   # 🔥 조건 반전
    
         with st.expander("📅 이벤트 히스토리"):
     
-            capsule_count = p["capsule_count"]
+
             display_rows = []
     
             # =========================
@@ -2134,6 +2129,7 @@ if selected_products:   # 🔥 조건 반전
                 )
             else:
                 st.caption("이벤트 없음")
+
 
 
 
