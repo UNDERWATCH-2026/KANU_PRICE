@@ -1586,11 +1586,8 @@ if selected_products:   # 🔥 조건 반전
                     color=alt.Color("product_name:N", title="제품", legend=None),  # 🔥 범례 제거
                     detail="segment:N",  # 🔥 이게 핵심 (선 완전 분리)
                     tooltip=[
-                        alt.Tooltip("product_name:N", title="제품"),
-                        alt.Tooltip("event_date:T", title="날짜", format="%Y-%m-%d"),
-                        alt.Tooltip("price_detail:N", title="가격 정보"),  # 🔥 상세 가격 정보
-                        alt.Tooltip("price_status:N", title="상태"),  # 🔥 할인 여부
-                    ],
+                        alt.Tooltip("tooltip_text:N", title="", format="html")
+                    ]
                 )
             )
     
@@ -1678,14 +1675,29 @@ if selected_products:   # 🔥 조건 반전
                     # unit_price 없는 lifecycle 제거 (매칭 실패한 경우)
                     df_filtered = df_filtered.dropna(subset=["unit_price"])
                     
-                    # 🔥 tooltip_text 생성 (HTML 줄바꿈)
-                    df_filtered = df_filtered.copy()  # SettingWithCopyWarning 방지
+                    # =========================
+                    # 🔥 여기부터 추가
+                    # =========================
+                    df_filtered = df_filtered.copy()
+                    
+                    event_label_map = {
+                        "NEW_PRODUCT": "신제품",
+                        "OUT_OF_STOCK": "품절",
+                        "RESTOCK": "복원"
+                    }
+                    
+                    df_filtered["event_label"] = df_filtered["lifecycle_event"].map(event_label_map)
+                    
                     df_filtered["tooltip_text"] = (
                         "제품: " + df_filtered["product_name"].astype(str) + "<br>" +
                         "날짜: " + df_filtered["event_date"].dt.strftime("%Y-%m-%d") + "<br>" +
                         "가격: " + df_filtered["price_detail"].astype(str) + "<br>" +
-                        "이벤트: " + df_filtered["lifecycle_event"].astype(str)
+                        "이벤트: " + df_filtered["event_label"].astype(str)
                     )
+                    # =========================
+                    # 🔥 여기까지 추가
+                    # =========================
+                    
                     
                     point_layer = (
                         alt.Chart(df_filtered)
@@ -1698,11 +1710,11 @@ if selected_products:   # 🔥 조건 반전
                             x="event_date:T",
                             y="unit_price:Q",
                             tooltip=[
-                                alt.Tooltip("tooltip_text:N", title="", format="html")  # ✅ 여기!
+                                alt.Tooltip("tooltip_text:N", title="", format="html")
                             ],
                         )
                     )
-    
+               
                     text_layer = (
                         alt.Chart(df_filtered)
                         .mark_text(
@@ -2143,6 +2155,7 @@ if selected_products:   # 🔥 조건 반전
                 )
             else:
                 st.caption("이벤트 없음")
+
 
 
 
