@@ -2077,12 +2077,11 @@ if selected_products:   # 🔥 조건 반전
         st.markdown("<br><br>", unsafe_allow_html=True)
         
         # =========================
-
-
+    
         with st.expander("📅 이벤트 히스토리"):
-    
+        
             display_rows = []
-    
+        
             # =========================
             # 1️⃣ 가격 변동 이벤트
             # =========================
@@ -2128,7 +2127,7 @@ if selected_products:   # 🔥 조건 반전
                     })
         
             # =========================
-            # 2️⃣ 할인 시작 / 종료 이벤트
+            # 2️⃣ 할인 시작 / 종료 이벤트 (가격 포함)
             # =========================
             discount_res = supabase.rpc(
                 "get_discount_periods_in_range",
@@ -2142,15 +2141,49 @@ if selected_products:   # 🔥 조건 반전
             discount_rows = discount_res.data if discount_res.data else []
         
             for row in discount_rows:
+        
+                # 🔥 할인 시작일 할인가 조회
+                discount_price_res = (
+                    supabase.table("product_all_events")
+                    .select("unit_price")
+                    .eq("product_url", p["product_url"])
+                    .eq("event_type", "DISCOUNT")
+                    .eq("date", row["discount_start_date"])
+                    .limit(1)
+                    .execute()
+                )
+        
+                discount_price = (
+                    float(discount_price_res.data[0]["unit_price"])
+                    if discount_price_res.data else None
+                )
+        
                 display_rows.append({
                     "날짜": row["discount_start_date"],
                     "이벤트": "💸 할인 시작",
-                    "가격 정보": ""
+                    "가격 정보": f"할인가 {discount_price:,.1f}원" if discount_price else ""
                 })
+        
+                # 🔥 할인 종료 직전 할인가 조회
+                discount_end_price_res = (
+                    supabase.table("product_all_events")
+                    .select("unit_price")
+                    .eq("product_url", p["product_url"])
+                    .eq("event_type", "DISCOUNT")
+                    .eq("date", row["discount_end_date"])
+                    .limit(1)
+                    .execute()
+                )
+        
+                discount_end_price = (
+                    float(discount_end_price_res.data[0]["unit_price"])
+                    if discount_end_price_res.data else None
+                )
+        
                 display_rows.append({
                     "날짜": row["discount_end_date"],
                     "이벤트": "💸 할인 종료",
-                    "가격 정보": ""
+                    "가격 정보": f"종료가 {discount_end_price:,.1f}원" if discount_end_price else ""
                 })
         
             # =========================
@@ -2173,7 +2206,7 @@ if selected_products:   # 🔥 조건 반전
                     })
         
             # =========================
-            # 4️⃣ 정렬 및 색상 강조
+            # 4️⃣ 정렬 + 색상 강조
             # =========================
             if display_rows:
         
@@ -2186,7 +2219,6 @@ if selected_products:   # 🔥 조건 반전
                 df_display = df_display.sort_values("날짜_정렬용", ascending=False)
                 df_display = df_display.drop(columns=["날짜_정렬용"])
         
-                # 🔥 정상가 색상 강조
                 def highlight_event(row):
                     if "정상가 상승" in row["이벤트"]:
                         return ["color: red" if col == "이벤트" else "" for col in row.index]
@@ -2205,4 +2237,5 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
