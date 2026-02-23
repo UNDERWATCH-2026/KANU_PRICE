@@ -1184,8 +1184,10 @@ with col_tabs:
         st.markdown("### 📦 비교할 제품 선택")
 
         with st.expander("목록 펼치기 / 접기", expanded=False):
-
-            for _, row in candidates_df.iterrows():
+        
+            unique_df = candidates_df.drop_duplicates(subset=["product_url"])
+        
+            for _, row in unique_df.iterrows():
         
                 product_url = row["product_url"]
                 label = format_product_label(row)
@@ -1193,10 +1195,10 @@ with col_tabs:
                 st.checkbox(
                     label,
                     value=product_url in st.session_state.selected_products,
-                    key=f"tab2_filter_{product_url}", 
+                    key=f"tab2_filter_{product_url}",
                     on_change=toggle_product,
                     args=(product_url,)
-                )
+                ))
 
     # =========================
     # TAB 3: 자연어 질문
@@ -2061,6 +2063,7 @@ for product_url in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
