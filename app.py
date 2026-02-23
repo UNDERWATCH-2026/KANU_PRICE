@@ -2278,24 +2278,15 @@ if selected_products:   # 🔥 조건 반전
                 df_display = df_display.sort_values("날짜_정렬용", ascending=False)
                 df_display = df_display.drop(columns=["날짜_정렬용"])
         
-                def highlight_event(row):
-                    if "정상가 상승" in row["이벤트"]:
-                        return ["color: red" if col == "이벤트" else "" for col in row.index]
-                    elif "정상가 하락" in row["이벤트"]:
-                        return ["color: blue" if col == "이벤트" else "" for col in row.index]
-                    else:
-                        return [""] * len(row)
-        
-                styled_df = df_display.style.apply(highlight_event, axis=1)
-        
                 st.dataframe(
-                    styled_df,
+                    df_display,
                     use_container_width=True,
                     hide_index=True
                 )
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
