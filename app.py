@@ -1365,7 +1365,15 @@ filter_date_from = pd.to_datetime(date_from)
 filter_date_to = pd.to_datetime(date_to)
 
 for product_url in selected_products:
-    row = df_all[df_all["product_url"] == product_url].iloc[0]
+
+    product_row = df_all[df_all["product_url"] == product_url]
+
+    if product_row.empty:
+        # 세션에 남아있지만 현재 데이터에 없는 경우 정리
+        st.session_state.selected_products.discard(product_url)
+        continue
+
+    row = product_row.iloc[0]
     pname = row["product_name"]
     label = format_product_label(row)
     st.markdown(f"- {label}")
@@ -2063,6 +2071,7 @@ for product_url in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
