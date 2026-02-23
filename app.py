@@ -784,26 +784,36 @@ def options_from(df: pd.DataFrame, col: str):
     vals = [v.strip() for v in vals.tolist() if v.strip()]
     return sorted(list(dict.fromkeys(vals)))
 
+def format_product_label(row):
+    parts = []
 
+    if row.get("brand"):
+        parts.append(str(row["brand"]))
+
+    if row.get("category1"):
+        parts.append(str(row["category1"]))
+
+    if row.get("category2"):
+        parts.append(str(row["category2"]))
+
+    parts.append(str(row["product_name"]))
+
+    return " - ".join(parts)
+    
 # =========================
 # 🔧 제품 선택 토글 함수 (안정화)
 # =========================
-def toggle_product(pname):
-    """
-    제품 선택/해제 토글
-    """
-
+def toggle_product(product_url):
     if "selected_products" not in st.session_state:
         st.session_state.selected_products = set()
 
-    # pname이 None이거나 빈값이면 방어
-    if not pname:
+    if not product_url:
         return
 
-    if pname in st.session_state.selected_products:
-        st.session_state.selected_products.remove(pname)
+    if product_url in st.session_state.selected_products:
+        st.session_state.selected_products.remove(product_url)
     else:
-        st.session_state.selected_products.add(pname)
+        st.session_state.selected_products.add(product_url)
 
 
 # =========================
@@ -1093,18 +1103,20 @@ with col_tabs:
                             
                                     # 🔥 product_url 안전하게 가져오기
                                     product_row = df_all[df_all["product_name"] == pname]
-                            
+                                    
                                     if product_row.empty:
-                                        continue  # 혹시라도 데이터 불일치 방어
-                            
-                                    product_url = product_row.iloc[0]["product_url"]
-                            
+                                        continue  # 데이터 불일치 방어
+                                    
+                                    row = product_row.iloc[0]
+                                    product_url = row["product_url"]
+                                    label = format_product_label(row)
+                                    
                                     st.checkbox(
-                                        pname,
-                                        value=pname in st.session_state.selected_products,
-                                        key=f"chk_kw_{product_url}",  # 🔥 유니크 키
+                                        label,
+                                        value=product_url in st.session_state.selected_products,
+                                        key=f"chk_kw_{product_url}",
                                         on_change=toggle_product,
-                                        args=(pname,)
+                                        args=(product_url,)
                                     )
 
     # =========================
@@ -1173,13 +1185,20 @@ with col_tabs:
 
         with st.expander("목록 펼치기 / 접기", expanded=False):
             for pname in sorted(candidates_df["product_name"].unique()):
-                st.checkbox(
-                    pname,
-                    value=pname in st.session_state.selected_products,
-                    key=f"chk_filter_{pname}",
-                    on_change=toggle_product,
-                    args=(pname,)
-                )
+                row = df_all[df_all["product_name"] == pname].iloc[0]
+                label = format_product_label(row)
+            
+                for _, row in candidates_df.iterrows():
+                    product_url = row["product_url"]
+                    label = format_product_label(row)
+                
+                    st.checkbox(
+                        label,
+                        value=product_url in st.session_state.selected_products,
+                        key=f"chk_filter_{product_url}",
+                        on_change=toggle_product,
+                        args=(product_url,)
+                    )
 
     # =========================
     # TAB 3: 자연어 질문
@@ -1276,23 +1295,19 @@ with col_tabs:
                     # 🔥 답변 표시
                     answer_data = history['answer']
                 
-                    if isinstance(answer_data, dict) and answer_data.get("type") == "product_list":
-                        # 제품 목록이 있는 경우
-                        st.markdown(f"**A:** {answer_data['text']}")
+                    for pidx, pname in enumerate(answer_data["products"]):
+                        row = df_all[df_all["product_name"] == pname].iloc[0]
+                        product_url = row["product_url"]
+                        label = format_product_label(row)
                     
-                        # 체크박스 추가
-                        if answer_data.get("products"):
-                            st.markdown("##### 📦 비교할 제품으로 추가")
-                            cols = st.columns(3)
-                            for pidx, pname in enumerate(answer_data["products"]):
-                                with cols[pidx % 3]:
-                                    st.checkbox(
-                                        pname,
-                                        value=pname in st.session_state.selected_products,
-                                        key=f"chk_nlp_{idx}_{pidx}_{pname}",
-                                        on_change=toggle_product,
-                                        args=(pname,)
-                                    )
+                        with cols[pidx % 3]:
+                            st.checkbox(
+                                label,
+                                value=product_url in st.session_state.selected_products,
+                                key=f"chk_nlp_{idx}_{pidx}_{product_url}",
+                                on_change=toggle_product,
+                                args=(product_url,)
+                            )
                     elif isinstance(answer_data, dict):
                         # 딕셔너리지만 product_list가 아닌 경우
                         st.markdown(f"**A:** {answer_data.get('text', str(answer_data))}")
@@ -1335,8 +1350,11 @@ lifecycle_rows = []
 filter_date_from = pd.to_datetime(date_from)
 filter_date_to = pd.to_datetime(date_to)
 
-for pname in selected_products:
-    row = df_all[df_all["product_name"] == pname].iloc[0]
+for product_url in selected_products:
+    row = df_all[df_all["product_url"] == product_url].iloc[0]
+    pname = row["product_name"]
+    label = format_product_label(row)
+    st.markdown(f"- {label}")
 
     # 가격 이벤트
     df_price = load_events(row["product_url"])
@@ -1419,8 +1437,11 @@ for pname in selected_products:
                     mask = tmp["event_date"] >= out_date
                     tmp.loc[mask, "unit_price"] = None
         
-        timeline_rows.append(tmp[["product_name", "event_date", "unit_price", "price_status", "price_detail"]])
-        
+        tmp["product_url"] = row["product_url"]
+
+        timeline_rows.append(
+            tmp[["product_url", "product_name", "event_date", "unit_price", "price_status", "price_detail"]]
+        )
 
     # lifecycle 이벤트
     df_life = load_lifecycle_events(row["product_url"])
@@ -1623,21 +1644,29 @@ if timeline_rows:
         st.markdown("#### 📋 제품 목록")
         
         # 🔥 제품별로 색상 구분하여 표시 (삭제 버튼 포함)
-        unique_products = sorted(df_chart["product_name"].unique())
+
+        unique_urls = sorted(df_chart["product_url"].unique())
         
-        for idx, product in enumerate(unique_products):
+        for product_url in unique_urls:
+        
+            product_row = df_all[df_all["product_url"] == product_url]
+            if product_row.empty:
+                continue
+        
+            row = product_row.iloc[0]
+            label = format_product_label(row)
+        
             col_btn, col_name = st.columns([1, 10])
-            
+        
             with col_btn:
-                if st.button("×", key=f"remove_product_{idx}", help="차트에서 제거"):
-                    # 선택된 제품 목록에서 제거
-                    if product in st.session_state.selected_products:
-                        st.session_state.selected_products.remove(product)
+                if st.button("×", key=f"remove_product_{product_url}", help="차트에서 제거"):
+                    if product_url in st.session_state.selected_products:
+                        st.session_state.selected_products.remove(product_url)
                     st.rerun()
-            
+        
             with col_name:
-                st.markdown(f"**{product}**")
-    
+                st.markdown(f"**{label}**")
+            
     # 🔥 엑셀 다운로드 버튼 추가
     with download_placeholder:
         # 엑셀 파일 생성
@@ -1772,8 +1801,8 @@ st.divider()
 # 8-2️⃣ 제품별 카드
 # =========================
 
-for pname in selected_products:
-    p = df_all[df_all["product_name"] == pname].iloc[0]
+for product_url in selected_products:
+    p = df_all[df_all["product_url"] == product_url].iloc[0]
     st.markdown(f"### {p['product_name']}")
 
     # 🔥 데이터 로딩 + 안전 처리
@@ -2020,6 +2049,7 @@ for pname in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
