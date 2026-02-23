@@ -3,6 +3,7 @@ import pandas as pd
 import altair as alt
 from supabase import create_client
 from datetime import datetime, timedelta
+import hashlib   # ✅ 반드시 추가
 
 # =========================
 # 0️⃣ 기본 설정
@@ -1148,7 +1149,7 @@ with col_tabs:
                                     
                                     st.checkbox(
                                         label,
-                                        key=f"tab1_kw_{product_url}", 
+                                        key=f"chk_tab1_{product_url}_{history['keyword']}", 
                                         on_change=toggle_product,
                                         args=(product_url,)
                                     )
@@ -1228,7 +1229,7 @@ with col_tabs:
         
                 st.checkbox(
                     label,
-                    key=f"tab2_filter_{product_url}",
+                    key=f"chk_tab2_{product_url}_{sel_brand}_{sel_cat1}_{sel_cat2}", 
                     on_change=toggle_product,
                     args=(product_url,)
                 )
@@ -1337,6 +1338,11 @@ with col_tabs:
                             st.markdown("##### 📦 비교할 제품으로 추가")
                             cols = st.columns(3)
                     
+                            # 🔥 질문 해시를 먼저 계산
+                            question_hash = hashlib.md5(
+                                history["question"].encode()
+                            ).hexdigest()[:8]
+                    
                             for pidx, pname in enumerate(answer_data["products"]):
                     
                                 product_row = df_all[df_all["product_name"] == pname]
@@ -1350,7 +1356,7 @@ with col_tabs:
                                 with cols[pidx % 3]:
                                     st.checkbox(
                                         label,
-                                        key=f"tab3_nlp_{idx}_{product_url}", 
+                                        key=f"chk_tab3_{product_url}_{question_hash}",
                                         on_change=toggle_product,
                                         args=(product_url,)
                                     )
@@ -2168,6 +2174,7 @@ if selected_products:   # 🔥 조건 반전
                 )
             else:
                 st.caption("이벤트 없음")
+
 
 
 
