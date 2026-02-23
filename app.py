@@ -1567,7 +1567,9 @@ if selected_products:   # 🔥 조건 반전
     
         # 4️⃣ NaN 제거 (끊긴 구간은 차트에서 제외)
         df_chart = df_timeline.dropna(subset=["unit_price"])
-    
+        st.write("df_timeline rows:", len(df_timeline))
+        st.write("df_chart rows:", len(df_chart))
+        st.write("df_chart unit_price nulls:", int(df_timeline["unit_price"].isna().sum()))
         # =========================
         # 📊 차트와 범례를 분리된 레이아웃으로 표시
         # =========================
@@ -2155,6 +2157,7 @@ if selected_products:   # 🔥 조건 반전
                 )
             else:
                 st.caption("이벤트 없음")
+
 
 
 
