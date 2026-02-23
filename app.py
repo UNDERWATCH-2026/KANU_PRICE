@@ -1840,9 +1840,7 @@ for product_url in selected_products:
     # 🔥 데이터 로딩 + 안전 처리
     df_life = load_lifecycle_events(p["product_url"])
 
-    out_periods = calculate_out_periods(
-        p["product_url"], filter_date_from, filter_date_to
-    ) or []
+
 
     normal_change_dates = get_normal_price_change_dates(
         p["product_url"], filter_date_from, filter_date_to
@@ -2081,6 +2079,7 @@ for product_url in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
