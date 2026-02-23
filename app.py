@@ -2048,12 +2048,12 @@ if selected_products:   # 🔥 조건 반전
                 bg=bg,
                 border=border,
                 title=icon,
-                content=f"""
-                날짜: {latest_change['date']}  
-                {float(latest_change['prev_price']):,.0f}원 →
-                {float(latest_change['normal_price']):,.0f}원  
-                ({diff:+,.0f}원)
-                """
+                content=(
+                    f"날짜: {latest_change['date']}<br>"
+                    f"{float(latest_change['prev_price']):,.0f}원 → "
+                    f"{float(latest_change['normal_price']):,.0f}원<br>"
+                    f"({diff:+,.0f}원)"
+                )
             ))
         
         # 📊 특이 이벤트 없음
@@ -2269,6 +2269,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
