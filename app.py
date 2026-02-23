@@ -815,7 +815,26 @@ def toggle_product(product_url):
     else:
         st.session_state.selected_products.add(product_url)
 
+# =========================
+# 정상가 변동 
+# =========================
 
+def get_normal_price_change_dates(product_url, date_from, date_to):
+
+    res = (
+        supabase.table("product_normal_price_events")
+        .select("date")
+        .eq("product_url", product_url)
+        .gte("date", date_from.strftime("%Y-%m-%d"))
+        .lte("date", date_to.strftime("%Y-%m-%d"))
+        .execute()
+    )
+
+    if not res.data:
+        return []
+
+    return [r["date"] for r in res.data]
+    
 # =========================
 # 4️⃣ 세션 상태 초기화
 # =========================
@@ -2079,6 +2098,7 @@ for product_url in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
