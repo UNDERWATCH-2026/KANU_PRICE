@@ -29,6 +29,7 @@ def load_product_summary():
         "category2",
         "product_name",
         "current_unit_price",
+        "normal_unit_price",
         "is_discount",
         "first_seen_date",
         "last_seen_date",
@@ -2118,6 +2119,7 @@ for product_url in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
