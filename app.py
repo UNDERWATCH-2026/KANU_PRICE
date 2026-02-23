@@ -1890,6 +1890,27 @@ for product_url in selected_products:
     
     c1, c2, c3, c4 = st.columns(4)
 
+    card_template = """
+    <div style="
+        background:{bg};
+        padding:18px;
+        border-radius:12px;
+        border-left:6px solid {border};
+        min-height:130px;
+        box-shadow:0 1px 3px rgba(0,0,0,0.06);
+        display:flex;
+        flex-direction:column;
+        justify-content:center;
+    ">
+        <div style="font-weight:600;font-size:15px;margin-bottom:6px;">
+            {title}
+        </div>
+        <div style="font-size:14px;color:#444;">
+            {content}
+        </div>
+    </div>
+    """
+
     # =========================
     # C1 가격
     # =========================
@@ -2088,6 +2109,7 @@ for product_url in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
