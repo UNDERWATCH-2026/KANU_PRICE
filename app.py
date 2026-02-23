@@ -990,24 +990,25 @@ with col_controls:
             del st.session_state.filter_cat2
         if "last_filter" in st.session_state:
             del st.session_state.last_filter
-        
+
         # 🔥 모든 체크박스, 버튼, form 입력 키 삭제
         keys_to_delete = [
-            key for key in st.session_state.keys() 
+            key for key in list(st.session_state.keys())  # 🔥 list() 필수
             if key.startswith((
-                "chk_kw_",           # 키워드 검색 체크박스
-                "chk_filter_",       # 필터 선택 체크박스
-                "chk_nlp_",          # 자연어 질문 체크박스
-                "delete_search_",    # 검색 결과 삭제 버튼
-                "delete_q_",         # 질문 삭제 버튼
-                "keyword_input_field",  # 키워드 검색 입력창
-                "FormSubmitter:search_form",  # 키워드 검색 form
-                "FormSubmitter:question_form"  # 자연어 질문 form
+                "tab1_kw_",          # 키워드 검색 체크박스
+                "tab2_filter_",      # 필터 선택 체크박스
+                "tab3_nlp_",         # 자연어 질문 체크박스
+                "remove_product_",   # 차트 제거 버튼
+                "delete_search_",    
+                "delete_q_",
+                "keyword_input_field",
+                "FormSubmitter:search_form",
+                "FormSubmitter:question_form"
             ))
         ]
+        
         for key in keys_to_delete:
-            if key in st.session_state:
-                del st.session_state[key]
+            del st.session_state[key]
         
         st.rerun()
 
@@ -2150,5 +2151,6 @@ if selected_products:   # 🔥 조건 반전
                 )
             else:
                 st.caption("이벤트 없음")
+
 
 
