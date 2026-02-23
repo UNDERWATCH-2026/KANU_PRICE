@@ -1844,23 +1844,28 @@ for pname in selected_products:
                 discount_rate = None
     
             # 🔥 카드 출력
-            text_block = "💸 할인\n"
-            text_block += f"기간: {latest_discount['discount_start_date']} ~ {latest_discount['discount_end_date']}\n"
-    
             if lowest_discount_price:
-                text_block += f"최저가: {lowest_discount_price:,.1f}원"
+            
+                text_block = (
+                    f"💸 할인\n"
+                    f"기간: {latest_discount['discount_start_date']} ~ "
+                    f"{latest_discount['discount_end_date']}\n"
+                    f"최저가: {lowest_discount_price:,.1f}원"
+                )
+            
                 if lowest_discount_date:
                     text_block += f" ({lowest_discount_date})"
+            
                 text_block += "\n"
-    
-            if discount_rate:
-                text_block += f"정상가 대비 최대 {discount_rate:.0f}% 할인"
-    
-            st.success(text_block)
-    
-        else:
-            st.info("정상가")
-        
+            
+                if discount_rate is not None:
+                    text_block += f"정상가 대비 최대 {discount_rate:.0f}% 할인"
+            
+                st.success(text_block)
+            
+            else:
+                st.info("정상가")
+                
     with c3:
         df_life = load_lifecycle_events(p["product_url"])
         has_new = (not df_life.empty) and (df_life["lifecycle_event"] == "NEW_PRODUCT").any()
@@ -1924,3 +1929,4 @@ for pname in selected_products:
                 use_container_width=True,
                 hide_index=True
             )
+
