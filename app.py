@@ -2049,9 +2049,9 @@ if selected_products:   # 🔥 조건 반전
                 border=border,
                 title=icon,
                 content=f"""
-                날짜: {latest_change['date']}<br>
+                날짜: {latest_change['date']}  
                 {float(latest_change['prev_price']):,.0f}원 →
-                {float(latest_change['normal_price']):,.0f}원
+                {float(latest_change['normal_price']):,.0f}원  
                 ({diff:+,.0f}원)
                 """
             ))
@@ -2125,7 +2125,39 @@ if selected_products:   # 🔥 조건 반전
                             f"{rate_text}"
                         )
                     })
-        
+            # =========================
+            # 정상가 변동 이벤트 추가
+            # =========================
+            normal_res = (
+                supabase.table("product_normal_price_events")
+                .select("*")
+                .eq("product_url", p["product_url"])
+                #.gte("date", filter_date_from.strftime("%Y-%m-%d"))
+                #.lte("date", filter_date_to.strftime("%Y-%m-%d"))
+                .execute()
+            )
+            
+            normal_rows = normal_res.data if normal_res.data else []
+            
+            for row in normal_rows:
+            
+                prev_price = float(row["prev_price"])
+                current_price = float(row["normal_price"])
+            
+                diff = current_price - prev_price
+                diff_rate = (diff / prev_price) * 100 if prev_price != 0 else 0
+            
+                event_label = "📈 정상가 상승" if diff > 0 else "📉 정상가 하락"
+            
+                display_rows.append({
+                    "날짜": row["date"],
+                    "이벤트": event_label,
+                    "가격 정보": (
+                        f"{prev_price:,.1f}원 → "
+                        f"{current_price:,.1f}원 "
+                        f"({diff_rate:+.1f}%)"
+                    )
+                })
             # =========================
             # 2️⃣ 할인 시작 / 종료 이벤트 (가격 포함)
             # =========================
@@ -2237,5 +2269,6 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
