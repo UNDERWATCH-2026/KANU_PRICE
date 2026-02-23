@@ -1925,22 +1925,22 @@ for pname in selected_products:
                     )
                 })
             df_changes = df_changes.sort_values("date")
-                
-                for i in range(len(df_changes) - 1):
-                
-                    current_row = df_changes.iloc[i]
-                    next_row = df_changes.iloc[i + 1]
-                
-                    current_date = pd.to_datetime(current_row["date"])
-                    next_date = pd.to_datetime(next_row["date"])
-                
-                    # 하루 이상 차이나면 유지 구간 존재
-                    if (next_date - current_date).days > 1:
-                        display_rows.append({
-                            "날짜": f"{(current_date + pd.Timedelta(days=1)).date()} ~ {(next_date - pd.Timedelta(days=1)).date()}",
-                            "이벤트": "💸 할인 유지",
-                            "가격 정보": f"{current_row['unit_price']:,.1f}원"
-                        })
+            
+            for i in range(len(df_changes) - 1):
+            
+                current_row = df_changes.iloc[i]
+                next_row = df_changes.iloc[i + 1]
+            
+                current_date = pd.to_datetime(current_row["date"])
+                next_date = pd.to_datetime(next_row["date"])
+            
+                # 하루 이상 차이나면 유지 구간 존재
+                if (next_date - current_date).days > 1:
+                    display_rows.append({
+                        "날짜": f"{(current_date + pd.Timedelta(days=1)).date()} ~ {(next_date - pd.Timedelta(days=1)).date()}",
+                        "이벤트": "💸 할인 유지",
+                        "가격 정보": f"{current_row['unit_price']:,.1f}원"
+                    })
         
         # =========================
         # 2️⃣ Lifecycle 이벤트
@@ -1982,4 +1982,5 @@ for pname in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
