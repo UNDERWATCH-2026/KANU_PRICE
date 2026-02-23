@@ -1784,30 +1784,33 @@ for pname in selected_products:
     with c1:
         st.metric("개당 가격", f"{float(p['current_unit_price']):,.1f}원")
 
+
     
     with c2:
+
+        summary_lines = []
     
-        date_from = df_timeline["event_date"].min().date()
-        date_to = df_timeline["event_date"].max().date()
-    
-        # 🔥 할인 구간 조회
-        res = supabase.rpc(
+        # =========================
+        # 💸 할인 구간 계산
+        # =========================
+        discount_res = supabase.rpc(
             "get_discount_periods_in_range",
             {
                 "p_product_url": p["product_url"],
-                "p_date_from": str(date_from),
-                "p_date_to": str(date_to),
+                "p_date_from": filter_date_from.strftime("%Y-%m-%d"),
+                "p_date_to": filter_date_to.strftime("%Y-%m-%d"),
             }
         ).execute()
     
-        discount_rows = res.data if res.data else []
+        discount_rows = discount_res.data if discount_res.data else []
+    
+        discount_rate = None
     
         if discount_rows:
-    
             latest_discount = discount_rows[0]
     
-            # 🔥 할인 기간 중 최저가 + 해당 날짜 조회
-            discount_res = (
+            # 할인 기간 중 최저가 조회
+            lowest_res = (
                 supabase.table("product_all_events")
                 .select("date, unit_price")
                 .eq("product_url", p["product_url"])
@@ -1819,56 +1822,113 @@ for pname in selected_products:
                 .execute()
             )
     
-            if discount_res.data:
-                lowest_discount_price = float(discount_res.data[0]["unit_price"])
-                lowest_discount_date = discount_res.data[0]["date"]
-            else:
-                lowest_discount_price = None
-                lowest_discount_date = None
+            if lowest_res.data:
+                lowest_price = float(lowest_res.data[0]["unit_price"])
+                lowest_date = lowest_res.data[0]["date"]
     
-            # 🔥 할인 시작 직전 정상가
-            normal_res = (
-                supabase.table("product_all_events")
-                .select("unit_price")
-                .eq("product_url", p["product_url"])
-                .eq("event_type", "NORMAL")
-                .lt("date", latest_discount["discount_start_date"])
-                .order("date", desc=True)
-                .limit(1)
-                .execute()
-            )
-    
-            normal_price = float(normal_res.data[0]["unit_price"]) if normal_res.data else None
-    
-            # 🔥 최대 할인율 계산
-            if normal_price and lowest_discount_price:
-                discount_rate = ((normal_price - lowest_discount_price) / normal_price) * 100
-            else:
-                discount_rate = None
-
-            # 🔥 카드 출력
-            if lowest_discount_price:
-
-                st.markdown(
-                    f"""
-                    <div style="
-                        background-color:#e8f3ed;
-                        padding:12px 14px;
-                        border-radius:8px;
-                        border-left:5px solid #2e8b57;
-                        font-size:14px;
-                    ">
-                        <strong>💸 할인</strong><br>
-                        기간: {latest_discount['discount_start_date']} ~ {latest_discount['discount_end_date']}<br>
-                        최저가: {lowest_discount_price:,.1f}원 ({lowest_discount_date})<br>
-                        정상가 대비 최대 {discount_rate:.0f}% 할인
-                    </div>
-                    """,
-                    unsafe_allow_html=True
+                # 할인 시작 직전 정상가
+                normal_res = (
+                    supabase.table("product_all_events")
+                    .select("unit_price")
+                    .eq("product_url", p["product_url"])
+                    .eq("event_type", "NORMAL")
+                    .lt("date", latest_discount["discount_start_date"])
+                    .order("date", desc=True)
+                    .limit(1)
+                    .execute()
                 )
-            
+    
+                normal_price = (
+                    float(normal_res.data[0]["unit_price"])
+                    if normal_res.data else None
+                )
+    
+                if normal_price and normal_price > 0:
+                    discount_rate = (
+                        (normal_price - lowest_price) / normal_price
+                    ) * 100
+    
+            if discount_rate is not None:
+                summary_lines.append(
+                    f"💸 할인: {latest_discount['discount_start_date']} ~ "
+                    f"{latest_discount['discount_end_date']} "
+                    f"(최대 {discount_rate:.0f}%)"
+                )
             else:
-                st.info("정상가")
+                summary_lines.append(
+                    f"💸 할인: {latest_discount['discount_start_date']} ~ "
+                    f"{latest_discount['discount_end_date']}"
+                )
+    
+        # =========================
+        # ❌ 품절 구간 계산
+        # =========================
+        df_life = load_lifecycle_events(p["product_url"])
+        out_periods = []
+    
+        if not df_life.empty:
+            df_life["date"] = pd.to_datetime(df_life["date"])
+            df_life = df_life.sort_values("date")
+    
+            out_dates = df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]["date"].tolist()
+            restore_dates = df_life[df_life["lifecycle_event"] == "RESTOCK"]["date"].tolist()
+    
+            for out_date in out_dates:
+                restore_after = [d for d in restore_dates if d > out_date]
+                restore_date = min(restore_after) if restore_after else filter_date_to
+    
+                if out_date <= filter_date_to and restore_date >= filter_date_from:
+                    out_periods.append((out_date.date(), restore_date.date()))
+    
+        for start, end in out_periods:
+            summary_lines.append(f"❌ 품절: {start} ~ {end}")
+    
+        # =========================
+        # 📈 정상가 변동 계산
+        # =========================
+        df_changes_res = (
+            supabase.table("product_price_change_events")
+            .select("*")
+            .eq("product_url", p["product_url"])
+            .gte("date", filter_date_from.strftime("%Y-%m-%d"))
+            .lte("date", filter_date_to.strftime("%Y-%m-%d"))
+            .execute()
+        )
+    
+        df_changes = pd.DataFrame(df_changes_res.data)
+    
+        normal_change_dates = []
+    
+        if not df_changes.empty:
+            for _, row in df_changes.iterrows():
+                if row["price_change_type"] in ["NORMAL_UP", "NORMAL_DOWN"]:
+                    normal_change_dates.append(pd.to_datetime(row["date"]).date())
+    
+        if normal_change_dates:
+            change_dates_str = ", ".join(
+                sorted({str(d) for d in normal_change_dates})
+            )
+            summary_lines.append(f"📈 정상가 변동: {change_dates_str}")
+    
+        # =========================
+        # 📊 최종 카드 출력
+        # =========================
+        if summary_lines:
+            st.markdown(
+                "<div style='background:#eef4ff;padding:12px;border-radius:8px;'>"
+                "<b>📊 조회 기간 요약</b><br>"
+                + "<br>".join(summary_lines) +
+                "</div>",
+                unsafe_allow_html=True
+            )
+        else:
+            st.markdown(
+                "<div style='background:#f5f5f5;padding:12px;border-radius:8px;'>"
+                "<b>📊 조회 기간 요약</b><br>"
+                "특이 이벤트 없음"
+                "</div>",
+                unsafe_allow_html=True
+            )
                 
     with c3:
         df_life = load_lifecycle_events(p["product_url"])
@@ -1985,6 +2045,7 @@ for pname in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
