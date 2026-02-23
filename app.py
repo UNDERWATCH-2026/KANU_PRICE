@@ -2053,10 +2053,11 @@ for product_url in selected_products:
 
     st.markdown("<br><br>", unsafe_allow_html=True)
 
-
+    
     # =========================
    
     with st.expander("📅 이벤트 히스토리"):
+        capsule_count = p["capsule_count"]  # 🔥 여기서 정의
         display_rows = []
         
         # =========================
@@ -2146,6 +2147,7 @@ for product_url in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
