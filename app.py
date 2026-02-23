@@ -2055,7 +2055,7 @@ for product_url in selected_products:
 
     
     # =========================
-   
+    st.write("p 존재 여부:", "p" in locals())
     with st.expander("📅 이벤트 히스토리"):
         capsule_count = p["capsule_count"]  # 🔥 여기서 정의
         display_rows = []
@@ -2147,6 +2147,7 @@ for product_url in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
