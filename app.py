@@ -1784,7 +1784,22 @@ for pname in selected_products:
     with c2:
     
         cards = []
-    
+
+        # =========================
+        # 💸 할인 구간 계산
+        # =========================
+        discount_res = supabase.rpc(
+            "get_discount_periods_in_range",
+            {
+                "p_product_url": p["product_url"],
+                "p_date_from": filter_date_from.strftime("%Y-%m-%d"),
+                "p_date_to": filter_date_to.strftime("%Y-%m-%d"),
+            }
+        ).execute()
+        
+        discount_rows = discount_res.data if discount_res.data else []
+        discount_rate = None
+            
         # =========================
         # 💸 할인 카드
         # =========================
@@ -1980,6 +1995,7 @@ for pname in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
