@@ -1088,12 +1088,20 @@ with col_tabs:
                             if not history['results']:
                                 st.caption("📭 검색 결과 없음")
                             else:
-                                # 제품 체크박스
                                 for pname in history['results']:
+                            
+                                    # 🔥 product_url 안전하게 가져오기
+                                    product_row = df_all[df_all["product_name"] == pname]
+                            
+                                    if product_row.empty:
+                                        continue  # 혹시라도 데이터 불일치 방어
+                            
+                                    product_url = product_row.iloc[0]["product_url"]
+                            
                                     st.checkbox(
                                         pname,
                                         value=pname in st.session_state.selected_products,
-                                        key=f"chk_kw_{pname}_{p['product_url']}",
+                                        key=f"chk_kw_{product_url}",  # 🔥 유니크 키
                                         on_change=toggle_product,
                                         args=(pname,)
                                     )
@@ -1982,6 +1990,7 @@ for pname in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
