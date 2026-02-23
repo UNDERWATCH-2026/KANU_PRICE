@@ -1467,7 +1467,7 @@ for product_url in selected_products:
             normal_price = float(normal_price_res.data[0]["normal_price"]) if normal_price_res.data else None
 
             # 🔥 capsule_count 가져오기
-            capsule_count = row["capsule_count"]
+            capsule_count = p["capsule_count"]
             
             # 할인 가격 (개당 단가)
             discount_price = float(price_row["unit_price"]) if pd.notna(price_row["unit_price"]) else None
@@ -2146,6 +2146,7 @@ for product_url in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
