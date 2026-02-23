@@ -998,19 +998,24 @@ with col_tabs:
                 # 공백 구분: AND 검색
                 keywords = search_keyword.split()
                 candidates_df = df_all.copy()
+                
                 for kw in keywords:
                     if len(kw) >= 2:
-                        # 각 키워드마다 모든 필드에서 OR 검색
-                        keyword_mask = False
-                        keyword_mask |= _norm_series(candidates_df["product_name"]).str.contains(kw, case=False)
-                        keyword_mask |= _norm_series(candidates_df["brand"]).str.contains(kw, case=False)
-                        keyword_mask |= _norm_series(candidates_df["category1"]).str.contains(kw, case=False)
-                        keyword_mask |= _norm_series(candidates_df["category2"]).str.contains(kw, case=False)
-                        keyword_mask |= _norm_series(candidates_df["brew_type_kr"]).str.contains(kw, case=False)
-                        
-                        # 해당 키워드가 어디든 포함된 제품만 남김 (AND 조건)
-                        if keyword_mask is not False and keyword_mask.any():
-                            candidates_df = candidates_df[keyword_mask]
+                
+                        keyword_mask = (
+                            _norm_series(candidates_df["product_name"]).str.contains(kw, case=False) |
+                            _norm_series(candidates_df["brand"]).str.contains(kw, case=False) |
+                            _norm_series(candidates_df["category1"]).str.contains(kw, case=False) |
+                            _norm_series(candidates_df["category2"]).str.contains(kw, case=False) |
+                            _norm_series(candidates_df["brew_type_kr"]).str.contains(kw, case=False)
+                        )
+                
+                        # 🔥 무조건 필터 적용
+                        candidates_df = candidates_df[keyword_mask]
+                
+                        # 🔥 매칭이 하나도 없으면 바로 종료
+                        if candidates_df.empty:
+                            break
             
             # 🔥 키워드 검색 로그 저장
             try:
@@ -1980,6 +1985,7 @@ for pname in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
