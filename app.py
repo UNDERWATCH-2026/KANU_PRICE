@@ -1198,7 +1198,7 @@ with col_tabs:
                     key=f"tab2_filter_{product_url}",
                     on_change=toggle_product,
                     args=(product_url,)
-                ))
+                )
 
     # =========================
     # TAB 3: 자연어 질문
@@ -2063,6 +2063,7 @@ for product_url in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
