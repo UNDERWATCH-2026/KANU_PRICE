@@ -2022,3 +2022,4 @@ for pname in selected_products:
             use_container_width=True,
             hide_index=True
         )
+
