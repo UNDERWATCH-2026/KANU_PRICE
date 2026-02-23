@@ -1293,26 +1293,40 @@ with col_tabs:
                             st.rerun()
                 
                     # 🔥 답변 표시
+                    # 🔥 답변 표시
                     answer_data = history['answer']
-                
-                    for pidx, pname in enumerate(answer_data["products"]):
-                        row = df_all[df_all["product_name"] == pname].iloc[0]
-                        product_url = row["product_url"]
-                        label = format_product_label(row)
                     
-                        with cols[pidx % 3]:
-                            st.checkbox(
-                                label,
-                                value=product_url in st.session_state.selected_products,
-                                key=f"chk_nlp_{idx}_{pidx}_{product_url}",
-                                on_change=toggle_product,
-                                args=(product_url,)
-                            )
+                    if isinstance(answer_data, dict) and answer_data.get("type") == "product_list":
+                    
+                        st.markdown(f"**A:** {answer_data['text']}")
+                    
+                        if answer_data.get("products"):
+                            st.markdown("##### 📦 비교할 제품으로 추가")
+                            cols = st.columns(3)
+                    
+                            for pidx, pname in enumerate(answer_data["products"]):
+                    
+                                product_row = df_all[df_all["product_name"] == pname]
+                                if product_row.empty:
+                                    continue
+                    
+                                row = product_row.iloc[0]
+                                product_url = row["product_url"]
+                                label = format_product_label(row)
+                    
+                                with cols[pidx % 3]:
+                                    st.checkbox(
+                                        label,
+                                        value=product_url in st.session_state.selected_products,
+                                        key=f"chk_nlp_{idx}_{pidx}_{product_url}",
+                                        on_change=toggle_product,
+                                        args=(product_url,)
+                                    )
+                    
                     elif isinstance(answer_data, dict):
-                        # 딕셔너리지만 product_list가 아닌 경우
                         st.markdown(f"**A:** {answer_data.get('text', str(answer_data))}")
+                    
                     else:
-                        # 일반 텍스트 답변
                         st.markdown(f"**A:** {answer_data}")
 
 st.divider()
@@ -2049,6 +2063,7 @@ for product_url in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
