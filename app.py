@@ -1455,10 +1455,18 @@ for product_url in selected_products:
             tmp.at[idx, "price_detail"] = f"정상가: {price_row['unit_price']:,.1f}원"
         
         # 🔥 lifecycle 데이터 불러오기
-        df_life = load_lifecycle_events(row["product_url"])
+        df_life = load_lifecycle_events(p["product_url"])
         
         if not df_life.empty:
-            df_life["date"] = pd.to_datetime(df_life["date"])
+            df_life["date"] = pd.to_datetime(df_life["date"], errors="coerce")
+        
+            # 🔥 기간 필터 적용 (이 줄이 핵심)
+            df_life = df_life[
+                df_life["date"].between(filter_date_from, filter_date_to)
+            ]
+        
+            # 🔥 NaT 제거
+            df_life = df_life.dropna(subset=["date"])
         
             # 품절/복원 구간 계산
             out_dates = df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]["date"].tolist()
@@ -2098,6 +2106,7 @@ for product_url in selected_products:
             )
         else:
             st.caption("이벤트 없음")
+
 
 
 
