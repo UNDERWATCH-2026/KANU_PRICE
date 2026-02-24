@@ -1202,42 +1202,26 @@ with col_tabs:
                                         value=(product_url in st.session_state.selected_products)
                                     )
                                     
-                                    # 🔥 레이아웃 제어
-                                    st.markdown(
-                                        f"""
-                                        <div style="
-                                            display:flex;
-                                            align-items:center;      /* ① 세로 중앙 정렬 */
-                                            gap:8px;                 /* ② 체크박스 ↔ 텍스트 가로 간격 */
-                                            min-height:48px;         /* ③ 행 높이 (전체 row 높이) */
-                                            padding:6px 0;           /* ④ 위아래 내부 여백 */
-                                        ">
-                                    
-                                            <div style="
-                                                width:24px;          /* ⑤ 체크박스 영역 고정 폭 */
-                                                flex:0 0 24px;       /* ⑥ 체크박스 영역 축소 방지 */
-                                            "></div>
-                                    
-                                            <div style="
-                                                flex:1;              /* ⑦ 텍스트가 나머지 공간 차지 */
-                                                white-space:normal;
-                                                word-break:keep-all; /* ⑧ 한글 단어 중간 잘림 방지 */
-                                                overflow-wrap:break-word;
-                                                line-height:1.35;    /* ⑨ 두 줄일 때 줄 간격 */
-                                            ">
-                                                {label}
-                                            </div>
-                                        </div>
-                                        """,
-                                        unsafe_allow_html=True
+                                    # 🔥 레이아웃 제어 (주석 제거 + 안전 문자열)
+                                    html = (
+                                        f"<div style='display:flex; align-items:center; gap:8px; min-height:48px; padding:6px 0;'>"
+                                        f"<div style='width:24px; flex:0 0 24px;'></div>"
+                                        f"<div style='flex:1; white-space:normal; word-break:keep-all; overflow-wrap:break-word; line-height:1.35;'>"
+                                        f"{label}"
+                                        f"</div>"
+                                        f"</div>"
                                     )
+                                    
+                                    st.markdown(html, unsafe_allow_html=True)
+                                    
                                     if checked:
                                         st.session_state.selected_products.add(product_url)
                                     else:
                                         st.session_state.selected_products.discard(product_url)
-
-                                # 🔽 하단 여백
-                                st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
+                                    
+                                    # 🔽 하단 여백 (for 루프 바깥, expander 안)
+                                    st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
+                           
     # =========================
     # TAB 2: 필터 선택
     # =========================
@@ -1331,41 +1315,25 @@ with col_tabs:
                 )
                 
                 # 🔥 레이아웃 제어
-                st.markdown(
-                    f"""
-                    <div style="
-                        display:flex;
-                        align-items:center;      /* ① 세로 중앙 정렬 */
-                        gap:8px;                 /* ② 체크박스 ↔ 텍스트 가로 간격 */
-                        min-height:48px;         /* ③ 행 높이 (전체 row 높이) */
-                        padding:6px 0;           /* ④ 위아래 내부 여백 */
-                    ">
-                
-                        <div style="
-                            width:24px;          /* ⑤ 체크박스 영역 고정 폭 */
-                            flex:0 0 24px;       /* ⑥ 체크박스 영역 축소 방지 */
-                        "></div>
-                
-                        <div style="
-                            flex:1;              /* ⑦ 텍스트가 나머지 공간 차지 */
-                            white-space:normal;
-                            word-break:keep-all; /* ⑧ 한글 단어 중간 잘림 방지 */
-                            overflow-wrap:break-word;
-                            line-height:1.35;    /* ⑨ 두 줄일 때 줄 간격 */
-                        ">
-                            {label}
-                        </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
+                html = (
+                    f"<div style='display:flex; align-items:center; gap:8px; min-height:48px; padding:6px 0;'>"
+                    f"<div style='width:24px; flex:0 0 24px;'></div>"
+                    f"<div style='flex:1; white-space:normal; word-break:keep-all; overflow-wrap:break-word; line-height:1.35;'>"
+                    f"{label}"
+                    f"</div>"
+                    f"</div>"
                 )
+                
+                st.markdown(html, unsafe_allow_html=True)
+                
                 if checked:
                     st.session_state.selected_products.add(product_url)
                 else:
                     st.session_state.selected_products.discard(product_url)
-
-                # 🔽 하단 여백
+                
+                # 🔽 하단 여백 (for 루프 바깥, expander 안)
                 st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
+       
 
     # =========================
     # TAB 3: 자연어 질문
@@ -2468,6 +2436,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
