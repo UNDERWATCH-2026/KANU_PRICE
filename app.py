@@ -1643,7 +1643,33 @@ if selected_products:   # 🔥 조건 반전
             )
 
             layers = [base_line]
-    
+
+            # ✅ 겹친 점(같은 날짜·같은 가격)에 대해 tooltip을 "묶어서" 보여주는 레이어
+            tooltip_multi = (
+                alt.Chart(df_chart)
+                .transform_aggregate(
+                    products="values(product_name)",
+                    details="values(price_detail)",
+                    statuses="values(price_status)",
+                    groupby=["event_date", "unit_price"]
+                )
+                # hover 잡기용 투명 점(크게)
+                .mark_circle(size=500, opacity=0)
+                .encode(
+                    x="event_date:T",
+                    y="unit_price:Q",
+                    tooltip=[
+                        alt.Tooltip("event_date:T", title="날짜", format="%Y-%m-%d"),
+                        alt.Tooltip("unit_price:Q", title="개당 가격(원)", format=",.1f"),
+                        alt.Tooltip("products:N", title="제품(겹친 항목)"),
+                        alt.Tooltip("details:N", title="가격 정보"),
+                        alt.Tooltip("statuses:N", title="상태"),
+                    ],
+                )
+            )
+            
+            layers.append(tooltip_multi)
+                        
             # =========================
             # 🔔 Lifecycle 아이콘 추가
             # =========================
@@ -2351,6 +2377,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
