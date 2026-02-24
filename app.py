@@ -1618,7 +1618,7 @@ if selected_products:   # 🔥 조건 반전
             # =========================
             base_line = (
                 alt.Chart(df_chart)
-                .mark_line(point=True)
+                .mark_line(point=alt.OverlayMarkDef(size=80))
                 .encode(
                     x=alt.X("event_date:T", title="날짜", axis=alt.Axis(format="%m/%d")),
                     y=alt.Y("unit_price:Q", title="개당 가격 (원)"),
@@ -1639,6 +1639,8 @@ if selected_products:   # 🔥 조건 반전
             # =========================
             # 🔔 Lifecycle 아이콘 추가
             # =========================
+            layers = [base_line]
+            
             if lifecycle_rows:
     
                 df_life_all = pd.concat(lifecycle_rows, ignore_index=True)
@@ -2341,6 +2343,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
