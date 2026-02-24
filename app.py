@@ -870,8 +870,28 @@ def get_normal_price_change_dates(product_url, date_from, date_to):
     return [r["date"] for r in res.data]
     
 # =========================
+# 4️⃣ 체크박스 key 등록
+# =========================
+
+def register_product_checkbox_key(product_url: str, widget_key: str):
+    if "product_checkbox_keys" not in st.session_state:
+        st.session_state["product_checkbox_keys"] = {}
+    st.session_state["product_checkbox_keys"].setdefault(product_url, set()).add(widget_key)
+
+def remove_product_everywhere(product_url: str):
+    # 1) 선택 목록에서 제거
+    st.session_state.selected_products.discard(product_url)
+
+    # 2) 해당 product_url에 연결된 체크박스들 모두 해제
+    key_map = st.session_state.get("product_checkbox_keys", {})
+    for k in key_map.get(product_url, set()):
+        # 위젯 상태를 False로 강제 (삭제보다 이게 안전)
+        st.session_state[k] = False
+        
+# =========================
 # 4️⃣ 세션 상태 초기화
 # =========================
+
 if "selected_products" not in st.session_state:
     st.session_state.selected_products = set()
 
@@ -1168,12 +1188,15 @@ with col_tabs:
                             
                                     scope = f"hist_{history_idx}"
                             
+                                    k = mk_widget_key("chk_tab1", product_url, scope)
+                                    register_product_checkbox_key(product_url, k)
+                                    
                                     checked = st.checkbox(
                                         label,
-                                        key=mk_widget_key("chk_tab1", product_url, scope),
+                                        key=k,
                                         value=(product_url in st.session_state.selected_products)
                                     )
-                            
+                                                                
                                     if checked:
                                         st.session_state.selected_products.add(product_url)
                                     else:
@@ -1260,9 +1283,12 @@ with col_tabs:
             
                 scope = f"{sel_brand}|{sel_cat1}|{sel_cat2}"
             
+                k = mk_widget_key("chk_tab2", product_url, scope)
+                register_product_checkbox_key(product_url, k)
+                
                 checked = st.checkbox(
                     label,
-                    key=mk_widget_key("chk_tab2", product_url, scope),
+                    key=k,
                     value=(product_url in st.session_state.selected_products)
                 )
             
@@ -1395,9 +1421,12 @@ with col_tabs:
                     
                                     scope = f"{idx}_{question_hash}_{pidx}"
                     
+                                    k = mk_widget_key("chk_tab3", product_url, scope)
+                                    register_product_checkbox_key(product_url, k)
+                                    
                                     checked = st.checkbox(
                                         label,
-                                        key=mk_widget_key("chk_tab3", product_url, scope),
+                                        key=k,
                                         value=(product_url in st.session_state.selected_products)
                                     )
                     
@@ -1826,15 +1855,30 @@ if selected_products:   # 🔥 조건 반전
         
                 with col_btn:
                     if st.button("×", key=f"remove_product_{product_url}", help="차트에서 제거"):
-                        st.session_state.selected_products.discard(product_url)
+                        remove_product_everywhere(product_url)
                         st.rerun()
-        
+
                 with col_name:
                     st.markdown(
-                        f"{color_dot(hex_color)} <b>{label}</b>",
+                        f"""
+                        <div style="
+                            display:flex;
+                            align-items:flex-start;
+                            gap:10px;
+                        ">
+                            {color_dot(hex_color)}
+                            <div style="
+                                white-space: normal;
+                                word-break: keep-all;
+                                overflow-wrap: break-word;
+                                line-height: 1.35;
+                            ">
+                                <b>{label}</b>
+                            </div>
+                        </div>
+                        """,
                         unsafe_allow_html=True
                     )
-
         
         # 🔥 엑셀 다운로드 버튼 추가
         with download_placeholder:
