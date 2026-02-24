@@ -1161,9 +1161,15 @@ with col_tabs:
                                     st.checkbox(
                                         label,
                                         key=mk_widget_key("chk_tab1", product_url, scope),
-                                        on_change=toggle_product,
-                                        args=(product_url,),
-                                    )
+                                        checked = st.checkbox(
+                                            label,
+                                            key=mk_widget_key("chk_tabX", product_url, scope),
+                                        )
+                                        
+                                        if checked:
+                                            st.session_state.selected_products.add(product_url)
+                                        else:
+                                            st.session_state.selected_products.discard(product_url)                                    )
     # =========================
     # TAB 2: 필터 선택
     # =========================
@@ -1246,12 +1252,15 @@ with col_tabs:
         
                 scope = f"{sel_brand}|{sel_cat1}|{sel_cat2}"
                 
-                st.checkbox(
-                    label,
-                    key=mk_widget_key("chk_tab2", product_url, scope),
-                    on_change=toggle_product,
-                    args=(product_url,),
-                )
+                checked = st.checkbox(
+                label,
+                key=mk_widget_key(...),
+            )
+            
+            if checked:
+                st.session_state.selected_products.add(product_url)
+            else:
+                st.session_state.selected_products.discard(product_url)
     # =========================
     # TAB 3: 자연어 질문
     # =========================
@@ -1377,9 +1386,15 @@ with col_tabs:
                                     st.checkbox(
                                         label,
                                         key=mk_widget_key("chk_tab3", product_url, scope),
-                                        on_change=toggle_product,
-                                        args=(product_url,),
-                                    )
+                                        checked = st.checkbox(
+                                            label,
+                                            key=mk_widget_key("chk_tabX", product_url, scope),
+                                        )
+                                        
+                                        if checked:
+                                            st.session_state.selected_products.add(product_url)
+                                        else:
+                                            st.session_state.selected_products.discard(product_url))
                                                                                                                         
                     elif isinstance(answer_data, dict):
                         st.markdown(f"**A:** {answer_data.get('text', str(answer_data))}")
@@ -2318,6 +2333,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
