@@ -1195,43 +1195,49 @@ with col_tabs:
                             
 
                                 with st.expander(f"목록 펼치기 / 접기 ({len(sorted_df)}개)", expanded=False):
-                            
+
                                     for _, row in sorted_df.iterrows():
-                            
+                                
                                         product_url = row["product_url"]
                                         label = format_product_label(row)
-                            
+                                
                                         scope = f"hist_{history_idx}"
-                            
+                                
                                         k = mk_widget_key("chk_tab1", product_url, scope)
                                         register_product_checkbox_key(product_url, k)
-                                    
-                                        checked = st.checkbox(
-                                            "",
-                                            key=k,
-                                            value=(product_url in st.session_state.selected_products)
-                                        )
-                                        
-                                        # 🔥 레이아웃 제어 (주석 제거 + 안전 문자열)
-                                        html = (
-                                            f"<div style='display:flex; align-items:flex-start; gap:8px; padding:6px 0;'>"
-                                            f"<div style='width:24px; flex:0 0 24px; margin-top:2px;'></div>"
-                                            f"<div style='flex:1; white-space:normal; word-break:keep-all; overflow-wrap:break-word; line-height:1.35;'>"
-                                            f"{label}"
-                                            f"</div>"
-                                            f"</div>"
-                                        )
-                                                                                
-                                        st.markdown(html, unsafe_allow_html=True)
-                                        
+                                
+                                        col_chk, col_lbl = st.columns([0.06, 0.94], vertical_alignment="top")
+                                
+                                        with col_chk:
+                                            checked = st.checkbox(
+                                                "",
+                                                key=k,
+                                                value=(product_url in st.session_state.selected_products)
+                                            )
+                                
+                                        with col_lbl:
+                                            st.markdown(
+                                                f"""
+                                                <div style="
+                                                    white-space:normal;
+                                                    word-break:keep-all;
+                                                    overflow-wrap:break-word;
+                                                    line-height:1.35;
+                                                    padding:2px 0 6px 0;
+                                                ">
+                                                    {label}
+                                                </div>
+                                                """,
+                                                unsafe_allow_html=True
+                                            )
+                                
                                         if checked:
                                             st.session_state.selected_products.add(product_url)
                                         else:
                                             st.session_state.selected_products.discard(product_url)
-                                        
-                                        # 🔽 하단 여백 (for 루프 바깥, expander 안)
-                                        st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
-                           
+                                
+                                    # 🔽 여기! (for 밖)
+                                    st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
     # =========================
     # TAB 2: 필터 선택
     # =========================
@@ -1307,40 +1313,49 @@ with col_tabs:
         )
         
         with st.expander(f"목록 펼치기 / 접기 ({len(unique_df)}개)", expanded=False):
-
+        
             for _, row in unique_df.iterrows():
         
                 product_url = row["product_url"]
                 label = format_product_label(row)
-            
+        
                 scope = f"{sel_brand}|{sel_cat1}|{sel_cat2}"
         
                 k = mk_widget_key("chk_tab2", product_url, scope)
                 register_product_checkbox_key(product_url, k)
-                
-                checked = st.checkbox(
-                    "",
-                    key=k,
-                    value=(product_url in st.session_state.selected_products)
-                )
-                
-                html = (
-                    f"<div style='display:flex; align-items:flex-start; gap:8px; padding:6px 0;'>"
-                    f"<div style='width:24px; flex:0 0 24px; margin-top:2px;'></div>"
-                    f"<div style='flex:1; white-space:normal; word-break:keep-all; overflow-wrap:break-word; line-height:1.35;'>"
-                    f"{label}"
-                    f"</div>"
-                    f"</div>"
-                )
-                                
-                st.markdown(html, unsafe_allow_html=True)
-                
+        
+                # ✅ 한 줄에 배치
+                col_chk, col_lbl = st.columns([0.06, 0.94], vertical_alignment="top")
+        
+                with col_chk:
+                    checked = st.checkbox(
+                        "",
+                        key=k,
+                        value=(product_url in st.session_state.selected_products)
+                    )
+        
+                with col_lbl:
+                    st.markdown(
+                        f"""
+                        <div style="
+                            white-space:normal;
+                            word-break:keep-all;
+                            overflow-wrap:break-word;
+                            line-height:1.35;
+                            padding:2px 0 6px 0;
+                        ">
+                            {label}
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+        
                 if checked:
                     st.session_state.selected_products.add(product_url)
                 else:
                     st.session_state.selected_products.discard(product_url)
         
-            # 🔽 하단 여백 (여기가 맞는 위치)
+            # 🔽 하단 여백 (for 밖)
             st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
 
     # =========================
@@ -2444,6 +2459,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
