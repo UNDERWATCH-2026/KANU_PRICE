@@ -1380,18 +1380,17 @@ with col_tabs:
                             
                                 with cols[pidx % 3]:
                                     scope = f"{idx}_{question_hash}_{pidx}"
-                            
-                                    st.checkbox(
+                                
+                                    checked = st.checkbox(
                                         label,
                                         key=mk_widget_key("chk_tab3", product_url, scope),
-                                        checked = st.checkbox(
-                                            label,
-                                            key=mk_widget_key("chk_tabX", product_url, scope)
-                                        
-                                        if checked:
-                                            st.session_state.selected_products.add(product_url)
-                                        else:
-                                            st.session_state.selected_products.discard(product_url)
+                                        value=(product_url in st.session_state.selected_products)
+                                    )
+                                
+                                    if checked:
+                                        st.session_state.selected_products.add(product_url)
+                                    else:
+                                        st.session_state.selected_products.discard(product_url)
                                                                                                                         
                     elif isinstance(answer_data, dict):
                         st.markdown(f"**A:** {answer_data.get('text', str(answer_data))}")
@@ -2330,6 +2329,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
