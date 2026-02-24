@@ -797,14 +797,13 @@ def format_product_label(row):
     category1 = row.get("category1")
     category2 = row.get("category2")
 
-    # None / NaN 안전 처리
     brand = str(brand).strip() if pd.notna(brand) else ""
     product_name = str(product_name).strip() if pd.notna(product_name) else ""
     category1 = str(category1).strip() if pd.notna(category1) else ""
     category2 = str(category2).strip() if pd.notna(category2) else ""
 
-    # 카누 바리스타는 브랜드 - 제품명만
-    if brand == "카누 바리스타":
+    # 🔥 카테고리 생략 브랜드
+    if brand in {"카누 바리스타", "네슬레", "일리카페"}:
         return f"{brand} - {product_name}"
 
     parts = [brand]
@@ -818,7 +817,6 @@ def format_product_label(row):
     parts.append(product_name)
 
     return " - ".join(parts)
-
 
 
 import re
@@ -2433,5 +2431,6 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
