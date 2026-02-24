@@ -491,7 +491,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
             product_name = row['product_name']
             
             results.append({
-                "text": f"• {row['brand']} - {product_name}{category_str}\n  🎉 출시일: {launch_date}",
+                "text": f"• {row['brand']} - {product_name}{category_str}\n  🆕 출시일: {launch_date}",
                 "product_name": product_name
             })
         
@@ -1186,8 +1186,7 @@ with col_tabs:
                                     )
                                 )
                             
-                                st.markdown("<hr style='margin:6px 0;'>", unsafe_allow_html=True)
-                            
+
                                 with st.expander(f"목록 펼치기 / 접기 ({len(sorted_df)}개)", expanded=False):
                             
                                     for _, row in sorted_df.iterrows():
@@ -1208,7 +1207,8 @@ with col_tabs:
                                         
                                         # 🔥 레이아웃 제어 (주석 제거 + 안전 문자열)
                                         html = (
-                                            f"<div style='display:flex; align-items:center; gap:8px; min-height:12px; padding:3px 0;'>"
+                                            f"<div style='display:flex; align-items:center; gap:8px; padding:3px 0;'>" 
+                                            # min-height:12px; 
                                             f"<div style='width:24px; flex:0 0 24px;'></div>"
                                             f"<div style='flex:1; white-space:normal; word-break:keep-all; overflow-wrap:break-word; line-height:1.35;'>"
                                             f"{label}"
@@ -1320,7 +1320,8 @@ with col_tabs:
                 
                 # 🔥 레이아웃 제어
                 html = (
-                    f"<div style='display:flex; align-items:center; gap:8px; min-height:12px; padding:3px 0;'>"
+                    f"<div style='display:flex; align-items:center; gap:8px; padding:3px 0;'>" 
+                    # min-height:12px;
                     f"<div style='width:24px; flex:0 0 24px;'></div>"
                     f"<div style='flex:1; white-space:normal; word-break:keep-all; overflow-wrap:break-word; line-height:1.35;'>"
                     f"{label}"
@@ -2440,6 +2441,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
