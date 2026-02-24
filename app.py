@@ -1612,6 +1612,18 @@ if selected_products:   # 🔥 조건 반전
     
         # 4️⃣ NaN 제거 (끊긴 구간은 차트에서 제외)
         df_chart = df_timeline.dropna(subset=["unit_price"]).copy()
+
+        # 같은 날짜+가격에서 겹친 점 순번
+        df_chart["dup_rank"] = (
+            df_chart.groupby(["event_date", "unit_price"])
+            .cumcount()
+        )
+        
+        # 점만 살짝 이동시키기 (0.06일 ≈ 1.44시간)
+        df_chart["event_date_jitter"] = (
+            df_chart["event_date"] +
+            pd.to_timedelta(df_chart["dup_rank"] * 0.06, unit="D")
+        )
     
         # =========================
         # 📊 차트와 범례를 분리된 레이아웃으로 표시
@@ -1620,29 +1632,41 @@ if selected_products:   # 🔥 조건 반전
         
         with col_chart:
             # =========================
-            # 📈 가격 선 차트 (범례 없음)
+            # 📈 가격 선 차트 (범례 없음) - 라인(기존 event_date)
             # =========================
             base_line = (
                 alt.Chart(df_chart)
-                .mark_line(point=alt.OverlayMarkDef(size=80))
+                .mark_line()  # ✅ point=True 제거 (라인만)
                 .encode(
                     x=alt.X("event_date:T", title="날짜", axis=alt.Axis(format="%m/%d")),
                     y=alt.Y("unit_price:Q", title="개당 가격 (원)"),
                     color=alt.Color("product_name:N", title="제품", legend=None),
+                    detail="segment:N",
+                )
+            )
             
-                    # 🔥 여기 수정
-                    detail=["product_name:N", "segment:N"],
-            
+            # =========================
+            # 🔵 포인트 레이어 - 점만 event_date_jitter 사용
+            # =========================
+            point_layer_price = (
+                alt.Chart(df_chart)
+                .mark_point(size=70)  # 점 크기 필요시 조절
+                .encode(
+                    x=alt.X("event_date_jitter:T", title="날짜", axis=alt.Axis(format="%m/%d")),
+                    y=alt.Y("unit_price:Q", title="개당 가격 (원)"),
+                    color=alt.Color("product_name:N", title="제품", legend=None),
+                    detail=["product_name:N", "segment:N"],  # 겹침 분리 안정화
                     tooltip=[
                         alt.Tooltip("product_name:N", title="제품"),
-                        alt.Tooltip("event_date:T", title="날짜", format="%Y-%m-%d"),
+                        alt.Tooltip("event_date:T", title="날짜", format="%Y-%m-%d"),  # ✅ 실제 날짜는 원래 event_date
                         alt.Tooltip("price_detail:N", title="가격 정보"),
                         alt.Tooltip("price_status:N", title="상태"),
                     ],
                 )
             )
-
-            layers = [base_line]
+            
+            layers = [base_line, point_layer_price]
+    
 
             # ✅ 겹친 점(같은 날짜·같은 가격)에 대해 tooltip을 "묶어서" 보여주는 레이어
             tooltip_multi = (
@@ -2382,6 +2406,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
