@@ -1652,7 +1652,44 @@ if selected_products:   # 🔥 조건 반전
             )
     
             layers = [base_line]
-    
+
+            # =========================
+            # 🔔 툴팁 전용 레이어 
+            # =========================
+
+            # ✅ 겹친 점(같은 날짜+가격)에 대한 "한 박스(세로 확장) 툴팁" 레이어
+            tooltip_multi = (
+                alt.Chart(df_chart)
+                # 1) 각 제품(행)을 '제품/날짜/가격정보/상태' 포함한 여러 줄 텍스트로 만들기
+                .transform_calculate(
+                    item=(
+                        "'제품: ' + datum.product_name + "
+                        "'\\n날짜: ' + timeFormat(datum.event_date, '%Y-%m-%d') + "
+                        "'\\n가격정보: ' + datum.price_detail + "
+                        "'\\n상태: ' + datum.price_status"
+                    )
+                )
+                # 2) 같은 날짜+가격 그룹으로 item들을 모으기
+                .transform_aggregate(
+                    items="values(item)",
+                    groupby=["event_date", "unit_price"]
+                )
+                # 3) 배열(items)을 줄바꿈(빈 줄 포함)으로 합쳐서 한 덩어리 문자열로 만들기
+                .transform_calculate(
+                    items_txt="join(datum.items, '\\n\\n')"
+                )
+                # 4) hover 잡기용 투명 점 (크게)
+                .mark_circle(size=900, opacity=0)
+                .encode(
+                    x="event_date:T",
+                    y="unit_price:Q",
+                    tooltip=[
+                        alt.Tooltip("items_txt:N", title=""),
+                    ],
+                )
+            )
+            
+            layers.append(tooltip_multi)
                         
             # =========================
             # 🔔 Lifecycle 아이콘 추가
@@ -2361,6 +2398,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
