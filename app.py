@@ -14,7 +14,8 @@ def mk_widget_key(prefix: str, product_url: str, scope: str) -> str:
     raw = f"{prefix}|{product_url}|{scope}"
     return prefix + "_" + hashlib.md5(raw.encode("utf-8")).hexdigest()[:16]
 
-
+st.write(len(st.session_state.selected_products))
+st.write(st.session_state.selected_products)
 # =========================
 # 1️⃣ Supabase 설정
 # =========================
@@ -2317,6 +2318,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
