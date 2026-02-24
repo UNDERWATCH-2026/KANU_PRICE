@@ -1207,15 +1207,14 @@ with col_tabs:
                                         
                                         # 🔥 레이아웃 제어 (주석 제거 + 안전 문자열)
                                         html = (
-                                            f"<div style='display:flex; align-items:center; gap:8px; padding:3px 0;'>" 
-                                            # min-height:12px; 
-                                            f"<div style='width:24px; flex:0 0 24px;'></div>"
+                                            f"<div style='display:flex; align-items:flex-start; gap:8px; padding:6px 0;'>"
+                                            f"<div style='width:24px; flex:0 0 24px; margin-top:2px;'></div>"
                                             f"<div style='flex:1; white-space:normal; word-break:keep-all; overflow-wrap:break-word; line-height:1.35;'>"
                                             f"{label}"
                                             f"</div>"
                                             f"</div>"
                                         )
-                                        
+                                                                                
                                         st.markdown(html, unsafe_allow_html=True)
                                         
                                         if checked:
@@ -1320,15 +1319,14 @@ with col_tabs:
                 
                 # 🔥 레이아웃 제어
                 html = (
-                    f"<div style='display:flex; align-items:center; gap:8px; padding:3px 0;'>" 
-                    # min-height:12px;
-                    f"<div style='width:24px; flex:0 0 24px;'></div>"
+                    f"<div style='display:flex; align-items:flex-start; gap:8px; padding:6px 0;'>"
+                    f"<div style='width:24px; flex:0 0 24px; margin-top:2px;'></div>"
                     f"<div style='flex:1; white-space:normal; word-break:keep-all; overflow-wrap:break-word; line-height:1.35;'>"
                     f"{label}"
                     f"</div>"
                     f"</div>"
                 )
-                
+                                
                 st.markdown(html, unsafe_allow_html=True)
                 
                 if checked:
@@ -2441,6 +2439,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
