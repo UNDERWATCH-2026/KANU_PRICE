@@ -1166,7 +1166,7 @@ with col_tabs:
                                     if checked:
                                         st.session_state.selected_products.add(product_url)
                                     else:
-                                        st.session_state.selected_products.discard(product_url)                            )
+                                        st.session_state.selected_products.discard(product_url)                          
     # =========================
     # TAB 2: 필터 선택
     # =========================
@@ -2330,6 +2330,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
