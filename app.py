@@ -382,7 +382,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
             
             results.append({
                 "text": f"• {row['brand']} - {product_name}{category_str}\n  💰 현재가: {float(row['current_unit_price']):,.1f}원",
-                "product_url": product_url
+                "product_url": row["product_url"]
             })
         
         if not results:
@@ -501,7 +501,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
             
             results.append({
                 "text": f"• {row['brand']} - {product_name}{category_str}\n  🆕 출시일: {launch_date}",
-                "product_url": product_url
+                "product_url": row["product_url"]
             })
         
         if not results:
@@ -558,7 +558,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
             
             results.append({
                 "text": f"• {row['brand']} - {product_name}{category_str}\n  📅 품절일: {out_date}",
-                "product_url": product_url
+                "product_url": row["product_url"]
             })
         
         if not results:
@@ -614,7 +614,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
             
             results.append({
                 "text": f"• {row['brand']} - {product_name}{category_str}\n  🔄 복원일: {restock_date}",
-                "product_url": product_url
+                "product_url": row["product_url"]
             })
         
         if not results:
@@ -2483,29 +2483,4 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
