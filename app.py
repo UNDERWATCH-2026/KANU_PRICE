@@ -1474,14 +1474,13 @@ with col_tabs:
                             # 🔥 정렬 (tab2와 동일)
                             sorted_df = (
                                 df_all[df_all["product_url"].astype(str).isin(answer_data["products"])]
-                            )
                                 .fillna("")
                                 .drop_duplicates(subset=["product_url"])
                                 .sort_values(
                                     by=["brand", "category1", "category2", "product_name"]
                                 )
                             )
-                            
+                                                        
                             for _, row in sorted_df.iterrows():
                             
                                 product_url = row["product_url"]
@@ -2484,6 +2483,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
