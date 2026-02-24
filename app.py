@@ -1649,8 +1649,16 @@ if selected_products:   # 🔥 조건 반전
             return cmap
         
         def color_dot(hex_color: str) -> str:
-            return f"<span style='color:{hex_color}; font-size:16px; line-height:1;'>●</span>"
-        
+            return (
+                f"<span style='"
+                f"color:{hex_color};"
+                f"font-size:22px;"        # 🔥 점 크기 확대 (16 → 20)
+                f"margin-right:12px;"     # 🔥 제품명과 간격 증가
+                f"display:inline-block;"
+                f"vertical-align:middle;"
+                f"'>●</span>"
+            )
+                
         
         # =========================
         # 📊 차트와 제품목록(색점) 분리 레이아웃
@@ -2355,3 +2363,4 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
