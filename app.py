@@ -1174,8 +1174,9 @@ with col_tabs:
                             
                             if not history['results']:
                                 st.caption("📭 검색 결과 없음")
+                            
                             else:
-                                # 🔥 product_url 기준으로 다시 정렬 (브랜드/카테고리 순)
+                                # 🔥 product_url 기준 정렬
                                 sorted_df = (
                                     df_all[df_all["product_url"].isin(history["results"])]
                                     .fillna("")
@@ -1185,42 +1186,45 @@ with col_tabs:
                                     )
                                 )
                             
-                                for _, row in sorted_df.iterrows():
+                                st.markdown("<hr style='margin:6px 0;'>", unsafe_allow_html=True)
                             
-                                    product_url = row["product_url"]
-                                    label = format_product_label(row)
+                                with st.expander(f"목록 펼치기 / 접기 ({len(sorted_df)}개)", expanded=False):
                             
-                                    scope = f"hist_{history_idx}"
+                                    for _, row in sorted_df.iterrows():
                             
-                                    # 🔥 체크박스 생성
-                                    k = mk_widget_key("chk_tab1", product_url, scope)
-                                    register_product_checkbox_key(product_url, k)
+                                        product_url = row["product_url"]
+                                        label = format_product_label(row)
+                            
+                                        scope = f"hist_{history_idx}"
+                            
+                                        k = mk_widget_key("chk_tab1", product_url, scope)
+                                        register_product_checkbox_key(product_url, k)
                                     
-                                    checked = st.checkbox(
-                                        "",
-                                        key=k,
-                                        value=(product_url in st.session_state.selected_products)
-                                    )
-                                    
-                                    # 🔥 레이아웃 제어 (주석 제거 + 안전 문자열)
-                                    html = (
-                                        f"<div style='display:flex; align-items:center; gap:8px; min-height:24px; padding:6px 0;'>"
-                                        f"<div style='width:24px; flex:0 0 24px;'></div>"
-                                        f"<div style='flex:1; white-space:normal; word-break:keep-all; overflow-wrap:break-word; line-height:1.35;'>"
-                                        f"{label}"
-                                        f"</div>"
-                                        f"</div>"
-                                    )
-                                    
-                                    st.markdown(html, unsafe_allow_html=True)
-                                    
-                                    if checked:
-                                        st.session_state.selected_products.add(product_url)
-                                    else:
-                                        st.session_state.selected_products.discard(product_url)
-                                    
-                                    # 🔽 하단 여백 (for 루프 바깥, expander 안)
-                                    st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
+                                        checked = st.checkbox(
+                                            "",
+                                            key=k,
+                                            value=(product_url in st.session_state.selected_products)
+                                        )
+                                        
+                                        # 🔥 레이아웃 제어 (주석 제거 + 안전 문자열)
+                                        html = (
+                                            f"<div style='display:flex; align-items:center; gap:8px; min-height:12px; padding:3px 0;'>"
+                                            f"<div style='width:24px; flex:0 0 24px;'></div>"
+                                            f"<div style='flex:1; white-space:normal; word-break:keep-all; overflow-wrap:break-word; line-height:1.35;'>"
+                                            f"{label}"
+                                            f"</div>"
+                                            f"</div>"
+                                        )
+                                        
+                                        st.markdown(html, unsafe_allow_html=True)
+                                        
+                                        if checked:
+                                            st.session_state.selected_products.add(product_url)
+                                        else:
+                                            st.session_state.selected_products.discard(product_url)
+                                        
+                                        # 🔽 하단 여백 (for 루프 바깥, expander 안)
+                                        st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
                            
     # =========================
     # TAB 2: 필터 선택
@@ -1316,7 +1320,7 @@ with col_tabs:
                 
                 # 🔥 레이아웃 제어
                 html = (
-                    f"<div style='display:flex; align-items:center; gap:8px; min-height:24px; padding:6px 0;'>"
+                    f"<div style='display:flex; align-items:center; gap:8px; min-height:12px; padding:3px 0;'>"
                     f"<div style='width:24px; flex:0 0 24px;'></div>"
                     f"<div style='flex:1; white-space:normal; word-break:keep-all; overflow-wrap:break-word; line-height:1.35;'>"
                     f"{label}"
@@ -2436,6 +2440,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
