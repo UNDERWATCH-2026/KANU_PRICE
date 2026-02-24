@@ -1898,17 +1898,19 @@ if selected_products:   # 🔥 조건 반전
                 with col_name:
                     st.markdown(
                         f"""
-                        <div style="
-                            display:flex;
-                            align-items:flex-start;
-                            gap:10px;
-                        ">
-                            {color_dot(hex_color)}
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            <span style="
+                                color:{hex_color};
+                                font-size:22px;
+                                line-height:1;
+                                flex:0 0 auto;
+                            ">●</span>
+                
                             <div style="
                                 white-space: normal;
                                 word-break: keep-all;
                                 overflow-wrap: break-word;
-                                line-height: 1.35;
+                                line-height:1.4;
                             ">
                                 <b>{label}</b>
                             </div>
@@ -1916,7 +1918,6 @@ if selected_products:   # 🔥 조건 반전
                         """,
                         unsafe_allow_html=True
                     )
-        
         # 🔥 엑셀 다운로드 버튼 추가
         with download_placeholder:
             # 엑셀 파일 생성
@@ -2444,6 +2445,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
