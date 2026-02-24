@@ -1265,10 +1265,9 @@ with col_tabs:
     with tab3:
         # 🔥 Form을 사용하여 제출 후 자동으로 입력창 비우기
         with st.form("question_form", clear_on_submit=True):
-            question = st.text_area(
+            question = st.text_input(
                 "자연어로 질문하세요",
-                placeholder="예: 카누 바리스타 밸런스드 디카페인 할인 기간 / 네스프레소 최저가 제품",
-                height=100,
+                placeholder="예: 카누 바리스타 할인 기간 / 네스프레소 최저가 제품",
                 key="insight_question_input"
             )
             ask_question = st.form_submit_button("🔍 질문하기", type="primary", use_container_width=True)
@@ -2336,6 +2335,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
