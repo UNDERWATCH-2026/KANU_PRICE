@@ -8,7 +8,16 @@ import hashlib   # ✅ 반드시 추가
 # =========================
 # 0️⃣ 기본 설정
 # =========================
-st.set_page_config(page_title="Capsule Price Intelligence", layout="wide")
+st.set_page_config(page_title="Coffee Capsule Price Intelligence", layout="wide")
+
+st.markdown("""
+<style>
+button[data-baseweb="tab"] {
+    font-size: 15px;
+    padding: 10px 30px;   /* 좌우 간격 조절 */
+}
+</style>
+""", unsafe_allow_html=True)
 
 def mk_widget_key(prefix: str, product_url: str, scope: str) -> str:
     raw = f"{prefix}|{product_url}|{scope}"
@@ -1169,9 +1178,7 @@ with col_tabs:
                                     # 검색 이력에서 제거
                                     st.session_state.search_history.pop(history_idx)
                                     st.rerun()
-                            
-                            st.markdown("---")
-                            
+                                                       
                             if not history['results']:
                                 st.caption("📭 검색 결과 없음")
                             
@@ -1289,24 +1296,25 @@ with col_tabs:
 
         st.markdown("### 📦 비교할 제품 선택")
 
-        with st.expander(f"목록 펼치기 / 접기 ({len(sorted_df)}개)", expanded=False):
-            unique_df = (
-                candidates_df
-                .fillna("")
-                .drop_duplicates(subset=["product_url"])
-                .sort_values(
-                    by=["brand", "category1", "category2", "product_name"]
-                )
+        # 🔥 정렬 + 중복 제거 먼저
+        unique_df = (
+            candidates_df
+            .fillna("")
+            .drop_duplicates(subset=["product_url"])
+            .sort_values(
+                by=["brand", "category1", "category2", "product_name"]
             )
+        )
         
-            for _, row in unique_df.iterrows():
+        with st.expander(f"목록 펼치기 / 접기 ({len(unique_df)}개)", expanded=False):
 
+            for _, row in unique_df.iterrows():
+        
                 product_url = row["product_url"]
                 label = format_product_label(row)
             
                 scope = f"{sel_brand}|{sel_cat1}|{sel_cat2}"
-
-                # 🔥 체크박스 생성
+        
                 k = mk_widget_key("chk_tab2", product_url, scope)
                 register_product_checkbox_key(product_url, k)
                 
@@ -1316,7 +1324,6 @@ with col_tabs:
                     value=(product_url in st.session_state.selected_products)
                 )
                 
-                # 🔥 레이아웃 제어
                 html = (
                     f"<div style='display:flex; align-items:flex-start; gap:8px; padding:6px 0;'>"
                     f"<div style='width:24px; flex:0 0 24px; margin-top:2px;'></div>"
@@ -1332,10 +1339,9 @@ with col_tabs:
                     st.session_state.selected_products.add(product_url)
                 else:
                     st.session_state.selected_products.discard(product_url)
-                
-                # 🔽 하단 여백 (for 루프 바깥, expander 안)
-                st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
-       
+        
+            # 🔽 하단 여백 (여기가 맞는 위치)
+            st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
 
     # =========================
     # TAB 3: 자연어 질문
@@ -2438,6 +2444,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
