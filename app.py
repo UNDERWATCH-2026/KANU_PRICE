@@ -1192,7 +1192,7 @@ with col_tabs:
                                     k = mk_widget_key("chk_tab1", product_url, scope)
                                     register_product_checkbox_key(product_url, k)
                                     
-                                    col_chk, col_lbl = st.columns([1, 10], vertical_alignment="top")
+                                    col_chk, col_lbl = st.columns([1, 10], vertical_alignment="center")
                                     
                                     with col_chk:
                                         checked = st.checkbox(
@@ -1311,7 +1311,7 @@ with col_tabs:
                 register_product_checkbox_key(product_url, k)
             
                 # ✅ 체크박스 + 텍스트 분리
-                col_chk, col_lbl = st.columns([1, 10], vertical_alignment="top")
+                col_chk, col_lbl = st.columns([1, 10], vertical_alignment="center")
             
                 with col_chk:
                     checked = st.checkbox(
@@ -2450,6 +2450,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
