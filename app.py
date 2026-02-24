@@ -1192,37 +1192,45 @@ with col_tabs:
                             
                                     scope = f"hist_{history_idx}"
                             
+                                    # 🔥 체크박스 생성
                                     k = mk_widget_key("chk_tab1", product_url, scope)
                                     register_product_checkbox_key(product_url, k)
-                            
-                                    col_chk, col_lbl = st.columns([1, 10], vertical_alignment="center")
-
-                                    with col_chk:
-                                        checked = st.checkbox(
-                                            "",
-                                            key=k,
-                                            value=(product_url in st.session_state.selected_products)
-                                        )
                                     
-                                    with col_lbl:
-                                        st.markdown(
-                                            f"""
+                                    checked = st.checkbox(
+                                        "",
+                                        key=k,
+                                        value=(product_url in st.session_state.selected_products)
+                                    )
+                                    
+                                    # 🔥 레이아웃 제어
+                                    st.markdown(
+                                        f"""
+                                        <div style="
+                                            display:flex;
+                                            align-items:center;      /* ① 세로 중앙 정렬 */
+                                            gap:8px;                 /* ② 체크박스 ↔ 텍스트 가로 간격 */
+                                            min-height:48px;         /* ③ 행 높이 (전체 row 높이) */
+                                            padding:6px 0;           /* ④ 위아래 내부 여백 */
+                                        ">
+                                    
                                             <div style="
-                                                min-height:48px;              /* 🔥 행 최소 높이 고정 */
-                                                display:flex;
-                                                align-items:center;           /* 🔥 글자 기준 중앙 */
-                                                padding:6px 0;                /* 🔥 위아래 간격 */
+                                                width:24px;          /* ⑤ 체크박스 영역 고정 폭 */
+                                                flex:0 0 24px;       /* ⑥ 체크박스 영역 축소 방지 */
+                                            "></div>
+                                    
+                                            <div style="
+                                                flex:1;              /* ⑦ 텍스트가 나머지 공간 차지 */
                                                 white-space:normal;
-                                                word-break:keep-all;
+                                                word-break:keep-all; /* ⑧ 한글 단어 중간 잘림 방지 */
                                                 overflow-wrap:break-word;
-                                                line-height:1.35;
+                                                line-height:1.35;    /* ⑨ 두 줄일 때 줄 간격 */
                                             ">
                                                 {label}
                                             </div>
-                                            """,
-                                            unsafe_allow_html=True
-                                        )
-                                    
+                                        </div>
+                                        """,
+                                        unsafe_allow_html=True
+                                    )
                                     if checked:
                                         st.session_state.selected_products.add(product_url)
                                     else:
@@ -1311,39 +1319,46 @@ with col_tabs:
                 label = format_product_label(row)
             
                 scope = f"{sel_brand}|{sel_cat1}|{sel_cat2}"
-            
+
+                # 🔥 체크박스 생성
                 k = mk_widget_key("chk_tab2", product_url, scope)
                 register_product_checkbox_key(product_url, k)
-            
-                # ✅ 체크박스 + 텍스트 분리
-                col_chk, col_lbl = st.columns([1, 9], vertical_alignment="center")
-
-                with col_chk:
-                    checked = st.checkbox(
-                        "",
-                        key=k,
-                        value=(product_url in st.session_state.selected_products)
-                    )
                 
-                with col_lbl:
-                    st.markdown(
-                        f"""
+                checked = st.checkbox(
+                    "",
+                    key=k,
+                    value=(product_url in st.session_state.selected_products)
+                )
+                
+                # 🔥 레이아웃 제어
+                st.markdown(
+                    f"""
+                    <div style="
+                        display:flex;
+                        align-items:center;      /* ① 세로 중앙 정렬 */
+                        gap:8px;                 /* ② 체크박스 ↔ 텍스트 가로 간격 */
+                        min-height:48px;         /* ③ 행 높이 (전체 row 높이) */
+                        padding:6px 0;           /* ④ 위아래 내부 여백 */
+                    ">
+                
                         <div style="
-                            min-height:48px;              /* 🔥 행 최소 높이 고정 */
-                            display:flex;
-                            align-items:center;           /* 🔥 글자 기준 중앙 */
-                            padding:6px 0;                /* 🔥 위아래 간격 */
+                            width:24px;          /* ⑤ 체크박스 영역 고정 폭 */
+                            flex:0 0 24px;       /* ⑥ 체크박스 영역 축소 방지 */
+                        "></div>
+                
+                        <div style="
+                            flex:1;              /* ⑦ 텍스트가 나머지 공간 차지 */
                             white-space:normal;
-                            word-break:keep-all;
+                            word-break:keep-all; /* ⑧ 한글 단어 중간 잘림 방지 */
                             overflow-wrap:break-word;
-                            line-height:1.35;
+                            line-height:1.35;    /* ⑨ 두 줄일 때 줄 간격 */
                         ">
                             {label}
                         </div>
-                        """,
-                        unsafe_allow_html=True
-                    )
-                
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
                 if checked:
                     st.session_state.selected_products.add(product_url)
                 else:
@@ -2453,6 +2468,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
