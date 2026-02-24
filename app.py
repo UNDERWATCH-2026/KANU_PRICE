@@ -1624,7 +1624,7 @@ if selected_products:   # 🔥 조건 반전
             df_chart["event_date"] +
             pd.to_timedelta(df_chart["dup_rank"] * 0.06, unit="D")
         )
-        df_chart = df_timeline.dropna(subset=["unit_price"]).copy()
+        st.write(df_chart[["product_name","price_detail","price_status"]].applymap(type).head())
         # =========================
         # 📊 차트와 범례를 분리된 레이아웃으로 표시
         # =========================
@@ -2406,6 +2406,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
