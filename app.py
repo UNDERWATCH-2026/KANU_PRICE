@@ -1466,7 +1466,7 @@ with col_tabs:
                             # 🔥 안내 문구 (작은 글씨)
                             st.markdown(
                                 "<div style='font-size:13px; color:#6b7280; margin:6px 0 8px 0;'>"
-                                "비교할 제품을 선택해 주세요"
+                                "* 비교할 제품을 선택해 주세요"
                                 "</div>",
                                 unsafe_allow_html=True
                             )
@@ -2483,6 +2483,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
