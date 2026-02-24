@@ -1619,13 +1619,6 @@ if selected_products:   # 🔥 조건 반전
             .cumcount()
         )
 
-        
-        st.write(df_chart[["product_name","price_detail","price_status"]].applymap(type).head())
-        df_chart["product_name"] = df_chart["product_name"].astype(str)
-        df_chart["price_detail"] = df_chart["price_detail"].astype(str)
-        df_chart["price_status"] = df_chart["price_status"].astype(str)
-
-        
         # 점만 살짝 이동시키기 (0.06일 ≈ 1.44시간)
         df_chart["event_date_jitter"] = (
             df_chart["event_date"] +
@@ -1639,72 +1632,27 @@ if selected_products:   # 🔥 조건 반전
         
         with col_chart:
             # =========================
-            # 📈 가격 선 차트 (범례 없음) - 라인(기존 event_date)
+            # 📈 가격 선 차트 (범례 없음)
             # =========================
             base_line = (
                 alt.Chart(df_chart)
-                .mark_line()  # ✅ point=True 제거 (라인만)
+                .mark_line(point=True)
                 .encode(
-                    x=alt.X("event_date:T", title="날짜", axis=alt.Axis(format="%m/%d")),
+                    x=alt.X("event_date:T", title="날짜", axis=alt.Axis(format="%m/%d")),  # 🔥 월/일 형식으로 고정
                     y=alt.Y("unit_price:Q", title="개당 가격 (원)"),
-                    color=alt.Color("product_name:N", title="제품", legend=None),
-                    detail="segment:N",
-                )
-            )
-            
-            # =========================
-            # 🔵 포인트 레이어 - 점만 event_date_jitter 사용
-            # =========================
-            point_layer_price = (
-                alt.Chart(df_chart)
-                .mark_point(size=70)  # 점 크기 필요시 조절
-                .encode(
-                    x=alt.X("event_date_jitter:T", title="날짜", axis=alt.Axis(format="%m/%d")),
-                    y=alt.Y("unit_price:Q", title="개당 가격 (원)"),
-                    color=alt.Color("product_name:N", title="제품", legend=None),
-                    detail=["product_name:N", "segment:N"],  # 겹침 분리 안정화
+                    color=alt.Color("product_name:N", title="제품", legend=None),  # 🔥 범례 제거
+                    detail="segment:N",  # 🔥 이게 핵심 (선 완전 분리)
                     tooltip=[
                         alt.Tooltip("product_name:N", title="제품"),
-                        alt.Tooltip("event_date:T", title="날짜", format="%Y-%m-%d"),  # ✅ 실제 날짜는 원래 event_date
-                        alt.Tooltip("price_detail:N", title="가격 정보"),
-                        alt.Tooltip("price_status:N", title="상태"),
-                    ],
-                )
-            )
-            
-            layers = [base_line, point_layer_price]
-    
-
-            # ✅ 겹친 점(같은 날짜·같은 가격)에 대해 tooltip을 "묶어서" 보여주는 레이어
-            tooltip_multi = (
-                alt.Chart(df_chart)
-                # 1) 제품별 1줄 텍스트 만들기
-                .transform_calculate(
-                    line="datum.product_name + ' | ' + datum.price_detail + ' | ' + datum.price_status"
-                )
-                # 2) 같은 날짜+가격 기준으로 line들을 모으기
-                .transform_aggregate(
-                    lines="values(line)",
-                    groupby=["event_date", "unit_price"]
-                )
-                # 3) 배열(lines) → 줄바꿈 텍스트로 변환
-                .transform_calculate(
-                    lines_txt="join(datum.lines, '\\n\\n')"
-                )
-                # 4) hover 잡기용 투명 점(크게)
-                .mark_circle(size=700, opacity=0)
-                .encode(
-                    x="event_date:T",
-                    y="unit_price:Q",
-                    tooltip=[
                         alt.Tooltip("event_date:T", title="날짜", format="%Y-%m-%d"),
-                        alt.Tooltip("unit_price:Q", title="개당 가격(원)", format=",.1f"),
-                        alt.Tooltip("lines_txt:N", title="제품별 상세"),
+                        alt.Tooltip("price_detail:N", title="가격 정보"),  # 🔥 상세 가격 정보
+                        alt.Tooltip("price_status:N", title="상태"),  # 🔥 할인 여부
                     ],
                 )
             )
-            
-            layers.append(tooltip_multi)
+    
+            layers = [base_line]
+    
                         
             # =========================
             # 🔔 Lifecycle 아이콘 추가
@@ -2413,6 +2361,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
