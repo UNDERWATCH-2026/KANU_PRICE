@@ -4,7 +4,7 @@ import altair as alt
 from supabase import create_client
 from datetime import datetime, timedelta
 import hashlib   # ✅ 반드시 추가
-
+st.write(df_chart[["product_name","price_detail","price_status"]].applymap(type).head())
 # =========================
 # 0️⃣ 기본 설정
 # =========================
@@ -2406,6 +2406,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
