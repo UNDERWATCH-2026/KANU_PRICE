@@ -896,8 +896,7 @@ def remove_product_everywhere(product_url: str):
 if "selected_products" not in st.session_state:
     st.session_state.selected_products = set()
 
-if st.session_state.get("debug_mode", True):
-    st.write("Selected:", len(st.session_state.selected_products))
+
 
 if "keyword_results" not in st.session_state:
     st.session_state.keyword_results = {}
@@ -1459,7 +1458,32 @@ with col_tabs:
                     if isinstance(answer_data, dict) and answer_data.get("type") == "product_list":
 
                         st.markdown(f"**A:** {answer_data['text']}")
-                        st.write("match count:", len(df_all[df_all["product_url"].isin(answer_data["products"])]))
+                        
+                        ####디버그
+
+                        st.write("🔎 answer_data raw:", answer_data["products"][:5])
+                        st.write("🔎 df_all raw:", df_all["product_url"].astype(str).unique()[:5])
+                        
+                        df_all["product_url_clean"] = (
+                            df_all["product_url"]
+                            .astype(str)
+                            .str.strip()
+                            .str.lower()
+                        )
+                        
+                        products_clean = [
+                            str(p).strip().lower()
+                            for p in answer_data["products"]
+                        ]
+                        
+                        st.write("🔎 cleaned answer:", products_clean[:5])
+                        st.write("🔎 cleaned df:", df_all["product_url_clean"].unique()[:5])
+                        
+                        matches = df_all[df_all["product_url_clean"].isin(products_clean)]
+                        
+                        st.write("✅ match count:", len(matches))
+                           ####디버그여기까지
+                        
                         if answer_data.get("products"):
                     
                    
@@ -2483,6 +2507,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
