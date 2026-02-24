@@ -1391,7 +1391,7 @@ with col_tabs:
                                         if checked:
                                             st.session_state.selected_products.add(product_url)
                                         else:
-                                            st.session_state.selected_products.discard(product_url))
+                                            st.session_state.selected_products.discard(product_url)
                                                                                                                         
                     elif isinstance(answer_data, dict):
                         st.markdown(f"**A:** {answer_data.get('text', str(answer_data))}")
@@ -2330,6 +2330,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
