@@ -1459,7 +1459,7 @@ with col_tabs:
                     if isinstance(answer_data, dict) and answer_data.get("type") == "product_list":
 
                         st.markdown(f"**A:** {answer_data['text']}")
-                    
+                        st.write(answer_data.get("products"))
                         if answer_data.get("products"):
                     
                    
@@ -1520,7 +1520,7 @@ with col_tabs:
                                     st.session_state.selected_products.add(product_url)
                                 else:
                                     st.session_state.selected_products.discard(product_url)
-                                st.write(answer_data.get("products"))
+                                
                     # =========================
                     # 일반 텍스트 답변
                     # =========================
@@ -2483,6 +2483,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
