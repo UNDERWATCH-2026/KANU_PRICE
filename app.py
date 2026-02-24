@@ -13,9 +13,8 @@ st.set_page_config(page_title="Capsule Price Intelligence", layout="wide")
 def mk_widget_key(prefix: str, product_url: str, scope: str) -> str:
     raw = f"{prefix}|{product_url}|{scope}"
     return prefix + "_" + hashlib.md5(raw.encode("utf-8")).hexdigest()[:16]
+st.write("Selected:", len(st.session_state.selected_products))
 
-st.write(len(st.session_state.selected_products))
-st.write(st.session_state.selected_products)
 # =========================
 # 1️⃣ Supabase 설정
 # =========================
@@ -1343,59 +1342,66 @@ with col_tabs:
             for idx, history in enumerate(reversed(st.session_state.question_history)):
                 with st.container(border=True):
                     col_q, col_del = st.columns([10, 1])
-                
+        
                     with col_q:
                         st.markdown(f"**Q:** {history['question']}")
-                
+        
                     with col_del:
                         if st.button("🗑️", key=f"delete_q_{idx}", help="질문 삭제"):
-                            st.session_state.question_history.pop(len(st.session_state.question_history) - 1 - idx)
+                            st.session_state.question_history.pop(
+                                len(st.session_state.question_history) - 1 - idx
+                            )
                             st.rerun()
-                
-                    # 🔥 답변 표시
-                    # 🔥 답변 표시
-                    answer_data = history['answer']
-                    
+        
+                    answer_data = history["answer"]
+        
+                    # =========================
+                    # ✅ 제품 리스트 답변 처리
+                    # =========================
                     if isinstance(answer_data, dict) and answer_data.get("type") == "product_list":
-                    
+
                         st.markdown(f"**A:** {answer_data['text']}")
                     
                         if answer_data.get("products"):
+                    
                             st.markdown("##### 📦 비교할 제품으로 추가")
                             cols = st.columns(3)
                     
-                            # 🔥 질문 해시를 먼저 계산
                             question_hash = hashlib.md5(
                                 history["question"].encode()
                             ).hexdigest()[:8]
-                            
-                            for pidx, pname in enumerate(answer_data["products"]):
-                            
-                                product_row = df_all[df_all["product_name"] == pname]
+                    
+                            # 👇 여기서부터 교체
+                            for pidx, product_url in enumerate(answer_data["products"]):
+                    
+                                product_row = df_all[df_all["product_url"] == product_url]
                                 if product_row.empty:
                                     continue
-                            
+                    
                                 row = product_row.iloc[0]
-                                product_url = row["product_url"]
                                 label = format_product_label(row)
-                            
+                    
                                 with cols[pidx % 3]:
+                    
                                     scope = f"{idx}_{question_hash}_{pidx}"
-                                
+                    
                                     checked = st.checkbox(
                                         label,
                                         key=mk_widget_key("chk_tab3", product_url, scope),
                                         value=(product_url in st.session_state.selected_products)
                                     )
-                                
+                    
                                     if checked:
                                         st.session_state.selected_products.add(product_url)
                                     else:
                                         st.session_state.selected_products.discard(product_url)
-                                                                                                                        
+                            
+                    # =========================
+                    # 일반 텍스트 답변
+                    # =========================
                     elif isinstance(answer_data, dict):
                         st.markdown(f"**A:** {answer_data.get('text', str(answer_data))}")
-                    
+        
                     else:
                         st.markdown(f"**A:** {answer_data}")
 
@@ -2330,6 +2336,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
