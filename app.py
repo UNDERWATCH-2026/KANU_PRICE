@@ -1289,8 +1289,7 @@ with col_tabs:
 
         st.markdown("### 📦 비교할 제품 선택")
 
-        with st.expander("목록 펼치기 / 접기", expanded=False):
-        
+        with st.expander(f"목록 펼치기 / 접기 ({len(sorted_df)}개)", expanded=False):
             unique_df = (
                 candidates_df
                 .fillna("")
@@ -2439,6 +2438,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
