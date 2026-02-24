@@ -1105,9 +1105,18 @@ with col_tabs:
                     existing_idx = idx
                     break
             
+            sorted_df = (
+                candidates_df
+                .fillna("")
+                .drop_duplicates(subset=["product_url"])
+                .sort_values(
+                    by=["brand", "category1", "category2", "product_name"]
+                )
+            )
+            
             search_result = {
                 "keyword": search_keyword,
-                "results": sorted(candidates_df["product_name"].unique().tolist()) if not candidates_df.empty else []
+                "results": sorted_df["product_url"].tolist()
             }
             
             if existing_idx is not None:
@@ -1166,15 +1175,18 @@ with col_tabs:
                             if not history['results']:
                                 st.caption("📭 검색 결과 없음")
                             else:
-                                for pname in history['results']:
+                                # 🔥 product_url 기준으로 다시 정렬 (브랜드/카테고리 순)
+                                sorted_df = (
+                                    df_all[df_all["product_url"].isin(history["results"])]
+                                    .fillna("")
+                                    .drop_duplicates(subset=["product_url"])
+                                    .sort_values(
+                                        by=["brand", "category1", "category2", "product_name"]
+                                    )
+                                )
                             
-                                    # 🔥 product_url 안전하게 가져오기
-                                    product_row = df_all[df_all["product_name"] == pname]
+                                for _, row in sorted_df.iterrows():
                             
-                                    if product_row.empty:
-                                        continue
-                            
-                                    row = product_row.iloc[0]
                                     product_url = row["product_url"]
                                     label = format_product_label(row)
                             
@@ -1182,19 +1194,16 @@ with col_tabs:
                             
                                     k = mk_widget_key("chk_tab1", product_url, scope)
                                     register_product_checkbox_key(product_url, k)
-                                    
-                                    k = mk_widget_key("chk_tab1", product_url, scope)
-                                    register_product_checkbox_key(product_url, k)
-                                    
+                            
                                     col_chk, col_lbl = st.columns([1, 10], vertical_alignment="center")
-                                    
+                            
                                     with col_chk:
                                         checked = st.checkbox(
                                             "",
                                             key=k,
                                             value=(product_url in st.session_state.selected_products)
                                         )
-                                    
+                            
                                     with col_lbl:
                                         st.markdown(
                                             f"""
@@ -1202,23 +1211,18 @@ with col_tabs:
                                                 white-space: normal;
                                                 word-break: keep-all;
                                                 overflow-wrap: break-word;
-                                                line-height: 1.35;
+                                                line-height:1.35;
                                             ">
                                                 {label}
                                             </div>
                                             """,
                                             unsafe_allow_html=True
                                         )
-                                                                        
+                            
                                     if checked:
                                         st.session_state.selected_products.add(product_url)
                                     else:
                                         st.session_state.selected_products.discard(product_url)
-                                                                
-                                    if checked:
-                                        st.session_state.selected_products.add(product_url)
-                                    else:
-                                        st.session_state.selected_products.discard(product_url)             
     # =========================
     # TAB 2: 필터 선택
     # =========================
@@ -2434,6 +2438,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
