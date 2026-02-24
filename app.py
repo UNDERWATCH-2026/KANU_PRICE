@@ -1462,40 +1462,64 @@ with col_tabs:
                     
                         if answer_data.get("products"):
                     
-                            st.markdown("##### 📦 비교할 제품으로 추가")
-                            cols = st.columns(3)
-                    
-                            question_hash = hashlib.md5(
-                                history["question"].encode()
-                            ).hexdigest()[:8]
-                    
-                            # 👇 여기서부터 교체
-                            for pidx, product_url in enumerate(answer_data["products"]):
-                    
-                                product_row = df_all[df_all["product_url"] == product_url]
-                                if product_row.empty:
-                                    continue
-                    
-                                row = product_row.iloc[0]
+                   
+                            # 🔥 안내 문구 (작은 글씨)
+                            st.markdown(
+                                "<div style='font-size:13px; color:#6b7280; margin:6px 0 8px 0;'>"
+                                "비교할 제품을 선택해 주세요"
+                                "</div>",
+                                unsafe_allow_html=True
+                            )
+                            
+                            # 🔥 정렬 (tab2와 동일)
+                            sorted_df = (
+                                df_all[df_all["product_url"].isin(answer_data["products"])]
+                                .fillna("")
+                                .drop_duplicates(subset=["product_url"])
+                                .sort_values(
+                                    by=["brand", "category1", "category2", "product_name"]
+                                )
+                            )
+                            
+                            for _, row in sorted_df.iterrows():
+                            
+                                product_url = row["product_url"]
                                 label = format_product_label(row)
-                    
-                                with cols[pidx % 3]:
-                    
-                                    scope = f"{idx}_{question_hash}_{pidx}"
-                    
-                                    k = mk_widget_key("chk_tab3", product_url, scope)
-                                    register_product_checkbox_key(product_url, k)
-                                    
+                            
+                                scope = f"tab3_{idx}"
+                            
+                                k = mk_widget_key("chk_tab3", product_url, scope)
+                                register_product_checkbox_key(product_url, k)
+                            
+                                col_chk, col_lbl = st.columns([0.06, 0.94], vertical_alignment="top")
+                            
+                                with col_chk:
                                     checked = st.checkbox(
-                                        label,
+                                        "",
                                         key=k,
                                         value=(product_url in st.session_state.selected_products)
                                     )
-                    
-                                    if checked:
-                                        st.session_state.selected_products.add(product_url)
-                                    else:
-                                        st.session_state.selected_products.discard(product_url)
+                            
+                                with col_lbl:
+                                    st.markdown(
+                                        f"""
+                                        <div style="
+                                            white-space:normal;
+                                            word-break:keep-all;
+                                            overflow-wrap:break-word;
+                                            line-height:1.35;
+                                            padding:4px 0;
+                                        ">
+                                            {label}
+                                        </div>
+                                        """,
+                                        unsafe_allow_html=True
+                                    )
+                            
+                                if checked:
+                                    st.session_state.selected_products.add(product_url)
+                                else:
+                                    st.session_state.selected_products.discard(product_url)
                             
                     # =========================
                     # 일반 텍스트 답변
@@ -2459,6 +2483,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
