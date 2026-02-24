@@ -349,7 +349,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
                         "text": f"• {row['brand']} - {row['product_name']}\n"
                                 f"  📅 할인 기간: {period['discount_start_date']} ~ {period['discount_end_date']}\n"
                                 f"{price_info}",
-                        "product_url": row['product_url']
+                        "product_url": str(row["product_url"])
                     })
         
         if not results:
@@ -358,7 +358,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         return {
             "type": "product_list",
             "text": "할인 기간 정보:\n\n" + "\n\n".join([r["text"] for r in results]),
-            "products": [r["product_url"] for r in results]
+            "products": [str(r["product_url"]) for r in results]
         }
 
     if intent == "DISCOUNT" and not start_date:
@@ -382,7 +382,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
             
             results.append({
                 "text": f"• {row['brand']} - {product_name}{category_str}\n  💰 현재가: {float(row['current_unit_price']):,.1f}원",
-                "product_url": row["product_url"]
+                "product_url": str(row["product_url"])
             })
         
         if not results:
@@ -391,7 +391,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         return {
             "type": "product_list",
             "text": "현재 할인 중 제품:\n\n" + "\n\n".join([r["text"] for r in results]),
-            "products": [r["product_url"] for r in results]
+            "products": [str(r["product_url"]) for r in results]
         }
 
     if intent == "PRICE_MIN":
@@ -437,7 +437,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
             results.append({
                 "text": f"• {row['brand']} - {row['product_name']}{category_str}\n"
                         f"  💰 최저가: {min_price:,.1f}원 (기간: {sd} ~ {ed})",
-                "product_url": row['product_url']
+                "product_url": str(row["product_url"])
             })
 
         if not results:
@@ -446,7 +446,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         return {
             "type": "product_list",
             "text": "최저가 제품 목록:\n\n" + "\n\n".join([r["text"] for r in results]),
-            "products": [r["product_url"] for r in results]
+            "products": [str(r["product_url"]) for r in results]
         }
 
     if intent == "PRICE_MAX":
@@ -501,7 +501,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
             
             results.append({
                 "text": f"• {row['brand']} - {product_name}{category_str}\n  🆕 출시일: {launch_date}",
-                "product_url": row["product_url"]
+                "product_url": str(row["product_url"])
             })
         
         if not results:
@@ -511,7 +511,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         return {
             "type": "product_list",
             "text": "최근 신제품:\n\n" + "\n\n".join([r["text"] for r in results]),
-            "products": [r["product_url"] for r in results]
+            "products": [str(r["product_url"]) for r in results]
         }
 
     if intent == "OUT":
@@ -558,7 +558,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
             
             results.append({
                 "text": f"• {row['brand']} - {product_name}{category_str}\n  📅 품절일: {out_date}",
-                "product_url": row["product_url"]
+                "product_url": str(row["product_url"])
             })
         
         if not results:
@@ -567,7 +567,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         return {
             "type": "product_list",
             "text": "최근 품절 제품:\n\n" + "\n\n".join([r["text"] for r in results]),
-            "products": [r["product_url"] for r in results]
+            "products": [str(r["product_url"]) for r in results]
         }
 
     if intent == "RESTORE":
@@ -614,7 +614,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
             
             results.append({
                 "text": f"• {row['brand']} - {product_name}{category_str}\n  🔄 복원일: {restock_date}",
-                "product_url": row["product_url"]
+                "product_url": str(row["product_url"])
             })
         
         if not results:
@@ -623,7 +623,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         return {
             "type": "product_list",
             "text": "최근 복원된 제품:\n\n" + "\n\n".join([r["text"] for r in results]),
-            "products": [r["product_url"] for r in results]
+            "products": [str(r["product_url"]) for r in results]
         }
 
     if intent == "VOLATILITY" and start_date:
@@ -1473,7 +1473,8 @@ with col_tabs:
                             
                             # 🔥 정렬 (tab2와 동일)
                             sorted_df = (
-                                df_all[df_all["product_url"].isin(answer_data["products"])]
+                                df_all[df_all["product_url"].astype(str).isin(answer_data["products"])]
+                            )
                                 .fillna("")
                                 .drop_duplicates(subset=["product_url"])
                                 .sort_values(
@@ -2483,5 +2484,6 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
