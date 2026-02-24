@@ -13,7 +13,8 @@ st.set_page_config(page_title="Capsule Price Intelligence", layout="wide")
 def mk_widget_key(prefix: str, product_url: str, scope: str) -> str:
     raw = f"{prefix}|{product_url}|{scope}"
     return prefix + "_" + hashlib.md5(raw.encode("utf-8")).hexdigest()[:16]
-    
+
+
 # =========================
 # 1️⃣ Supabase 설정
 # =========================
@@ -1154,8 +1155,8 @@ with col_tabs:
                                     product_url = row["product_url"]
                                     label = format_product_label(row)
                                     
-                                    scope = f"hist{history_idx}"
-
+                                    scope = f"hist_{history_idx}"
+                                    
                                     st.checkbox(
                                         label,
                                         key=mk_widget_key("chk_tab1", product_url, scope),
@@ -1243,14 +1244,13 @@ with col_tabs:
                 label = format_product_label(row)
         
                 scope = f"{sel_brand}|{sel_cat1}|{sel_cat2}"
-
+                
                 st.checkbox(
                     label,
                     key=mk_widget_key("chk_tab2", product_url, scope),
                     on_change=toggle_product,
                     args=(product_url,),
                 )
-
     # =========================
     # TAB 3: 자연어 질문
     # =========================
@@ -1359,27 +1359,27 @@ with col_tabs:
                             question_hash = hashlib.md5(
                                 history["question"].encode()
                             ).hexdigest()[:8]
-                    
+                            
                             for pidx, pname in enumerate(answer_data["products"]):
-                    
+                            
                                 product_row = df_all[df_all["product_name"] == pname]
                                 if product_row.empty:
                                     continue
-                    
+                            
                                 row = product_row.iloc[0]
                                 product_url = row["product_url"]
                                 label = format_product_label(row)
-                    
+                            
                                 with cols[pidx % 3]:
-                                    scope = question_hash
-
+                                    scope = f"{idx}_{question_hash}_{pidx}"
+                            
                                     st.checkbox(
                                         label,
                                         key=mk_widget_key("chk_tab3", product_url, scope),
                                         on_change=toggle_product,
                                         args=(product_url,),
                                     )
-                                                        
+                                                                                                                        
                     elif isinstance(answer_data, dict):
                         st.markdown(f"**A:** {answer_data.get('text', str(answer_data))}")
                     
@@ -2317,6 +2317,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
