@@ -1206,7 +1206,7 @@ with col_tabs:
                                         k = mk_widget_key("chk_tab1", product_url, scope)
                                         register_product_checkbox_key(product_url, k)
                                 
-                                        col_chk, col_lbl = st.columns([0.06, 0.94], vertical_alignment="top")
+                                        col_chk, col_lbl = st.columns([0.06, 0.94], vertical_alignment="center")
                                 
                                         with col_chk:
                                             checked = st.checkbox(
@@ -1223,7 +1223,7 @@ with col_tabs:
                                                     word-break:keep-all;
                                                     overflow-wrap:break-word;
                                                     line-height:1.35;
-                                                    padding:2px 0 6px 0;
+                                                    padding:5px 0 6px 0;
                                                 ">
                                                     {label}
                                                 </div>
@@ -1325,7 +1325,7 @@ with col_tabs:
                 register_product_checkbox_key(product_url, k)
         
                 # ✅ 한 줄에 배치
-                col_chk, col_lbl = st.columns([0.06, 0.94], vertical_alignment="top")
+                col_chk, col_lbl = st.columns([0.06, 0.94], vertical_alignment="center")
         
                 with col_chk:
                     checked = st.checkbox(
@@ -1342,7 +1342,7 @@ with col_tabs:
                             word-break:keep-all;
                             overflow-wrap:break-word;
                             line-height:1.35;
-                            padding:2px 0 6px 0;
+                            padding:5px 0 6px 0;
                         ">
                             {label}
                         </div>
@@ -2459,6 +2459,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
