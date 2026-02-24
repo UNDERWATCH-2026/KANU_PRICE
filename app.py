@@ -792,16 +792,21 @@ def options_from(df: pd.DataFrame, col: str):
     return sorted(list(dict.fromkeys(vals)))
 
 def format_product_label(row):
-    brand = str(row.get("brand", "")).strip()
-    product_name = str(row.get("product_name", "")).strip()
-    category1 = str(row.get("category1", "")).strip()
-    category2 = str(row.get("category2", "")).strip()
+    brand = row.get("brand")
+    product_name = row.get("product_name")
+    category1 = row.get("category1")
+    category2 = row.get("category2")
 
-    # ✅ 카누 바리스타는 브랜드 - 제품명만 표시
+    # None / NaN 안전 처리
+    brand = str(brand).strip() if pd.notna(brand) else ""
+    product_name = str(product_name).strip() if pd.notna(product_name) else ""
+    category1 = str(category1).strip() if pd.notna(category1) else ""
+    category2 = str(category2).strip() if pd.notna(category2) else ""
+
+    # 카누 바리스타는 브랜드 - 제품명만
     if brand == "카누 바리스타":
         return f"{brand} - {product_name}"
 
-    # 기본 로직
     parts = [brand]
 
     if category1:
@@ -2335,6 +2340,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
