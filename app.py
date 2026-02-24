@@ -10,6 +10,10 @@ import hashlib   # ✅ 반드시 추가
 # =========================
 st.set_page_config(page_title="Capsule Price Intelligence", layout="wide")
 
+def mk_widget_key(prefix: str, product_url: str, scope: str) -> str:
+    raw = f"{prefix}|{product_url}|{scope}"
+    return prefix + "_" + hashlib.md5(raw.encode("utf-8")).hexdigest()[:16]
+    
 # =========================
 # 1️⃣ Supabase 설정
 # =========================
@@ -1123,9 +1127,12 @@ with col_tabs:
                                 if st.button("🗑️", key=f"delete_search_{history_idx}", help="검색 결과 삭제"):
                                     # 해당 검색 결과의 제품들을 선택에서 제거
                                     for pname in history['results']:
-                                        if pname in st.session_state.selected_products:
-                                            st.session_state.selected_products.remove(pname)
-                                    
+                                        rows = df_all[df_all["product_name"] == pname]
+                                        if rows.empty:
+                                            continue
+                                        for u in rows["product_url"].dropna().unique():
+                                            st.session_state.selected_products.discard(u)
+                                                                        
                                     # 검색 이력에서 제거
                                     st.session_state.search_history.pop(history_idx)
                                     st.rerun()
@@ -1147,13 +1154,14 @@ with col_tabs:
                                     product_url = row["product_url"]
                                     label = format_product_label(row)
                                     
+                                    scope = f"hist{history_idx}"
+
                                     st.checkbox(
                                         label,
-                                        key=f"chk_tab1_{product_url}_{history['keyword']}", 
+                                        key=mk_widget_key("chk_tab1", product_url, scope),
                                         on_change=toggle_product,
-                                        args=(product_url,)
+                                        args=(product_url,),
                                     )
-
     # =========================
     # TAB 2: 필터 선택
     # =========================
@@ -1234,11 +1242,13 @@ with col_tabs:
                 product_url = row["product_url"]
                 label = format_product_label(row)
         
+                scope = f"{sel_brand}|{sel_cat1}|{sel_cat2}"
+
                 st.checkbox(
                     label,
-                    key=f"chk_tab2_{product_url}_{sel_brand}_{sel_cat1}_{sel_cat2}", 
+                    key=mk_widget_key("chk_tab2", product_url, scope),
                     on_change=toggle_product,
-                    args=(product_url,)
+                    args=(product_url,),
                 )
 
     # =========================
@@ -1361,13 +1371,15 @@ with col_tabs:
                                 label = format_product_label(row)
                     
                                 with cols[pidx % 3]:
+                                    scope = question_hash
+
                                     st.checkbox(
                                         label,
-                                        key=f"chk_tab3_{product_url}_{question_hash}",
+                                        key=mk_widget_key("chk_tab3", product_url, scope),
                                         on_change=toggle_product,
-                                        args=(product_url,)
+                                        args=(product_url,),
                                     )
-                    
+                                                        
                     elif isinstance(answer_data, dict):
                         st.markdown(f"**A:** {answer_data.get('text', str(answer_data))}")
                     
@@ -2305,6 +2317,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
