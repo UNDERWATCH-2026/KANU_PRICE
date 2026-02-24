@@ -1204,7 +1204,7 @@ with col_tabs:
                                     
                                     # 🔥 레이아웃 제어 (주석 제거 + 안전 문자열)
                                     html = (
-                                        f"<div style='display:flex; align-items:center; gap:8px; min-height:48px; padding:6px 0;'>"
+                                        f"<div style='display:flex; align-items:center; gap:8px; min-height:24px; padding:6px 0;'>"
                                         f"<div style='width:24px; flex:0 0 24px;'></div>"
                                         f"<div style='flex:1; white-space:normal; word-break:keep-all; overflow-wrap:break-word; line-height:1.35;'>"
                                         f"{label}"
@@ -1316,7 +1316,7 @@ with col_tabs:
                 
                 # 🔥 레이아웃 제어
                 html = (
-                    f"<div style='display:flex; align-items:center; gap:8px; min-height:48px; padding:6px 0;'>"
+                    f"<div style='display:flex; align-items:center; gap:8px; min-height:24px; padding:6px 0;'>"
                     f"<div style='width:24px; flex:0 0 24px;'></div>"
                     f"<div style='flex:1; white-space:normal; word-break:keep-all; overflow-wrap:break-word; line-height:1.35;'>"
                     f"{label}"
@@ -2436,6 +2436,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
