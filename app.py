@@ -1628,249 +1628,206 @@ if selected_products:   # 🔥 조건 반전
         # =========================
         # 📊 차트와 범례를 분리된 레이아웃으로 표시
         # =========================
+
+        # =========================
+        # ✅ 공통 색상 매핑 유틸 (필요하면 파일 상단 유틸에 1회만 선언해도 됨)
+        # =========================
+        def get_or_create_color_map(keys: list[str]) -> dict[str, str]:
+            palette = [
+                "#4c78a8","#f58518","#e45756","#72b7b2","#54a24b",
+                "#eeca3b","#b279a2","#ff9da6","#9d755d","#bab0ac",
+                "#1f77b4","#ff7f0e","#2ca02c","#d62728","#9467bd",
+                "#8c564b","#e377c2","#7f7f7f","#bcbd22","#17becf",
+            ]
+            if "color_map" not in st.session_state:
+                st.session_state["color_map"] = {}
+            cmap = st.session_state["color_map"]
+            for k in sorted(set([str(x) for x in keys if str(x).strip()])):
+                if k not in cmap:
+                    cmap[k] = palette[len(cmap) % len(palette)]
+            st.session_state["color_map"] = cmap
+            return cmap
+        
+        def color_dot(hex_color: str) -> str:
+            return f"<span style='color:{hex_color}; font-size:16px; line-height:1;'>●</span>"
+        
+        
+        # =========================
+        # 📊 차트와 제품목록(색점) 분리 레이아웃
+        # =========================
         col_chart, col_legend = st.columns([3, 1])
+        
+        # ✅ 이 시점 df_chart에는 product_name = "브랜드 - 제품명" display_name이 들어있음
+        color_map = get_or_create_color_map(df_chart["product_name"].unique().tolist())
+        color_domain = list(color_map.keys())
+        color_range = [color_map[k] for k in color_domain]
         
         with col_chart:
             # =========================
-            # 📈 가격 선 차트 (범례 없음)
+            # 📈 가격 선 차트 (범례 없음 + 색 고정)
             # =========================
             base_line = (
                 alt.Chart(df_chart)
                 .mark_line(point=True)
                 .encode(
-                    x=alt.X("event_date:T", title="날짜", axis=alt.Axis(format="%m/%d")),  # 🔥 월/일 형식으로 고정
+                    # ✅ jitter 쓰고 싶으면 event_date -> event_date_jitter로 교체 가능
+                    x=alt.X("event_date:T", title="날짜", axis=alt.Axis(format="%m/%d")),
                     y=alt.Y("unit_price:Q", title="개당 가격 (원)"),
-                    color=alt.Color("product_name:N", title="제품", legend=None),  # 🔥 범례 제거
-                    detail="segment:N",  # 🔥 이게 핵심 (선 완전 분리)
+                    color=alt.Color(
+                        "product_name:N",
+                        scale=alt.Scale(domain=color_domain, range=color_range),  # ✅ 색상 강제 고정
+                        legend=None
+                    ),
+                    detail="segment:N",
                     tooltip=[
                         alt.Tooltip("product_name:N", title="제품"),
                         alt.Tooltip("event_date:T", title="날짜", format="%Y-%m-%d"),
-                        alt.Tooltip("price_detail:N", title="가격 정보"),  # 🔥 상세 가격 정보
-                        alt.Tooltip("price_status:N", title="상태"),  # 🔥 할인 여부
+                        alt.Tooltip("price_detail:N", title="가격 정보"),
+                        alt.Tooltip("price_status:N", title="상태"),
                     ],
                 )
             )
-    
+        
             layers = [base_line]
-
-            # =========================
-            # 🔔 툴팁 전용 레이어 
-            # =========================
-
-            # ✅ 겹친 점(같은 날짜+가격)에 대한 "한 박스(세로 확장) 툴팁" 레이어
-            tooltip_multi = (
-                alt.Chart(df_chart)
-                # 1) 각 제품(행)을 '제품/날짜/가격정보/상태' 포함한 여러 줄 텍스트로 만들기
-                .transform_calculate(
-                    item=(
-                        "'제품: ' + datum.product_name + "
-                        "'\\n날짜: ' + timeFormat(datum.event_date, '%Y-%m-%d') + "
-                        "'\\n가격정보: ' + datum.price_detail + "
-                        "'\\n상태: ' + datum.price_status"
-                    )
-                )
-                # 2) 같은 날짜+가격 그룹으로 item들을 모으기
-                .transform_aggregate(
-                    items="values(item)",
-                    groupby=["event_date", "unit_price"]
-                )
-                # 3) 배열(items)을 줄바꿈(빈 줄 포함)으로 합쳐서 한 덩어리 문자열로 만들기
-                .transform_calculate(
-                    items_txt="join(datum.items, '\\n\\n')"
-                )
-                # 4) hover 잡기용 투명 점 (크게)
-                .mark_circle(size=900, opacity=0)
-                .encode(
-                    x="event_date:T",
-                    y="unit_price:Q",
-                    tooltip=[
-                        alt.Tooltip("items_txt:N", title=""),
-                    ],
-                )
-            )
-            
-            layers.append(tooltip_multi)
-                        
+        
             # =========================
             # 🔔 Lifecycle 아이콘 추가
             # =========================
-
-            
             if lifecycle_rows:
-    
                 df_life_all = pd.concat(lifecycle_rows, ignore_index=True)
-    
+        
                 icon_config = {
                     "NEW_PRODUCT": {"color": "green", "label": "NEW"},
                     "OUT_OF_STOCK": {"color": "red", "label": "품절"},
                     "RESTOCK": {"color": "orange", "label": "복원"},
                 }
-    
+        
                 for event_type, cfg in icon_config.items():
-    
-                    df_filtered = df_life_all[
-                        df_life_all["lifecycle_event"] == event_type
-                    ]
-    
+                    df_filtered = df_life_all[df_life_all["lifecycle_event"] == event_type]
                     if df_filtered.empty:
                         continue
-    
-                    # 🔥 아이콘 위치를 가격선에 맞추기 위해 join
+        
+                    # 가격선 위치 맞추기 위해 join
                     df_filtered = df_filtered.merge(
                         df_timeline[["product_name", "event_date", "unit_price", "price_detail"]],
                         on=["product_name", "event_date"],
                         how="left"
                     )
-                
-                    # 🔥 품절/복원 아이콘은 실제 가격선 위에만 표시
+        
+                    # 품절/복원 아이콘은 가격선 위에만 표시되도록 보정
                     if event_type in ["OUT_OF_STOCK", "RESTOCK"]:
-                    
-                        # =========================
-                        # ❌ 품절 처리
-                        # =========================
                         if event_type == "OUT_OF_STOCK":
-                    
-                            # 품절 시작점: 직전 가격을 y좌표로 사용
-                            for idx, row in df_filtered[df_filtered["unit_price"].isna()].iterrows():
+                            for idx2, r2 in df_filtered[df_filtered["unit_price"].isna()].iterrows():
                                 product_prices = df_timeline[
-                                    (df_timeline["product_name"] == row["product_name"]) &
-                                    (df_timeline["event_date"] < row["event_date"]) &
+                                    (df_timeline["product_name"] == r2["product_name"]) &
+                                    (df_timeline["event_date"] < r2["event_date"]) &
                                     (df_timeline["unit_price"].notna())
                                 ]
-                    
                                 if not product_prices.empty:
                                     closest = product_prices.nsmallest(1, "event_date").iloc[-1]
-                                    df_filtered.at[idx, "unit_price"] = closest["unit_price"]
-                    
-
-                            # 🔥 아이콘 툴팁 가격 숨김
+                                    df_filtered.at[idx2, "unit_price"] = closest["unit_price"]
                             df_filtered["price_detail"] = "-"
-                        
-                            # 🔥 상태도 강제로 품절로 고정
                             df_filtered["price_status"] = "품절"
-                    
-                    
-                        # =========================
-                        # 🔄 복원 처리
-                        # =========================
-                        
-                        # 복원 시점: 복원 당일 가격 사용 (이미 있으면 그대로, 없으면 직후 가격)
+        
                         elif event_type == "RESTOCK":
-                            # 복원 날짜는 가격선에 포함되므로 대부분 unit_price가 이미 있음
-                            # 없는 경우에만 직후 가격 사용
-                            for idx, row in df_filtered[df_filtered["unit_price"].isna()].iterrows():
+                            for idx2, r2 in df_filtered[df_filtered["unit_price"].isna()].iterrows():
                                 product_prices = df_timeline[
-                                    (df_timeline["product_name"] == row["product_name"]) &
-                                    (df_timeline["event_date"] >= row["event_date"]) &
+                                    (df_timeline["product_name"] == r2["product_name"]) &
+                                    (df_timeline["event_date"] >= r2["event_date"]) &
                                     (df_timeline["unit_price"].notna())
                                 ]
                                 if not product_prices.empty:
                                     closest = product_prices.nsmallest(1, "event_date").iloc[0]
-                                    df_filtered.at[idx, "unit_price"] = closest["unit_price"]
-                                    df_filtered.at[idx, "price_detail"] = closest["price_detail"]
-                    
+                                    df_filtered.at[idx2, "unit_price"] = closest["unit_price"]
+                                    df_filtered.at[idx2, "price_detail"] = closest["price_detail"]
                     else:
-                        # NEW 이벤트: 가장 가까운 가격 사용
-                        for idx, row in df_filtered[df_filtered["unit_price"].isna()].iterrows():
+                        # NEW: 가장 가까운 가격 사용
+                        for idx2, r2 in df_filtered[df_filtered["unit_price"].isna()].iterrows():
                             product_prices = df_timeline[
-                                (df_timeline["product_name"] == row["product_name"]) &
+                                (df_timeline["product_name"] == r2["product_name"]) &
                                 (df_timeline["unit_price"].notna())
                             ]
-                            
                             if not product_prices.empty:
-                                # 이벤트 날짜와 가장 가까운 가격 찾기
-                                product_prices["date_diff"] = abs(
-                                    (product_prices["event_date"] - row["event_date"]).dt.total_seconds()
-                                )
-                                closest = product_prices.nsmallest(1, "date_diff").iloc[0]
-                                df_filtered.at[idx, "unit_price"] = closest["unit_price"]
-                                df_filtered.at[idx, "price_detail"] = closest["price_detail"]
-                    
-                    # unit_price 없는 lifecycle 제거 (매칭 실패한 경우)
+                                pp = product_prices.copy()
+                                pp["date_diff"] = (pp["event_date"] - r2["event_date"]).abs().dt.total_seconds()
+                                closest = pp.nsmallest(1, "date_diff").iloc[0]
+                                df_filtered.at[idx2, "unit_price"] = closest["unit_price"]
+                                df_filtered.at[idx2, "price_detail"] = closest["price_detail"]
+        
                     df_filtered = df_filtered.dropna(subset=["unit_price"])
-    
-                    df_filtered = df_filtered.copy()
-
+                    if df_filtered.empty:
+                        continue
+        
                     event_label_map = {
                         "NEW_PRODUCT": "신제품",
                         "OUT_OF_STOCK": "품절",
                         "RESTOCK": "복원",
                     }
                     df_filtered["event_label"] = df_filtered["lifecycle_event"].map(event_label_map).fillna(df_filtered["lifecycle_event"])
-
+        
                     point_layer = (
-                       alt.Chart(df_filtered)
-                        .mark_point(
-                            size=150,
-                            shape="triangle-up",
-                            color=cfg["color"]
-                        )
+                        alt.Chart(df_filtered)
+                        .mark_point(size=150, shape="triangle-up", color=cfg["color"])
                         .encode(
                             x="event_date:T",
-                            y="unit_price:Q",   # 🔥 반드시 추가
+                            y="unit_price:Q",
                             tooltip=[
                                 alt.Tooltip("product_name:N", title="제품"),
                                 alt.Tooltip("event_date:T", title="날짜", format="%Y-%m-%d"),
-                                alt.Tooltip("price_detail:N", title="가격 정보"),  # 🔥 상세 가격 정보
+                                alt.Tooltip("price_detail:N", title="가격 정보"),
                                 alt.Tooltip("event_label:N", title="이벤트"),
                             ],
                         )
                     )
-    
+        
                     text_layer = (
                         alt.Chart(df_filtered)
-                        .mark_text(
-                            dy=12,   # 🔥 아래로 12px 이동
-                            fontSize=11,
-                            fontWeight="bold",
-                            color=cfg["color"]
-                        )
+                        .mark_text(dy=12, fontSize=11, fontWeight="bold", color=cfg["color"])
                         .encode(
                             x="event_date:T",
-                            y="unit_price:Q",   # 🔥 반드시 동일하게
+                            y="unit_price:Q",
                             text=alt.value(cfg["label"]),
                         )
                     )
-    
-    
+        
                     layers.append(point_layer)
                     layers.append(text_layer)
-    
-            chart = (
-                alt.layer(*layers)
-                .properties(height=420)
-                .interactive()
-            )
-    
+        
+            chart = alt.layer(*layers).properties(height=420).interactive()
             st.altair_chart(chart, use_container_width=True)
         
         with col_legend:
             st.markdown("#### 📋 제품 목록")
-            
-            # 🔥 제품별로 색상 구분하여 표시 (삭제 버튼 포함)
-    
+        
+            # ✅ 차트에 실제로 그려진 제품(product_url)만 목록에 표시
             unique_urls = sorted(df_chart["product_url"].unique())
-            
+        
             for product_url in unique_urls:
-            
                 product_row = df_all[df_all["product_url"] == product_url]
                 if product_row.empty:
                     continue
-            
+        
                 row = product_row.iloc[0]
                 label = format_product_label(row)
-            
+        
+                # ✅ 색상키는 반드시 차트의 product_name과 동일한 display_name이어야 함
+                display_name = f"{row['brand']} - {row['product_name']}"
+                hex_color = color_map.get(display_name, "#999999")
+        
                 col_btn, col_name = st.columns([1, 10])
-            
+        
                 with col_btn:
                     if st.button("×", key=f"remove_product_{product_url}", help="차트에서 제거"):
-                        if product_url in st.session_state.selected_products:
-                            st.session_state.selected_products.remove(product_url)
+                        st.session_state.selected_products.discard(product_url)
                         st.rerun()
-            
+        
                 with col_name:
-                    st.markdown(f"**{label}**")
-                
+                    st.markdown(
+                        f"{color_dot(hex_color)} <b>{label}</b>",
+                        unsafe_allow_html=True
+                    )
+
+        
         # 🔥 엑셀 다운로드 버튼 추가
         with download_placeholder:
             # 엑셀 파일 생성
@@ -2398,43 +2355,3 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
