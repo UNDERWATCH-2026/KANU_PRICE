@@ -1191,11 +1191,37 @@ with col_tabs:
                                     k = mk_widget_key("chk_tab1", product_url, scope)
                                     register_product_checkbox_key(product_url, k)
                                     
-                                    checked = st.checkbox(
-                                        label,
-                                        key=k,
-                                        value=(product_url in st.session_state.selected_products)
-                                    )
+                                    k = mk_widget_key("chk_tab1", product_url, scope)
+                                    register_product_checkbox_key(product_url, k)
+                                    
+                                    col_chk, col_lbl = st.columns([1, 10])
+                                    
+                                    with col_chk:
+                                        checked = st.checkbox(
+                                            "",
+                                            key=k,
+                                            value=(product_url in st.session_state.selected_products)
+                                        )
+                                    
+                                    with col_lbl:
+                                        st.markdown(
+                                            f"""
+                                            <div style="
+                                                white-space: normal;
+                                                word-break: keep-all;
+                                                overflow-wrap: break-word;
+                                                line-height: 1.35;
+                                            ">
+                                                {label}
+                                            </div>
+                                            """,
+                                            unsafe_allow_html=True
+                                        )
+                                    
+                                    if checked:
+                                        st.session_state.selected_products.add(product_url)
+                                    else:
+                                        st.session_state.selected_products.discard(product_url)
                                                                 
                                     if checked:
                                         st.session_state.selected_products.add(product_url)
@@ -2407,4 +2433,5 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
