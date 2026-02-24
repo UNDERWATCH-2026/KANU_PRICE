@@ -1355,7 +1355,7 @@ with col_tabs:
                 register_product_checkbox_key(product_url, k)
         
                 # ✅ 한 줄에 배치
-                col_chk, col_lbl = st.columns([0.03, 0.97], vertical_alignment="center")
+                col_chk, col_lbl = st.columns([0.02, 0.98], vertical_alignment="center")
         
                 with col_chk:
                     checked = st.checkbox(
@@ -2515,6 +2515,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
