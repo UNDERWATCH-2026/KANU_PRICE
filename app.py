@@ -1026,7 +1026,7 @@ with col_controls:
         # 🔥 모든 체크박스, 버튼, form 입력 키 삭제
         keys_to_delete = [
             key for key in list(st.session_state.keys())
-            if key.startswith(("tab", "remove_product_", "delete_"))
+            if key.startswith(("tab", "chk_tab", "remove_product_", "delete_"))
         ]
         
         for key in keys_to_delete:
@@ -1168,8 +1168,8 @@ with col_tabs:
                             with col_delete:
                                 if st.button("🗑️", key=f"delete_search_{history_idx}", help="검색 결과 삭제"):
                                     # 해당 검색 결과의 제품들을 선택에서 제거
-                                    for pname in history['results']:
-                                        rows = df_all[df_all["product_name"] == pname]
+                                    for product_url in history["results"]:
+                                        st.session_state.selected_products.discard(product_url)
                                         if rows.empty:
                                             continue
                                         for u in rows["product_url"].dropna().unique():
@@ -1459,7 +1459,7 @@ with col_tabs:
                     if isinstance(answer_data, dict) and answer_data.get("type") == "product_list":
 
                         st.markdown(f"**A:** {answer_data['text']}")
-                        st.write(answer_data.get("products"))
+                        st.write("match count:", len(df_all[df_all["product_url"].isin(answer_data["products"])]))
                         if answer_data.get("products"):
                     
                    
@@ -2483,4 +2483,5 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
