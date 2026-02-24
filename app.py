@@ -1635,11 +1635,13 @@ if selected_products:   # 🔥 조건 반전
                     ],
                 )
             )
+
+            layers = [base_line]
     
             # =========================
             # 🔔 Lifecycle 아이콘 추가
             # =========================
-            layers = [base_line]
+
             
             if lifecycle_rows:
     
@@ -2343,6 +2345,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
