@@ -1196,21 +1196,25 @@ with col_tabs:
                                     register_product_checkbox_key(product_url, k)
                             
                                     col_chk, col_lbl = st.columns([1, 10], vertical_alignment="center")
-                            
+
                                     with col_chk:
                                         checked = st.checkbox(
                                             "",
                                             key=k,
                                             value=(product_url in st.session_state.selected_products)
                                         )
-                            
+                                    
                                     with col_lbl:
                                         st.markdown(
                                             f"""
                                             <div style="
-                                                white-space: normal;
-                                                word-break: keep-all;
-                                                overflow-wrap: break-word;
+                                                min-height:48px;              /* 🔥 행 최소 높이 고정 */
+                                                display:flex;
+                                                align-items:center;           /* 🔥 글자 기준 중앙 */
+                                                padding:6px 0;                /* 🔥 위아래 간격 */
+                                                white-space:normal;
+                                                word-break:keep-all;
+                                                overflow-wrap:break-word;
                                                 line-height:1.35;
                                             ">
                                                 {label}
@@ -1218,11 +1222,14 @@ with col_tabs:
                                             """,
                                             unsafe_allow_html=True
                                         )
-                            
+                                    
                                     if checked:
                                         st.session_state.selected_products.add(product_url)
                                     else:
                                         st.session_state.selected_products.discard(product_url)
+
+                                # 🔽 하단 여백
+                                st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
     # =========================
     # TAB 2: 필터 선택
     # =========================
@@ -1310,21 +1317,25 @@ with col_tabs:
             
                 # ✅ 체크박스 + 텍스트 분리
                 col_chk, col_lbl = st.columns([1, 10], vertical_alignment="center")
-            
+
                 with col_chk:
                     checked = st.checkbox(
                         "",
                         key=k,
                         value=(product_url in st.session_state.selected_products)
                     )
-            
+                
                 with col_lbl:
                     st.markdown(
                         f"""
                         <div style="
-                            white-space: normal;
-                            word-break: keep-all;
-                            overflow-wrap: break-word;
+                            min-height:48px;              /* 🔥 행 최소 높이 고정 */
+                            display:flex;
+                            align-items:center;           /* 🔥 글자 기준 중앙 */
+                            padding:6px 0;                /* 🔥 위아래 간격 */
+                            white-space:normal;
+                            word-break:keep-all;
+                            overflow-wrap:break-word;
                             line-height:1.35;
                         ">
                             {label}
@@ -1332,11 +1343,15 @@ with col_tabs:
                         """,
                         unsafe_allow_html=True
                     )
-            
+                
                 if checked:
                     st.session_state.selected_products.add(product_url)
                 else:
                     st.session_state.selected_products.discard(product_url)
+
+                # 🔽 하단 여백
+                st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
+
     # =========================
     # TAB 3: 자연어 질문
     # =========================
@@ -2438,6 +2453,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
