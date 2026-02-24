@@ -1618,13 +1618,13 @@ if selected_products:   # 🔥 조건 반전
             df_chart.groupby(["event_date", "unit_price"])
             .cumcount()
         )
-        
+        st.write(df_chart[["product_name","price_detail","price_status"]].applymap(type).head())
         # 점만 살짝 이동시키기 (0.06일 ≈ 1.44시간)
         df_chart["event_date_jitter"] = (
             df_chart["event_date"] +
             pd.to_timedelta(df_chart["dup_rank"] * 0.06, unit="D")
         )
-        st.write(df_chart[["product_name","price_detail","price_status"]].applymap(type).head())
+       
         # =========================
         # 📊 차트와 범례를 분리된 레이아웃으로 표시
         # =========================
@@ -2406,6 +2406,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
