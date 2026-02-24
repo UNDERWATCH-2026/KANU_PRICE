@@ -1158,18 +1158,15 @@ with col_tabs:
                                     
                                     scope = f"hist_{history_idx}"
                                     
-                                    st.checkbox(
+                                    checked = st.checkbox(
                                         label,
                                         key=mk_widget_key("chk_tab1", product_url, scope),
-                                        checked = st.checkbox(
-                                            label,
-                                            key=mk_widget_key("chk_tabX", product_url, scope),
-                                        )
-                                        
-                                        if checked:
-                                            st.session_state.selected_products.add(product_url)
-                                        else:
-                                            st.session_state.selected_products.discard(product_url)                                    )
+                                    )
+                                    
+                                    if checked:
+                                        st.session_state.selected_products.add(product_url)
+                                    else:
+                                        st.session_state.selected_products.discard(product_url)                            )
     # =========================
     # TAB 2: 필터 선택
     # =========================
@@ -2333,6 +2330,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
