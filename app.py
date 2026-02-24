@@ -13,7 +13,7 @@ st.set_page_config(page_title="Capsule Price Intelligence", layout="wide")
 def mk_widget_key(prefix: str, product_url: str, scope: str) -> str:
     raw = f"{prefix}|{product_url}|{scope}"
     return prefix + "_" + hashlib.md5(raw.encode("utf-8")).hexdigest()[:16]
-st.write("Selected:", len(st.session_state.selected_products))
+
 
 # =========================
 # 1️⃣ Supabase 설정
@@ -874,6 +874,10 @@ def get_normal_price_change_dates(product_url, date_from, date_to):
 # =========================
 if "selected_products" not in st.session_state:
     st.session_state.selected_products = set()
+
+if st.session_state.get("debug_mode", True):
+    st.write("Selected:", len(st.session_state.selected_products))
+
 if "keyword_results" not in st.session_state:
     st.session_state.keyword_results = {}
 if "active_mode" not in st.session_state:
@@ -884,6 +888,8 @@ if "search_keyword" not in st.session_state:
     st.session_state.search_keyword = ""
 if "search_history" not in st.session_state:
     st.session_state.search_history = []  # 🔥 검색 이력 [{keyword: "쥬시", results: [...]}]
+
+
 
 # =========================
 # 5️⃣ 메인 UI
@@ -2345,6 +2351,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
