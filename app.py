@@ -1647,23 +1647,28 @@ if selected_products:   # 🔥 조건 반전
             # ✅ 겹친 점(같은 날짜·같은 가격)에 대해 tooltip을 "묶어서" 보여주는 레이어
             tooltip_multi = (
                 alt.Chart(df_chart)
+                # 1) 제품별 1줄 텍스트 만들기
+                .transform_calculate(
+                    line="datum.product_name + ' | ' + datum.price_detail + ' | ' + datum.price_status"
+                )
+                # 2) 같은 날짜+가격 기준으로 line들을 모으기
                 .transform_aggregate(
-                    products="values(product_name)",
-                    details="values(price_detail)",
-                    statuses="values(price_status)",
+                    lines="values(line)",
                     groupby=["event_date", "unit_price"]
                 )
-                # hover 잡기용 투명 점(크게)
-                .mark_circle(size=500, opacity=0)
+                # 3) 배열(lines) → 줄바꿈 텍스트로 변환
+                .transform_calculate(
+                    lines_txt="join(datum.lines, '\\n\\n')"
+                )
+                # 4) hover 잡기용 투명 점(크게)
+                .mark_circle(size=700, opacity=0)
                 .encode(
                     x="event_date:T",
                     y="unit_price:Q",
                     tooltip=[
                         alt.Tooltip("event_date:T", title="날짜", format="%Y-%m-%d"),
                         alt.Tooltip("unit_price:Q", title="개당 가격(원)", format=",.1f"),
-                        alt.Tooltip("products:N", title="제품(겹친 항목)"),
-                        alt.Tooltip("details:N", title="가격 정보"),
-                        alt.Tooltip("statuses:N", title="상태"),
+                        alt.Tooltip("lines_txt:N", title="제품별 상세"),
                     ],
                 )
             )
@@ -2377,6 +2382,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
