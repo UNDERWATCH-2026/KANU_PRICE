@@ -1244,21 +1244,22 @@ with col_tabs:
             )
         
             for _, row in unique_df.iterrows():
-        
+
                 product_url = row["product_url"]
                 label = format_product_label(row)
-        
-                scope = f"{sel_brand}|{sel_cat1}|{sel_cat2}"
-                
-                checked = st.checkbox(
-                label,
-                key=mk_widget_key(...),
-            )
             
-            if checked:
-                st.session_state.selected_products.add(product_url)
-            else:
-                st.session_state.selected_products.discard(product_url)
+                scope = f"{sel_brand}|{sel_cat1}|{sel_cat2}"
+            
+                checked = st.checkbox(
+                    label,
+                    key=mk_widget_key("chk_tab2", product_url, scope),
+                    value=(product_url in st.session_state.selected_products)
+                )
+            
+                if checked:
+                    st.session_state.selected_products.add(product_url)
+                else:
+                    st.session_state.selected_products.discard(product_url)
     # =========================
     # TAB 3: 자연어 질문
     # =========================
@@ -2329,6 +2330,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
