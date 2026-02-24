@@ -1160,8 +1160,8 @@ with col_tabs:
                                     
                                     checked = st.checkbox(
                                         label,
-                                        key=mk_widget_key("chk_tab1", product_url, scope),
-                                    )
+                                        key=mk_widget_key("chk_tab1", product_url, scope)
+                                    
                                     
                                     if checked:
                                         st.session_state.selected_products.add(product_url)
@@ -1385,8 +1385,7 @@ with col_tabs:
                                         key=mk_widget_key("chk_tab3", product_url, scope),
                                         checked = st.checkbox(
                                             label,
-                                            key=mk_widget_key("chk_tabX", product_url, scope),
-                                        )
+                                            key=mk_widget_key("chk_tabX", product_url, scope)
                                         
                                         if checked:
                                             st.session_state.selected_products.add(product_url)
@@ -2330,6 +2329,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
