@@ -1148,25 +1148,26 @@ with col_tabs:
                             
                                     # 🔥 product_url 안전하게 가져오기
                                     product_row = df_all[df_all["product_name"] == pname]
-                                    
+                            
                                     if product_row.empty:
-                                        continue  # 데이터 불일치 방어
-                                    
+                                        continue
+                            
                                     row = product_row.iloc[0]
                                     product_url = row["product_url"]
                                     label = format_product_label(row)
-                                    
+                            
                                     scope = f"hist_{history_idx}"
-                                    
+                            
                                     checked = st.checkbox(
                                         label,
-                                        key=mk_widget_key("chk_tab1", product_url, scope)
-                                    
-                                    
+                                        key=mk_widget_key("chk_tab1", product_url, scope),
+                                        value=(product_url in st.session_state.selected_products)
+                                    )
+                            
                                     if checked:
                                         st.session_state.selected_products.add(product_url)
                                     else:
-                                        st.session_state.selected_products.discard(product_url)                          
+                                        st.session_state.selected_products.discard(product_url)             
     # =========================
     # TAB 2: 필터 선택
     # =========================
@@ -2329,6 +2330,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
