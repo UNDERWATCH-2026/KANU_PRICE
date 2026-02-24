@@ -8,7 +8,7 @@ import hashlib   # ✅ 반드시 추가
 # =========================
 # 0️⃣ 기본 설정
 # =========================
-st.set_page_config(page_title="Coffee Capsule Price Intelligence", layout="wide")
+st.set_page_config(page_title="Capsule Price Intelligence", layout="wide")
 
 st.markdown("""
 <style>
@@ -358,7 +358,11 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         return {
             "type": "product_list",
             "text": "할인 기간 정보:\n\n" + "\n\n".join([r["text"] for r in results]),
-            "products": [str(r["product_url"]) for r in results]
+            "products": [
+                str(r["product_url"]).strip().lower()
+                for r in results
+                if r.get("product_url")
+            ]
         }
 
     if intent == "DISCOUNT" and not start_date:
@@ -391,7 +395,11 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         return {
             "type": "product_list",
             "text": "현재 할인 중 제품:\n\n" + "\n\n".join([r["text"] for r in results]),
-            "products": [str(r["product_url"]) for r in results]
+            "products": [
+                str(r["product_url"]).strip().lower()
+                for r in results
+                if r.get("product_url")
+            ]
         }
 
     if intent == "PRICE_MIN":
@@ -446,7 +454,11 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         return {
             "type": "product_list",
             "text": "최저가 제품 목록:\n\n" + "\n\n".join([r["text"] for r in results]),
-            "products": [str(r["product_url"]) for r in results]
+            "products": [
+                str(r["product_url"]).strip().lower()
+                for r in results
+                if r.get("product_url")
+            ]
         }
 
     if intent == "PRICE_MAX":
@@ -511,7 +523,11 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         return {
             "type": "product_list",
             "text": "최근 신제품:\n\n" + "\n\n".join([r["text"] for r in results]),
-            "products": [str(r["product_url"]) for r in results]
+            "products": [
+                str(r["product_url"]).strip().lower()
+                for r in results
+                if r.get("product_url")
+            ]
         }
 
     if intent == "OUT":
@@ -567,7 +583,11 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         return {
             "type": "product_list",
             "text": "최근 품절 제품:\n\n" + "\n\n".join([r["text"] for r in results]),
-            "products": [str(r["product_url"]) for r in results]
+            "products": [
+                str(r["product_url"]).strip().lower()
+                for r in results
+                if r.get("product_url")
+            ]
         }
 
     if intent == "RESTORE":
@@ -623,7 +643,11 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         return {
             "type": "product_list",
             "text": "최근 복원된 제품:\n\n" + "\n\n".join([r["text"] for r in results]),
-            "products": [str(r["product_url"]) for r in results]
+            "products": [
+                str(r["product_url"]).strip().lower()
+                for r in results
+                if r.get("product_url")
+            ]
         }
 
     if intent == "VOLATILITY" and start_date:
@@ -914,12 +938,19 @@ if "search_history" not in st.session_state:
 # =========================
 # 5️⃣ 메인 UI
 # =========================
-st.title("☕ Capsule Price Intelligence")
+st.title("☕ Coffee Capsule Price Intelligence")
 
 # -------------------------
 # 데이터 로딩 (탭 이전에 로드)
 # -------------------------
 df_all = load_product_summary()
+
+df_all["product_url"] = (
+    df_all["product_url"]
+    .astype(str)
+    .str.strip()
+    .str.lower()
+)
 
 # 데이터 없으면 즉시 중단
 if df_all is None or df_all.empty:
@@ -1459,35 +1490,12 @@ with col_tabs:
 
                         st.markdown(f"**A:** {answer_data['text']}")
                         
-                        ####디버그
 
-                        st.write("🔎 answer_data raw:", answer_data["products"][:5])
-                        st.write("🔎 df_all raw:", df_all["product_url"].astype(str).unique()[:5])
-                        
-                        df_all["product_url_clean"] = (
-                            df_all["product_url"]
-                            .astype(str)
-                            .str.strip()
-                            .str.lower()
-                        )
-                        
-                        products_clean = [
-                            str(p).strip().lower()
-                            for p in answer_data["products"]
-                        ]
-                        
-                        st.write("🔎 cleaned answer:", products_clean[:5])
-                        st.write("🔎 cleaned df:", df_all["product_url_clean"].unique()[:5])
-                        
-                        matches = df_all[df_all["product_url_clean"].isin(products_clean)]
-                        
-                        st.write("✅ match count:", len(matches))
-                           ####디버그여기까지
                         
                         if answer_data.get("products"):
                     
                    
-                            # 🔥 안내 문구 (작은 글씨)
+                            # 🔥 안내 문구
                             st.markdown(
                                 "<div style='font-size:13px; color:#6b7280; margin:6px 0 8px 0;'>"
                                 "* 비교할 제품을 선택해 주세요"
@@ -1495,16 +1503,16 @@ with col_tabs:
                                 unsafe_allow_html=True
                             )
                             
-                            # 🔥 정렬 (tab2와 동일)
+                            # 🔥 매칭 (clean 필요 없음)
                             sorted_df = (
-                                df_all[df_all["product_url"].astype(str).isin(answer_data["products"])]
+                                df_all[df_all["product_url"].isin(answer_data["products"])]
                                 .fillna("")
                                 .drop_duplicates(subset=["product_url"])
                                 .sort_values(
                                     by=["brand", "category1", "category2", "product_name"]
                                 )
                             )
-                                                        
+                                                                                                                                            
                             for _, row in sorted_df.iterrows():
                             
                                 product_url = row["product_url"]
@@ -2507,6 +2515,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
