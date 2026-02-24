@@ -1620,20 +1620,21 @@ if selected_products:   # 🔥 조건 반전
                 alt.Chart(df_chart)
                 .mark_line(point=True)
                 .encode(
-                    x=alt.X("event_date:T", title="날짜", axis=alt.Axis(format="%m/%d")),  # 🔥 월/일 형식으로 고정
+                    x=alt.X("event_date:T", title="날짜", axis=alt.Axis(format="%m/%d")),
                     y=alt.Y("unit_price:Q", title="개당 가격 (원)"),
-                    color=alt.Color("product_name:N", title="제품", legend=None),  # 🔥 범례 제거
-                    detail="segment:N",  # 🔥 이게 핵심 (선 완전 분리)
+                    color=alt.Color("product_name:N", title="제품", legend=None),
+            
+                    # 🔥 여기 수정
+                    detail=["product_name:N", "segment:N"],
+            
                     tooltip=[
                         alt.Tooltip("product_name:N", title="제품"),
                         alt.Tooltip("event_date:T", title="날짜", format="%Y-%m-%d"),
-                        alt.Tooltip("price_detail:N", title="가격 정보"),  # 🔥 상세 가격 정보
-                        alt.Tooltip("price_status:N", title="상태"),  # 🔥 할인 여부
+                        alt.Tooltip("price_detail:N", title="가격 정보"),
+                        alt.Tooltip("price_status:N", title="상태"),
                     ],
                 )
             )
-    
-            layers = [base_line]
     
             # =========================
             # 🔔 Lifecycle 아이콘 추가
@@ -2340,6 +2341,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
