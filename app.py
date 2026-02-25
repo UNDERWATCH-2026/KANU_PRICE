@@ -865,13 +865,15 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
             })
 
         all_results = new_results + out_results
-        text = ""
-        if new_results:
-            text += f"🆕 신제품:\n\n" + "\n\n".join([r["text"] for r in new_results])
-        if out_results:
-            if text:
-                text += "\n\n---\n\n"
-            text += f"❌ 품절 제품:\n\n" + "\n\n".join([r["text"] for r in out_results])
+
+        if new_results and out_results:
+            text = f"🆕 신제품 ({len(new_results)}개) + ❌ 품절 ({len(out_results)}개)"
+        elif new_results:
+            text = f"🆕 신제품 ({len(new_results)}개)"
+        elif out_results:
+            text = f"❌ 품절 제품 ({len(out_results)}개)"
+        else:
+            text = ""
 
         return {
             "type": "product_list",
@@ -881,10 +883,11 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
                 for r in all_results
                 if r.get("product_url")
             ],
-            # 🔥 구분 정보 추가
             "new_products": [str(r["product_url"]).strip().lower() for r in new_results],
             "out_products": [str(r["product_url"]).strip().lower() for r in out_results],
         }
+            
+    if intent == "VOLATILITY" and start_date:
             
     if intent == "VOLATILITY" and start_date:
         res = (
@@ -2782,6 +2785,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
