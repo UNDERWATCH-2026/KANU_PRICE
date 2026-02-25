@@ -930,7 +930,7 @@ def remove_product_everywhere(product_url: str):
     st.session_state.selected_products.discard(product_url)
     if "_removed_products" not in st.session_state:
         st.session_state["_removed_products"] = set()
-    st.session_state["_removed_products"].add(product_url))
+    st.session_state["_removed_products"].add(product_url)
         
 # =========================
 # 4️⃣ 세션 상태 초기화
@@ -2554,6 +2554,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
