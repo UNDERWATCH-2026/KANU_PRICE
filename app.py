@@ -1062,12 +1062,9 @@ with col_controls:
             del st.session_state.date_to
         
         # 🔥 필터 selectbox 상태 완전 초기화 (삭제)
-        if "filter_brand" in st.session_state:
-            del st.session_state.filter_brand
-        if "filter_cat1" in st.session_state:
-            del st.session_state.filter_cat1
-        if "filter_cat2" in st.session_state:
-            del st.session_state.filter_cat2
+        st.session_state["filter_brand"] = "(전체)"
+        st.session_state["filter_cat1"] = "(전체)"
+        st.session_state["filter_cat2"] = "(전체)"
         if "last_filter" in st.session_state:
             del st.session_state.last_filter
 
@@ -2536,6 +2533,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
