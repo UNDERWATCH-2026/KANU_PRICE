@@ -927,10 +927,13 @@ def register_product_checkbox_key(product_url: str, widget_key: str):
 
 # remove_product_everywhere 수정
 def remove_product_everywhere(product_url: str):
+    # 🔥 URL 앞뒤 _ 제거
+    product_url = product_url.strip("_")
+    
     st.session_state.selected_products.discard(product_url)
     if "_removed_products" not in st.session_state:
         st.session_state["_removed_products"] = set()
-    st.session_state["_removed_products"].add(product_url)
+    st.session_state["_removed_products"].add(product_url))
         
 # =========================
 # 4️⃣ 세션 상태 초기화
@@ -2016,8 +2019,12 @@ if selected_products:   # 🔥 조건 반전
                 col_btn, col_name = st.columns([1, 10])
         
                 with col_btn:
+                    # 교체 - URL 정제 후 전달
                     if st.button("×", key=f"remove_product_{product_url}", help="차트에서 제거"):
-                        remove_product_everywhere(product_url)
+                        clean_url = str(product_url).strip().replace(r"^_+|_+$", "")
+                        # 🔥 정규식 대신 strip 방식 사용
+                        clean_url = product_url.strip("_")
+                        remove_product_everywhere(clean_url)
                         st.rerun()
 
                 with col_name:
@@ -2559,6 +2566,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
