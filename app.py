@@ -928,16 +928,12 @@ def register_product_checkbox_key(product_url: str, widget_key: str):
         st.session_state["product_checkbox_keys"] = {}
     st.session_state["product_checkbox_keys"].setdefault(product_url, set()).add(widget_key)
 
-# remove_product_everywhere 수정
 def remove_product_everywhere(product_url: str):
     clean_url = str(product_url).strip("_").strip()
-    st.session_state["_debug_input_url"] = product_url
-    st.session_state["_debug_clean_url"] = clean_url
-    
     st.session_state.selected_products.discard(clean_url)
     if "_removed_products" not in st.session_state:
         st.session_state["_removed_products"] = set()
-    st.session_state["_removed_products"].add(clean_url)  # 🔥 clean_url 사용
+    st.session_state["_removed_products"].add(clean_url)
         
 # =========================
 # 4️⃣ 세션 상태 초기화
@@ -972,30 +968,11 @@ if "_removed_products" not in st.session_state:
 # =========================
 st.title("☕ Coffee Capsule Price Intelligence")
 
-if "_debug_clean_url" in st.session_state:
-    st.code(f"clean URL: [{st.session_state['_debug_clean_url']}]")
-if st.session_state.get("_removed_products"):
-    st.code(f"_removed: {st.session_state['_removed_products']}")
-
-if "_debug_input_url" in st.session_state:
-    st.code(f"remove에 전달된 URL: [{st.session_state['_debug_input_url']}]")
-
-# 🔥 임시 확인
-if st.session_state.get("selected_products"):
-    st.code(list(st.session_state.selected_products)[:3])
-    
-# 🔥 임시 디버깅
-_removed_debug = st.session_state.get("_removed_products", set())
-if _removed_debug:
-    st.warning(f"DEBUG _removed_products: {_removed_debug}")
-
 # -------------------------
 # 데이터 로딩 (탭 이전에 로드)
 # -------------------------
 df_all = load_product_summary()
 
-# 🔥 임시 확인
-st.code(df_all["product_url"].head(3).tolist())
 
 df_all["product_url"] = (
     df_all["product_url"]
@@ -1835,8 +1812,6 @@ if selected_products:   # 🔥 조건 반전
         # 4️⃣ NaN 제거 (끊긴 구간은 차트에서 제외)
         df_chart = df_timeline.dropna(subset=["unit_price"]).copy()
 
-        # 🔥 임시 확인
-        st.code(df_chart["product_url"].unique().tolist()[:3])
 
         # 같은 날짜+가격에서 겹친 점 순번
         df_chart["dup_rank"] = (
@@ -2034,9 +2009,7 @@ if selected_products:   # 🔥 조건 반전
         
             # ✅ 차트에 실제로 그려진 제품(product_url)만 목록에 표시
             unique_urls = sorted(df_chart["product_url"].unique())
-            # 🔥 임시 확인
-            st.code(unique_urls[:3])
-        
+
             for product_url in unique_urls:
                 product_row = df_all[df_all["product_url"] == product_url]
                 if product_row.empty:
@@ -2599,6 +2572,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
