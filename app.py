@@ -1758,24 +1758,30 @@ if selected_products:   # 🔥 조건 반전
     # =========================
 
     # 🔥 임시 디버깅 - 확인 후 삭제
-for product_url in selected_products:
-    product_row = df_all[df_all["product_url"] == product_url]
-    if product_row.empty:
-        continue
-    row = product_row.iloc[0]
-    if "일리" in str(row.get("brand", "")):
-        df_price_debug = load_events(row["product_url"])
-        st.write(f"DEBUG 일리카페 전체 이벤트 수: {len(df_price_debug)}")
-        st.write(f"DEBUG 일리카페 product_url: {row['product_url']}")
-        if not df_price_debug.empty:
-            df_price_debug["event_date"] = pd.to_datetime(df_price_debug["date"])
-            filtered = df_price_debug[
-                (df_price_debug["event_date"] >= filter_date_from) &
-                (df_price_debug["event_date"] <= filter_date_to)
-            ]
-            st.write(f"DEBUG 기간 필터 후 이벤트 수: {len(filtered)}")
-            st.write(filtered.head())
-
+if "일리" in str(row.get("brand", "")):
+    # 🔥 마크다운 렌더링 피하기 위해 st.code 사용
+    st.code(f"product_url 실제값: [{row['product_url']}]")
+    
+    # 🔥 product_all_events에서 직접 조회
+    test_res = (
+        supabase.table("product_all_events")
+        .select("product_url, date, unit_price")
+        .eq("product_url", row["product_url"])
+        .limit(3)
+        .execute()
+    )
+    st.code(f"직접 조회 결과: {test_res.data}")
+    
+    # 🔥 LIKE로도 조회
+    test_res2 = (
+        supabase.table("product_all_events")
+        .select("product_url")
+        .like("product_url", "%illycaffe%")
+        .limit(3)
+        .execute()
+    )
+    st.code(f"LIKE 조회 결과: {test_res2.data}")head())
+#여기까지
     if timeline_rows:
     
         df_timeline = pd.concat(timeline_rows, ignore_index=True)
@@ -2555,6 +2561,7 @@ for product_url in selected_products:
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
