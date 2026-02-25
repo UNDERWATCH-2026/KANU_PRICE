@@ -261,36 +261,46 @@ def extract_period(q: str):
 
     return None
 
-def extract_period_label(q: str, date_from: datetime, date_to: datetime) -> str:
-    """질문에서 기간 표현을 추출해서 레이블 반환"""
+def extract_period_from_question(q: str):
+    """
+    질문에서 기간 추출
+    반환: (date_from, date_to, period_label) 또는 None (기간 없음)
+    """
+    today = datetime.today()
     q_lower = q.lower()
-    
+
     # 최근 N 표현
-    if "최근 7일" in q_lower or "최근 일주일" in q_lower:
-        return "최근 7일 내"
+    if any(w in q_lower for w in ["최근 7일", "최근 일주일", "최근 1주일"]):
+        return today - timedelta(days=7), today, "최근 7일 내"
     if any(w in q_lower for w in ["최근 한 달", "최근 30일", "최근 1개월"]):
-        return "최근 1개월 내"
+        return today - timedelta(days=30), today, "최근 1개월 내"
     if "최근 3개월" in q_lower:
-        return "최근 3개월 내"
+        return today - timedelta(days=90), today, "최근 3개월 내"
     if "최근 1년" in q_lower:
-        return "최근 1년 내"
-    if "최근" in q_lower:
-        return "최근"
-    
+        return today - timedelta(days=365), today, "최근 1년 내"
+
     # 연도+월 표현 (예: 2025년 10월)
     import re
     month_match = re.search(r"(\d{4})년\s*(\d{1,2})월", q)
     if month_match:
-        return f"{month_match.group(1)}년 {month_match.group(2)}월"
-    
+        year = int(month_match.group(1))
+        month = int(month_match.group(2))
+        from_dt = datetime(year, month, 1)
+        # 말일 계산
+        if month == 12:
+            to_dt = datetime(year + 1, 1, 1) - timedelta(days=1)
+        else:
+            to_dt = datetime(year, month + 1, 1) - timedelta(days=1)
+        return from_dt, to_dt, f"{year}년 {month}월"
+
     # 연도만 (예: 2025년)
     year_match = re.search(r"(\d{4})년", q)
     if year_match:
-        return f"{year_match.group(1)}년"
-    
-    # 기본값: 조회 기간
-    return f"{date_from.strftime('%Y-%m-%d')} ~ {date_to.strftime('%Y-%m-%d')}"
+        year = int(year_match.group(1))
+        return datetime(year, 1, 1), datetime(year, 12, 31), f"{year}년"
 
+    return None  # 기간 없음 → 조회기간 사용
+    
 
 def extract_brew_type(q: str, df_all: pd.DataFrame):
     q = q.lower()
@@ -305,11 +315,15 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
     df_work = df_summary.copy()
     
     # 🔥 기간 레이블 생성
-    period_label = extract_period_label(
-        question,
-        date_from if date_from else datetime.now() - timedelta(days=90),
-        date_to if date_to else datetime.now()
-    )
+    question_period = extract_period_from_question(question)
+    if question_period:
+        _, _, period_label = question_period
+    else:
+        # 조회기간 설정값으로 레이블 생성
+        if date_from and date_to:
+            period_label = f"{date_from.strftime('%Y-%m-%d')} ~ {date_to.strftime('%Y-%m-%d')}"
+        else:
+            period_label = "조회 기간 내"
 
     # 🔥 키워드 추출 (brew_type은 별도 처리)
     brew_condition = extract_brew_type(question, df_summary)
@@ -448,7 +462,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         
         return {
             "type": "product_list",
-            "text": "현재 할인 중 제품:\n\n" + "\n\n".join([r["text"] for r in results]),
+            "text": f"{period_label} 할인 중 제품 ({len(results)}개)",
             "products": [
                 str(r["product_url"]).strip().lower()
                 for r in results
@@ -507,7 +521,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
 
         return {
             "type": "product_list",
-            "text": "최저가 제품 목록:\n\n" + "\n\n".join([r["text"] for r in results]),
+            "text": f"{period_label} 최저가 제품 ({len(results)}개)",
             "products": [
                 str(r["product_url"]).strip().lower()
                 for r in results
@@ -576,7 +590,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         # 체크박스와 텍스트 분리 반환
         return {
             "type": "product_list",
-            "text": "최근 신제품:\n\n" + "\n\n".join([r["text"] for r in results]),
+            "text": f"{period_label} 신제품 ({len(results)}개)",
             "products": [
                 str(r["product_url"]).strip().lower()
                 for r in results
@@ -636,7 +650,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         
         return {
             "type": "product_list",
-            "text": "최근 품절 제품:\n\n" + "\n\n".join([r["text"] for r in results]),
+            "text": f"{period_label} 품절 제품 ({len(results)}개)",
             "products": [
                 str(r["product_url"]).strip().lower()
                 for r in results
@@ -783,7 +797,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         
         return {
             "type": "product_list",
-            "text": "최근 복원된 제품:\n\n" + "\n\n".join([r["text"] for r in results]),
+            "text": f"{period_label} 복원 제품 ({len(results)}개)",
             "products": [
                 str(r["product_url"]).strip().lower()
                 for r in results
@@ -1650,8 +1664,17 @@ with col_tabs:
             # 🔥 현재 검색/필터 조건을 반영한 데이터셋 생성
             filtered_df = df_all.copy()
         
-            # 🔥 조회 기간 적용 (브랜드/제품명 필터링은 execute_rule에서 처리)
-            answer = execute_rule(intent, question, filtered_df, date_from, date_to)
+            # 교체
+            # 🔥 질문에서 기간 추출 시도
+            question_period = extract_period_from_question(question)
+            
+            if question_period:
+                # 질문에 기간이 있으면 질문 기간 우선
+                q_date_from, q_date_to, _ = question_period
+                answer = execute_rule(intent, question, filtered_df, q_date_from, q_date_to)
+            else:
+                # 질문에 기간 없으면 조회기간 설정값 사용
+                answer = execute_rule(intent, question, filtered_df, date_from, date_to)
 
             # 🔥 필터 정보 수집
             filter_info = {
@@ -2757,6 +2780,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
