@@ -1885,13 +1885,19 @@ if selected_products:   # 🔥 조건 반전
             
             if tmp.empty:
                 continue
-                
+
             tmp["unit_price"] = tmp["unit_price"].astype(float)
+
+            # 0원 → None
+            tmp.loc[tmp["unit_price"] == 0, "unit_price"] = None
             
-            # 🔥 할인 여부 추가
             tmp["is_discount"] = tmp["event_type"] == "DISCOUNT"
             tmp["price_status"] = tmp["is_discount"].map({True: "💸 할인 중", False: "정상가"})
             
+            # 🔥 None(품절)인 경우 덮어쓰기
+            tmp.loc[tmp["unit_price"].isna(), "price_status"] = "품절"
+            tmp.loc[tmp["unit_price"].isna(), "price_detail"] = "품절"
+
             # 🔥 정상가와 할인율 정보 추가 (툴팁용)
             tmp["normal_price"] = None
             tmp["discount_rate"] = None
@@ -1979,6 +1985,19 @@ if selected_products:   # 🔥 조건 반전
             timeline_rows.append(
                 tmp[["product_url", "product_name", "event_date", "unit_price", "price_status", "price_detail"]]
             )
+
+            # 🔥 0원 = 품절 → lifecycle에 없어도 OUT_OF_STOCK 이벤트 강제 추가
+            zero_price_dates = tmp[tmp["unit_price"].isna() & (tmp["price_detail"] == "품절")]["event_date"].tolist()
+
+            if zero_price_dates and not df_life.empty:
+                existing_out_dates = df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]["date"].tolist()
+                for zdate in zero_price_dates:
+                    if zdate not in existing_out_dates:
+                        new_row = pd.DataFrame([{
+                            "date": zdate,
+                            "lifecycle_event": "OUT_OF_STOCK"
+                        }])
+                        df_life = pd.concat([df_life, new_row], ignore_index=True)
     
         # lifecycle 이벤트
         df_life = load_lifecycle_events(row["product_url"])
@@ -2696,6 +2715,15 @@ if selected_products:   # 🔥 조건 반전
             
                 prev_price = float(row["prev_price"])
                 current_price = float(row["normal_price"])
+
+                # 🔥 정상가 0원 = 품절
+                if current_price == 0:
+                    display_rows.append({
+                        "날짜": row["date"],
+                        "이벤트": "❌ 품절",
+                        "가격 정보": f"정상가 {prev_price:,.1f}원 → 품절"
+                    })
+                    continue
             
                 diff = current_price - prev_price
                 diff_rate = (diff / prev_price) * 100 if prev_price != 0 else 0
@@ -2848,56 +2876,5 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
