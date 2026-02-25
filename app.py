@@ -2596,37 +2596,72 @@ if selected_products:   # 🔥 조건 반전
                     title="❌ 품절",
                     content=f"날짜: {latest_out['date'].date()}"
                 ))
-        
-        # 📈 정상가 변동
+
+        # 🔄 복원
+        if not df_life.empty:
+            restore_events = df_life[df_life["lifecycle_event"] == "RESTOCK"]
+            if not restore_events.empty:
+                latest_restore = restore_events.sort_values("date", ascending=False).iloc[0]
+                cards.append(render_card(
+                    bg="#fff8e1",
+                    border="#f59e0b",
+                    title="🔄 복원",
+                    content=f"날짜: {latest_restore['date'].date()}"
+                ))
+
+        # 📈 정상가 변동 / 품절 / 복원
         if normal_change_rows:
             latest_change = normal_change_rows[0]
         
             prev_price = float(latest_change["prev_price"])
             current_price = float(latest_change["normal_price"])
-        
-            diff = current_price - prev_price
-            diff_rate = (diff / prev_price) * 100 if prev_price != 0 else 0
-        
-            # 상승/하락 색상 구분
-            if diff > 0:
-                bg = "#fdecea"
-                border = "#b91c1c"
-                icon = "📈 정상가 상승"
+
+            # 🔥 0원 = 품절 (lifecycle에 없는 경우)
+            if current_price == 0:
+                # 이미 lifecycle에서 품절 카드가 추가된 경우 중복 방지
+                already_has_out = any("품절" in c for c in cards)
+                if not already_has_out:
+                    cards.append(render_card(
+                        bg="#e8f0f8",
+                        border="#2c5aa0",
+                        title="❌ 품절",
+                        content=f"날짜: {latest_change['date']}<br>정상가 {prev_price:,.0f}원 → 품절"
+                    ))
+
+            # 🔥 이전 0원 → 현재 1원 이상 = 복원 (lifecycle에 없는 경우)
+            elif prev_price == 0 and current_price > 0:
+                already_has_restore = any("복원" in c for c in cards)
+                if not already_has_restore:
+                    cards.append(render_card(
+                        bg="#fff8e1",
+                        border="#f59e0b",
+                        title="🔄 복원",
+                        content=f"날짜: {latest_change['date']}<br>품절 → 정상가 {current_price:,.0f}원"
+                    ))
+
             else:
-                bg = "#eaf2ff"
-                border = "#1d4ed8"
-                icon = "📉 정상가 하락"
-        
-            cards.append(render_card(
-                bg=bg,
-                border=border,
-                title=icon,
-                content=(
-                    f"날짜: {latest_change['date']}<br>"
-                    f"{prev_price:,.0f}원 → {current_price:,.0f}원 "
-                    f"({diff_rate:+.1f}%)"
-                )
-            ))
+                diff = current_price - prev_price
+                diff_rate = (diff / prev_price) * 100 if prev_price != 0 else 0
+            
+                if diff > 0:
+                    bg = "#fdecea"
+                    border = "#b91c1c"
+                    icon = "📈 정상가 상승"
+                else:
+                    bg = "#eaf2ff"
+                    border = "#1d4ed8"
+                    icon = "📉 정상가 하락"
+            
+                cards.append(render_card(
+                    bg=bg,
+                    border=border,
+                    title=icon,
+                    content=(
+                        f"날짜: {latest_change['date']}<br>"
+                        f"{prev_price:,.0f}원 → {current_price:,.0f}원 "
+                        f"({diff_rate:+.1f}%)"
+                    )
+                ))
         
         # 📊 특이 이벤트 없음
         if not cards:
@@ -2712,7 +2747,7 @@ if selected_products:   # 🔥 조건 반전
             normal_rows = normal_res.data if normal_res.data else []
 
             for row in normal_rows:
-            
+                     
                 prev_price = float(row["prev_price"])
                 current_price = float(row["normal_price"])
 
@@ -2884,6 +2919,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
