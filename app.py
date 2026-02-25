@@ -968,6 +968,7 @@ df_all["product_url"] = (
     .astype(str)
     .str.strip()
     .str.lower()
+    .str.replace(r"^_+|_+$", "", regex=True)  # 🔥 앞뒤 __ 제거
 )
 
 # 데이터 없으면 즉시 중단
@@ -2554,6 +2555,7 @@ for product_url in selected_products:
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
