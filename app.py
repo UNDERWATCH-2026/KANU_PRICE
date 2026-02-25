@@ -1824,6 +1824,9 @@ if selected_products:   # 🔥 조건 반전
         # 4️⃣ NaN 제거 (끊긴 구간은 차트에서 제외)
         df_chart = df_timeline.dropna(subset=["unit_price"]).copy()
 
+        # 🔥 임시 확인
+        st.code(df_chart["product_url"].unique().tolist()[:3])
+
         # 같은 날짜+가격에서 겹친 점 순번
         df_chart["dup_rank"] = (
             df_chart.groupby(["event_date", "unit_price"])
@@ -2583,6 +2586,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
