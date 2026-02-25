@@ -929,11 +929,12 @@ def remove_product_everywhere(product_url: str):
     st.session_state.selected_products.discard(product_url)
     if "product_checkbox_keys" in st.session_state:
         keys = st.session_state["product_checkbox_keys"].get(product_url, set())
-        # 🔥 임시 확인
-        st.write(f"DEBUG 삭제할 keys: {keys}")
         for k in list(keys):
             if k in st.session_state:
                 del st.session_state[k]
+        # 🔥 삭제 후 남은 전체 chk 키 확인
+        remaining_chk_keys = [k for k in st.session_state.keys() if k.startswith("chk_")]
+        print(f"[DEBUG] 삭제 후 남은 chk keys: {remaining_chk_keys}")
         
 # =========================
 # 4️⃣ 세션 상태 초기화
@@ -2538,6 +2539,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
