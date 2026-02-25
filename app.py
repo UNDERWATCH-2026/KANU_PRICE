@@ -1750,10 +1750,31 @@ if selected_products:   # 🔥 조건 반전
             
             if not tmp2.empty:
                 lifecycle_rows.append(tmp2[["product_name", "event_date", "lifecycle_event"]])
-    
+
+
     # =========================
     # 8-1️⃣ 개당 가격 타임라인 비교 차트
     # =========================
+
+    # 🔥 임시 디버깅 - 확인 후 삭제
+for product_url in selected_products:
+    product_row = df_all[df_all["product_url"] == product_url]
+    if product_row.empty:
+        continue
+    row = product_row.iloc[0]
+    if "일리" in str(row.get("brand", "")):
+        df_price_debug = load_events(row["product_url"])
+        st.write(f"DEBUG 일리카페 전체 이벤트 수: {len(df_price_debug)}")
+        st.write(f"DEBUG 일리카페 product_url: {row['product_url']}")
+        if not df_price_debug.empty:
+            df_price_debug["event_date"] = pd.to_datetime(df_price_debug["date"])
+            filtered = df_price_debug[
+                (df_price_debug["event_date"] >= filter_date_from) &
+                (df_price_debug["event_date"] <= filter_date_to)
+            ]
+            st.write(f"DEBUG 기간 필터 후 이벤트 수: {len(filtered)}")
+            st.write(filtered.head())
+
     if timeline_rows:
     
         df_timeline = pd.concat(timeline_rows, ignore_index=True)
@@ -2533,6 +2554,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
