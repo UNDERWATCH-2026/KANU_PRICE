@@ -216,7 +216,11 @@ def classify_intent(q: str):
 
     # 복합 표현 먼저
     if "품절" in q and ("복원" in q or "재입고" in q):
-        return "RESTORE"
+        # 🔥 "품절 후 복원" 같은 순서 표현은 RESTORE
+        if "후" in q or "그 후" in q or "다시" in q:
+            return "RESTORE"
+        # 🔥 "품절, 복원" / "품절 및 복원" / "품절과 복원" 은 둘 다 표시
+        return "OUT_AND_RESTORE"
 
     if "할인" in q and ("기간" in q or "언제" in q):
         return "DISCOUNT_PERIOD"
@@ -616,6 +620,93 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
             .eq("lifecycle_event", "RESTOCK")
         )
         
+    if intent == "OUT_AND_RESTORE":
+        results = []
+    
+        # 품절 조회
+        res_out = (
+            supabase.table("product_lifecycle_events")
+            .select("product_url, date")
+            .eq("lifecycle_event", "OUT_OF_STOCK")
+        )
+        if date_from:
+            res_out = res_out.gte("date", date_from.strftime("%Y-%m-%d"))
+        if date_to:
+            res_out = res_out.lte("date", date_to.strftime("%Y-%m-%d"))
+        res_out = res_out.execute()
+    
+        out_data = {r["product_url"]: r["date"] for r in (res_out.data or [])}
+    
+        # 복원 조회
+        res_restore = (
+            supabase.table("product_lifecycle_events")
+            .select("product_url, date")
+            .eq("lifecycle_event", "RESTOCK")
+        )
+        if date_from:
+            res_restore = res_restore.gte("date", date_from.strftime("%Y-%m-%d"))
+        if date_to:
+            res_restore = res_restore.lte("date", date_to.strftime("%Y-%m-%d"))
+        res_restore = res_restore.execute()
+    
+        restore_data = {r["product_url"]: r["date"] for r in (res_restore.data or [])}
+    
+        all_urls = set(list(out_data.keys()) + list(restore_data.keys()))
+        df = df_work[df_work["product_url"].isin(all_urls)]
+    
+        if df.empty:
+            return "해당 기간 품절 또는 복원 제품이 없습니다."
+    
+        # 품절 목록
+        out_results = []
+        for _, row in df[df["product_url"].isin(out_data)].iterrows():
+            categories = []
+            if pd.notna(row.get("category1")) and row["category1"]:
+                categories.append(row["category1"])
+            if pd.notna(row.get("category2")) and row["category2"]:
+                categories.append(row["category2"])
+            category_str = f" [{' > '.join(categories)}]" if categories else ""
+    
+            out_results.append({
+                "text": f"• {row['brand']} - {row['product_name']}{category_str}\n  📅 품절일: {out_data[row['product_url']]}",
+                "product_url": str(row["product_url"])
+            })
+    
+        # 복원 목록
+        restore_results = []
+        for _, row in df[df["product_url"].isin(restore_data)].iterrows():
+            categories = []
+            if pd.notna(row.get("category1")) and row["category1"]:
+                categories.append(row["category1"])
+            if pd.notna(row.get("category2")) and row["category2"]:
+                categories.append(row["category2"])
+            category_str = f" [{' > '.join(categories)}]" if categories else ""
+    
+            restore_results.append({
+                "text": f"• {row['brand']} - {row['product_name']}{category_str}\n  🔄 복원일: {restore_data[row['product_url']]}",
+                "product_url": str(row["product_url"])
+            })
+    
+        all_results = out_results + restore_results
+    
+        text = ""
+        if out_results:
+            text += "❌ 품절 제품:\n\n" + "\n\n".join([r["text"] for r in out_results])
+        if restore_results:
+            if text:
+                text += "\n\n---\n\n"
+            text += "🔄 복원 제품:\n\n" + "\n\n".join([r["text"] for r in restore_results])
+    
+        return {
+            "type": "product_list",
+            "text": text,
+            "products": [
+                str(r["product_url"]).strip().lower()
+                for r in all_results
+                if r.get("product_url")
+            ]
+        }
+            
         # 🔥 조회 기간 필터링
         if date_from:
             res = res.gte("date", date_from.strftime("%Y-%m-%d"))
@@ -2557,6 +2648,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
