@@ -207,26 +207,38 @@ def extract_product_name_from_question(q: str) -> list:
 def classify_intent(q: str):
     q = q.lower()
 
-    # 🔥 "할인 기간" 키워드 감지
+    # 복합 표현 먼저
+    if "품절" in q and ("복원" in q or "재입고" in q):
+        return "RESTORE"
+
     if "할인" in q and ("기간" in q or "언제" in q):
         return "DISCOUNT_PERIOD"
     if "할인" in q or "행사" in q:
         return "DISCOUNT"
-    if any(word in q for word in ["신제품", "새롭게", "새로", "신규", "출시", "새로운", "처음"]):
+
+    if any(word in q for word in ["신제품", "새롭게", "새로", "신규", "출시", "새로운", "처음", "신상"]):
         return "NEW"
-    if "가장 싼" in q or "최저가" in q:
+
+    if any(word in q for word in ["가장 싼", "제일 싼", "제일 저렴한", "가장 저렴한", "최저가"]):
         return "PRICE_MIN"
-    if "비싼" in q or "최고가" in q:
+
+    # 🔥 따옴표 통일
+    if any(word in q for word in ["가장 비싼", "제일 비싼", "최고가"]):
         return "PRICE_MAX"
+
     if any(word in q for word in ["상승", "증가"]) and "않" not in q:
         return "PRICE_UP"
+
     if "변동" in q or "많이 바뀐" in q:
         return "VOLATILITY"
+
+    if any(word in q for word in ["복원", "재입고", "입고", "돌아온"]):
+        return "RESTORE"
+
     if "품절" in q:
         return "OUT"
-    if "복원" in q:
-        return "RESTORE"
-    if "정상가" in q and "변동" in q:
+
+    if "정상가" in q and ("변동" in q or "상승" in q):
         return "NORMAL_CHANGE"
 
     return "UNKNOWN"
@@ -1482,98 +1494,88 @@ with col_tabs:
                             st.rerun()
         
                     answer_data = history["answer"]
-
                     
                     with st.expander("💬 답변 펼치기 / 접기", expanded=True):
                     
+                        # =========================
+                        # ✅ 제품 리스트 답변 처리
+                        # =========================
                         if isinstance(answer_data, dict) and answer_data.get("type") == "product_list":
-                            ...
                     
+                            # 🔥 헤더 텍스트만 출력 (제품 목록은 체크박스로 대체)
+                            header_text = answer_data['text'].split('\n')[0]
+                            st.markdown(f"**A:** {header_text}")
+                    
+                            if answer_data.get("products"):
+                    
+                                st.markdown(
+                                    "<div style='font-size:13px; color:#6b7280; margin:6px 0 8px 0;'>"
+                                    "* 비교할 제품을 선택해 주세요"
+                                    "</div>",
+                                    unsafe_allow_html=True
+                                )
+                    
+                                sorted_df = (
+                                    df_all[df_all["product_url"].isin(answer_data["products"])]
+                                    .fillna("")
+                                    .drop_duplicates(subset=["product_url"])
+                                    .sort_values(by=["brand", "category1", "category2", "product_name"])
+                                )
+                    
+                                if sorted_df.empty:
+                                    st.caption("⚠️ 매칭되는 제품이 없습니다.")
+                                else:
+                                    for _, row in sorted_df.iterrows():
+                    
+                                        product_url = row["product_url"]
+                                        label = format_product_label(row)
+                    
+                                        scope = f"tab3_{idx}"
+                    
+                                        k = mk_widget_key("chk_tab3", product_url, scope)
+                                        register_product_checkbox_key(product_url, k)
+                    
+                                        col_chk, col_lbl = st.columns([0.06, 0.94], vertical_alignment="top")
+                    
+                                        with col_chk:
+                                            checked = st.checkbox(
+                                                "",
+                                                key=k,
+                                                value=(product_url in st.session_state.selected_products)
+                                            )
+                    
+                                        with col_lbl:
+                                            st.markdown(
+                                                f"""
+                                                <div style="
+                                                    white-space:normal;
+                                                    word-break:keep-all;
+                                                    overflow-wrap:break-word;
+                                                    line-height:1.35;
+                                                    padding:4px 0;
+                                                ">
+                                                    {label}
+                                                </div>
+                                                """,
+                                                unsafe_allow_html=True
+                                            )
+                    
+                                        if checked:
+                                            st.session_state.selected_products.add(product_url)
+                                        else:
+                                            st.session_state.selected_products.discard(product_url)
+                    
+                            else:
+                                st.caption("표시할 제품이 없습니다.")
+                    
+                        # =========================
+                        # 일반 텍스트 답변
+                        # =========================
                         elif isinstance(answer_data, dict):
                             st.markdown(f"**A:** {answer_data.get('text', str(answer_data))}")
                     
                         else:
                             st.markdown(f"**A:** {answer_data}")
-        
-                    # =========================
-                    # ✅ 제품 리스트 답변 처리
-                    # =========================
-                    if isinstance(answer_data, dict) and answer_data.get("type") == "product_list":
-
-                        # 🔥 헤더 텍스트만 출력 (제품 목록은 체크박스로 대체)
-                        header_text = answer_data['text'].split('\n')[0]
-                        st.markdown(f"**A:** {header_text}")
-                    
-                        if answer_data.get("products"):
-                    
-                            st.markdown(
-                                "<div style='font-size:13px; color:#6b7280; margin:6px 0 8px 0;'>"
-                                "* 비교할 제품을 선택해 주세요"
-                                "</div>",
-                                unsafe_allow_html=True
-                            )
-                    
-                            sorted_df = (
-                                df_all[df_all["product_url"].isin(answer_data["products"])]
-                                .fillna("")
-                                .drop_duplicates(subset=["product_url"])
-                                .sort_values(by=["brand", "category1", "category2", "product_name"])
-                            )
-                    
-                            if sorted_df.empty:
-                                st.caption("⚠️ 매칭되는 제품이 없습니다.")
-                            else:
-                                for _, row in sorted_df.iterrows():
-                    
-                                    product_url = row["product_url"]
-                                    label = format_product_label(row)
-                    
-                                    scope = f"tab3_{idx}"
-                    
-                                    k = mk_widget_key("chk_tab3", product_url, scope)
-                                    register_product_checkbox_key(product_url, k)
-                    
-                                    col_chk, col_lbl = st.columns([0.06, 0.94], vertical_alignment="top")
-                    
-                                    with col_chk:
-                                        checked = st.checkbox(
-                                            "",
-                                            key=k,
-                                            value=(product_url in st.session_state.selected_products)
-                                        )
-                    
-                                    with col_lbl:
-                                        st.markdown(
-                                            f"""
-                                            <div style="
-                                                white-space:normal;
-                                                word-break:keep-all;
-                                                overflow-wrap:break-word;
-                                                line-height:1.35;
-                                                padding:4px 0;
-                                            ">
-                                                {label}
-                                            </div>
-                                            """,
-                                            unsafe_allow_html=True
-                                        )
-                    
-                                    if checked:
-                                        st.session_state.selected_products.add(product_url)
-                                    else:
-                                        st.session_state.selected_products.discard(product_url)
-                    
-                        else:
-                            st.caption("표시할 제품이 없습니다.")
-                                
-                    # =========================
-                    # 일반 텍스트 답변
-                    # =========================
-                    elif isinstance(answer_data, dict):
-                        st.markdown(f"**A:** {answer_data.get('text', str(answer_data))}")
-        
-                    else:
-                        st.markdown(f"**A:** {answer_data}")
 
 # st.divider()
 
@@ -2528,6 +2530,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
