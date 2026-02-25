@@ -981,15 +981,7 @@ df_all["product_url"] = (
     .str.strip()
 )
 
-# 🔥 정제 후 확인
-st.code(df_all["product_url"].head(3).tolist())
 
-df_all["product_url"] = (
-    df_all["product_url"]
-    .astype(str)
-    .str.strip("_")
-    .str.strip()
-)
 # 데이터 없으면 즉시 중단
 if df_all is None or df_all.empty:
     st.warning("아직 집계된 제품 데이터가 없습니다.")
@@ -2572,6 +2564,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
