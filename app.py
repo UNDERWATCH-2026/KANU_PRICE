@@ -979,6 +979,19 @@ if _removed_debug:
 # -------------------------
 df_all = load_product_summary()
 
+# 🔥 임시 확인
+st.code(df_all["product_url"].head(3).tolist())
+
+df_all["product_url"] = (
+    df_all["product_url"]
+    .astype(str)
+    .str.strip("_")
+    .str.strip()
+)
+
+# 🔥 정제 후 확인
+st.code(df_all["product_url"].head(3).tolist())
+
 df_all["product_url"] = (
     df_all["product_url"]
     .astype(str)
@@ -2566,6 +2579,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
