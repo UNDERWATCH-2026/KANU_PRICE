@@ -2172,7 +2172,7 @@ if selected_products:   # 🔥 조건 반전
                             text=alt.Text("count:Q"),
                         )
                     )
-                    layers.append(text_overlap)]
+                    layers.append(text_overlap)
         
             # =========================
             # 🔔 Lifecycle 아이콘 추가
@@ -2848,6 +2848,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
