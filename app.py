@@ -886,8 +886,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
             "new_products": [str(r["product_url"]).strip().lower() for r in new_results],
             "out_products": [str(r["product_url"]).strip().lower() for r in out_results],
         }
-            
-    if intent == "VOLATILITY" and start_date:
+
             
     if intent == "VOLATILITY" and start_date:
         res = (
@@ -2785,6 +2784,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
