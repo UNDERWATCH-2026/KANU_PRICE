@@ -1756,29 +1756,6 @@ if selected_products:   # 🔥 조건 반전
     # 8-1️⃣ 개당 가격 타임라인 비교 차트
     # =========================
 
-    # 🔥 임시 디버깅 - 확인 후 삭제
-if "일리" in str(row.get("brand", "")):
-    st.code(f"product_url 실제값: [{row['product_url']}]")
-    
-    test_res = (
-        supabase.table("product_all_events")
-        .select("product_url, date, unit_price")
-        .eq("product_url", row["product_url"])
-        .limit(3)
-        .execute()
-    )
-    st.code(f"직접 조회 결과: {test_res.data}")
-    
-    test_res2 = (
-        supabase.table("product_all_events")
-        .select("product_url")
-        .like("product_url", "%illycaffe%")
-        .limit(3)
-        .execute()
-    )
-    st.code(f"LIKE 조회 결과: {test_res2.data}")
-    
-#여기까지
     if timeline_rows:
     
         df_timeline = pd.concat(timeline_rows, ignore_index=True)
@@ -2558,6 +2535,7 @@ if "일리" in str(row.get("brand", "")):
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
