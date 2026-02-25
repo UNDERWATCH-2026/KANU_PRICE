@@ -1955,8 +1955,8 @@ if selected_products:   # 🔥 조건 반전
             if not df_life.empty:
                 df_life["date"] = pd.to_datetime(df_life["date"], errors="coerce")
                 df_life = df_life.dropna(subset=["date"])
+                # 🔥 기간 필터 없음 - 전체 lifecycle 기준으로 선 끊기
 
-                # 품절/복원 구간 계산 (기간 필터 없이 전체 적용)
                 out_dates = df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]["date"].tolist()
                 restore_dates = df_life[df_life["lifecycle_event"] == "RESTOCK"]["date"].tolist()
 
@@ -1968,8 +1968,8 @@ if selected_products:   # 🔥 조건 반전
                         tmp.loc[mask, "unit_price"] = None
                     else:
                         mask = tmp["event_date"] >= out_date
-                        tmp.loc[mask, "unit_price"] = None               
-            
+                        tmp.loc[mask, "unit_price"] = None
+                        
                 # 품절/복원 구간 계산
                 out_dates = df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]["date"].tolist()
                 restore_dates = df_life[df_life["lifecycle_event"] == "RESTOCK"]["date"].tolist()
@@ -2597,26 +2597,31 @@ if selected_products:   # 🔥 조건 반전
         if not df_life.empty:
             out_events = df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]
             if not out_events.empty:
-                latest_out = out_events.sort_values("date", ascending=False).iloc[0]
+                out_dates_str = "<br>".join([
+                    f"날짜: {r['date'].date()}"
+                    for _, r in out_events.sort_values("date", ascending=False).iterrows()
+                ])
                 cards.append(render_card(
                     bg="#e8f0f8",
                     border="#2c5aa0",
                     title="❌ 품절",
-                    content=f"날짜: {latest_out['date'].date()}"
+                    content=out_dates_str
                 ))
 
         # 🔄 복원
         if not df_life.empty:
             restore_events = df_life[df_life["lifecycle_event"] == "RESTOCK"]
             if not restore_events.empty:
-                latest_restore = restore_events.sort_values("date", ascending=False).iloc[0]
+                restore_dates_str = "<br>".join([
+                    f"날짜: {r['date'].date()}"
+                    for _, r in restore_events.sort_values("date", ascending=False).iterrows()
+                ])
                 cards.append(render_card(
                     bg="#fff8e1",
                     border="#f59e0b",
                     title="🔄 복원",
-                    content=f"날짜: {latest_restore['date'].date()}"
+                    content=restore_dates_str
                 ))
-
         # 📈 정상가 변동 / 품절 / 복원
         if normal_change_rows:
             latest_change = normal_change_rows[0]
@@ -2921,12 +2926,11 @@ if selected_products:   # 🔥 조건 반전
                     # 🔥 품절/복원 날짜 기준으로 가격 정보 조회
                     price_info = ""
                     if event_type == "OUT_OF_STOCK":
-                        # 품절 직전 정상가 조회
+                        # 🔥 품절 직전 정상가 또는 할인가 조회
                         price_res = (
                             supabase.table("product_all_events")
-                            .select("unit_price")
+                            .select("unit_price, event_type")
                             .eq("product_url", p["product_url"])
-                            .eq("event_type", "NORMAL")
                             .lt("date", event_date.strftime("%Y-%m-%d"))
                             .order("date", desc=True)
                             .limit(1)
@@ -2934,15 +2938,16 @@ if selected_products:   # 🔥 조건 반전
                         )
                         if price_res.data:
                             prev = float(price_res.data[0]["unit_price"])
-                            price_info = f"정상가 {prev:,.1f}원 → 품절"
+                            etype = price_res.data[0]["event_type"]
+                            price_label = "할인가" if etype == "DISCOUNT" else "정상가"
+                            price_info = f"{price_label} {prev:,.1f}원 → 품절"
 
                     elif event_type == "RESTOCK":
-                        # 복원 이후 첫 정상가 조회
+                        # 🔥 복원 이후 첫 정상가 또는 할인가 조회
                         price_res = (
                             supabase.table("product_all_events")
-                            .select("unit_price")
+                            .select("unit_price, event_type")
                             .eq("product_url", p["product_url"])
-                            .eq("event_type", "NORMAL")
                             .gte("date", event_date.strftime("%Y-%m-%d"))
                             .order("date", desc=False)
                             .limit(1)
@@ -2950,7 +2955,9 @@ if selected_products:   # 🔥 조건 반전
                         )
                         if price_res.data:
                             after = float(price_res.data[0]["unit_price"])
-                            price_info = f"품절 → 정상가 {after:,.1f}원"
+                            etype = price_res.data[0]["event_type"]
+                            price_label = "할인가" if etype == "DISCOUNT" else "정상가"
+                            price_info = f"품절 → {price_label} {after:,.1f}원"
             
                     display_rows.append({
                         "날짜": event_date.strftime("%Y-%m-%d"),
@@ -2979,6 +2986,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
