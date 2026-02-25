@@ -2023,6 +2023,8 @@ if selected_products:   # 🔥 조건 반전
         
             # ✅ 차트에 실제로 그려진 제품(product_url)만 목록에 표시
             unique_urls = sorted(df_chart["product_url"].unique())
+            # 🔥 임시 확인
+            st.code(unique_urls[:3])
         
             for product_url in unique_urls:
                 product_row = df_all[df_all["product_url"] == product_url]
@@ -2586,6 +2588,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
