@@ -2086,29 +2086,88 @@ if selected_products:   # 🔥 조건 반전
             # =========================
             # 📈 가격 선 차트 (범례 없음 + 색 고정)
             # =========================
+            # 선 레이어 (원래 날짜 사용)
             base_line = (
                 alt.Chart(df_chart)
-                .mark_line(point=True)
+                .mark_line()
                 .encode(
-                    # ✅ jitter 쓰고 싶으면 event_date -> event_date_jitter로 교체 가능
                     x=alt.X("event_date:T", title="날짜", axis=alt.Axis(format="%m/%d")),
                     y=alt.Y("unit_price:Q", title="개당 가격 (원)"),
                     color=alt.Color(
                         "product_name:N",
-                        scale=alt.Scale(domain=color_domain, range=color_range),  # ✅ 색상 강제 고정
+                        scale=alt.Scale(domain=color_domain, range=color_range),
                         legend=None
                     ),
                     detail="segment:N",
+                )
+            )
+            
+            # 🔥 겹친 점 처리 - 같은 날짜+가격 그룹으로 합치기
+            df_points = (
+                df_chart.groupby(["event_date", "unit_price"])
+                .agg(
+                    product_names=("product_name", lambda x: "\n".join(sorted(set(x)))),
+                    price_detail=("price_detail", lambda x: " / ".join(dict.fromkeys(x))),
+                    price_status=("price_status", "first"),
+                    count=("product_name", "count"),
+                    product_name=("product_name", "first"),  # 색상용
+                )
+                .reset_index()
+            )
+            
+            # 겹친 점 표시 (2개 이상이면 빨간 점 + 숫자)
+            df_overlap = df_points[df_points["count"] > 1].copy()
+            df_single = df_points[df_points["count"] == 1].copy()
+            
+            # 단일 제품 점
+            point_single = (
+                alt.Chart(df_single)
+                .mark_point(size=60, filled=True)
+                .encode(
+                    x=alt.X("event_date:T"),
+                    y=alt.Y("unit_price:Q"),
+                    color=alt.Color(
+                        "product_name:N",
+                        scale=alt.Scale(domain=color_domain, range=color_range),
+                        legend=None
+                    ),
                     tooltip=[
-                        alt.Tooltip("product_name:N", title="제품"),
+                        alt.Tooltip("product_names:N", title="제품"),
                         alt.Tooltip("event_date:T", title="날짜", format="%Y-%m-%d"),
                         alt.Tooltip("price_detail:N", title="가격 정보"),
                         alt.Tooltip("price_status:N", title="상태"),
                     ],
                 )
             )
-        
-            layers = [base_line]
+            
+            # 겹친 제품 점 (빨간색)
+            point_overlap = (
+                alt.Chart(df_overlap)
+                .mark_point(size=120, filled=True, color="red")
+                .encode(
+                    x=alt.X("event_date:T"),
+                    y=alt.Y("unit_price:Q"),
+                    tooltip=[
+                        alt.Tooltip("product_names:N", title="제품 (겹침)"),
+                        alt.Tooltip("event_date:T", title="날짜", format="%Y-%m-%d"),
+                        alt.Tooltip("price_detail:N", title="가격 정보"),
+                        alt.Tooltip("count:Q", title="겹친 제품 수"),
+                    ],
+                )
+            )
+            
+            # 겹친 점 숫자 표시
+            text_overlap = (
+                alt.Chart(df_overlap)
+                .mark_text(dy=-10, fontSize=11, fontWeight="bold", color="red")
+                .encode(
+                    x=alt.X("event_date:T"),
+                    y=alt.Y("unit_price:Q"),
+                    text=alt.Text("count:Q"),
+                )
+            )
+            
+            layers = [base_line, point_single, point_overlap, text_overlap]
         
             # =========================
             # 🔔 Lifecycle 아이콘 추가
@@ -2784,6 +2843,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
