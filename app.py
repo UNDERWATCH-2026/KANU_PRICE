@@ -2710,7 +2710,7 @@ if selected_products:   # 🔥 조건 반전
             )
             
             normal_rows = normal_res.data if normal_res.data else []
-            
+
             for row in normal_rows:
             
                 prev_price = float(row["prev_price"])
@@ -2722,6 +2722,15 @@ if selected_products:   # 🔥 조건 반전
                         "날짜": row["date"],
                         "이벤트": "❌ 품절",
                         "가격 정보": f"정상가 {prev_price:,.1f}원 → 품절"
+                    })
+                    continue
+
+                # 🔥 이전 정상가 0원 → 현재 1원 이상 = 복원
+                if prev_price == 0 and current_price > 0:
+                    display_rows.append({
+                        "날짜": row["date"],
+                        "이벤트": "🔄 복원",
+                        "가격 정보": f"품절 → 정상가 {current_price:,.1f}원"
                     })
                     continue
             
@@ -2739,7 +2748,6 @@ if selected_products:   # 🔥 조건 반전
                         f"({diff_rate:+.1f}%)"
                     )
                 })
-
             # =========================
             # 2️⃣ 할인 시작 / 종료 이벤트 (가격 포함)
             # =========================
@@ -2876,5 +2884,6 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
