@@ -1216,18 +1216,17 @@ with col_tabs:
                             
                             with col_delete:
                                 if st.button("🗑️", key=f"delete_search_{history_idx}", help="검색 결과 삭제"):
-                                    # 해당 검색 결과의 제품들을 선택에서 제거
                                     for product_url in history["results"]:
                                         st.session_state.selected_products.discard(product_url)
-                                        if rows.empty:
-                                            continue
-                                        for u in rows["product_url"].dropna().unique():
-                                            st.session_state.selected_products.discard(u)
-                                                                        
-                                    # 검색 이력에서 제거
+                                        # 🔥 체크박스 위젯 상태도 False로 초기화
+                                        if "product_checkbox_keys" in st.session_state:
+                                            keys = st.session_state["product_checkbox_keys"].get(product_url, set())
+                                            for k in list(keys):
+                                                if k in st.session_state:
+                                                    st.session_state[k] = False
                                     st.session_state.search_history.pop(history_idx)
                                     st.rerun()
-                                                       
+                                                                                       
                             if not history['results']:
                                 st.caption("📭 검색 결과 없음")
                             
@@ -2539,6 +2538,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
