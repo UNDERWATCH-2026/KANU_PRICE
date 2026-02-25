@@ -1950,10 +1950,11 @@ if selected_products:   # 🔥 조건 반전
                 tmp.at[idx, "price_detail"] = f"정상가: {price_row['unit_price']:,.1f}원"
                        
             # 🔥 lifecycle 데이터 불러오기 - 기간 필터 없이 전체 조회
+            df_life = load_lifecycle_events(row["product_url"])  # 🔥 이 줄 추가
+            
             if not df_life.empty:
                 df_life["date"] = pd.to_datetime(df_life["date"], errors="coerce")
                 df_life = df_life.dropna(subset=["date"])
-
                 # 🔥 0원 가격 날짜를 OUT_OF_STOCK으로 추가
                 zero_dates = tmp[tmp["unit_price"].isna()]["event_date"].tolist()
                 for zdate in zero_dates:
@@ -3022,6 +3023,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
