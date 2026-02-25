@@ -54,7 +54,10 @@ def load_product_summary():
         "brew_type_kr",
     ]
     res = supabase.table("product_price_summary_enriched").select(", ".join(cols)).execute()
-    return pd.DataFrame(res.data)
+    df = pd.DataFrame(res.data)
+    # 🔥 로딩 시점에 URL 정제
+    df["product_url"] = df["product_url"].astype(str).str.strip("_").str.strip()
+    return df
 
 @st.cache_data(ttl=300)
 def load_events(product_url: str):
@@ -927,9 +930,7 @@ def register_product_checkbox_key(product_url: str, widget_key: str):
 
 # remove_product_everywhere 수정
 def remove_product_everywhere(product_url: str):
-    # 🔥 URL 앞뒤 _ 제거
-    product_url = product_url.strip("_")
-    
+    product_url = str(product_url).strip("_").strip()
     st.session_state.selected_products.discard(product_url)
     if "_removed_products" not in st.session_state:
         st.session_state["_removed_products"] = set()
@@ -978,12 +979,11 @@ if _removed_debug:
 # -------------------------
 df_all = load_product_summary()
 
-# 교체 - lower() 제거
 df_all["product_url"] = (
     df_all["product_url"]
     .astype(str)
+    .str.strip("_")
     .str.strip()
-    .str.replace(r"^_+|_+$", "", regex=True)
 )
 # 데이터 없으면 즉시 중단
 if df_all is None or df_all.empty:
@@ -2566,6 +2566,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
