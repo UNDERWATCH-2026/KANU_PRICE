@@ -926,14 +926,12 @@ def register_product_checkbox_key(product_url: str, widget_key: str):
     st.session_state["product_checkbox_keys"].setdefault(product_url, set()).add(widget_key)
 
 def remove_product_everywhere(product_url: str):
-    # 1. 선택 목록에서 제거
     st.session_state.selected_products.discard(product_url)
-    # 2. 연결된 모든 체크박스 위젯 상태를 False로 초기화
     if "product_checkbox_keys" in st.session_state:
         keys = st.session_state["product_checkbox_keys"].get(product_url, set())
         for k in list(keys):
             if k in st.session_state:
-                st.session_state[k] = False
+                del st.session_state[k]  # 🔥 False 대신 삭제
         
 # =========================
 # 4️⃣ 세션 상태 초기화
@@ -1223,7 +1221,7 @@ with col_tabs:
                                             keys = st.session_state["product_checkbox_keys"].get(product_url, set())
                                             for k in list(keys):
                                                 if k in st.session_state:
-                                                    st.session_state[k] = False
+                                                    del st.session_state[k]  # 🔥 False 대신 삭제
                                     st.session_state.search_history.pop(history_idx)
                                     st.rerun()
                                                                                        
@@ -2538,6 +2536,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
