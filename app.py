@@ -928,10 +928,9 @@ def register_product_checkbox_key(product_url: str, widget_key: str):
 # remove_product_everywhere 수정
 def remove_product_everywhere(product_url: str):
     st.session_state.selected_products.discard(product_url)
-    # 🔥 제거된 제품 별도 추적
     if "_removed_products" not in st.session_state:
         st.session_state["_removed_products"] = set()
-    st.session_state["_removed_products"].add(product_url)
+    st.session_state["_removed_products"].add(product_url))
         
 # =========================
 # 4️⃣ 세션 상태 초기화
@@ -953,7 +952,13 @@ if "search_keyword" not in st.session_state:
 if "search_history" not in st.session_state:
     st.session_state.search_history = []  # 🔥 검색 이력 [{keyword: "쥬시", results: [...]}]
 
+# 세션 상태 초기화 부분에 추가
+if "selected_products" not in st.session_state:
+    st.session_state.selected_products = set()
 
+# 🔥 추가
+if "_removed_products" not in st.session_state:
+    st.session_state["_removed_products"] = set()
 
 # =========================
 # 5️⃣ 메인 UI
@@ -1075,7 +1080,10 @@ with col_controls:
             key for key in list(st.session_state.keys())
             if key.startswith(("tab", "chk_tab", "remove_product_", "delete_"))
         ]
-        
+
+        st.session_state.selected_products = set()
+        st.session_state["_removed_products"] = set()  # 🔥 추가
+
         for key in keys_to_delete:
             del st.session_state[key]
 
@@ -2546,6 +2554,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
