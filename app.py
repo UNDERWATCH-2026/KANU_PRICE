@@ -2765,11 +2765,6 @@ if selected_products:   # 🔥 조건 반전
 
                 # 🔥 복원 날짜 df_life에서 직접 수집
 
-                import streamlit as st
-                st.write("df_life:", df_life if not df_life.empty else "비어있음")
-                st.write("restore_dates_in_display:", restore_dates_in_display)
-                st.write("row date 예시:", df_changes["date"].tolist())
-
                 restore_dates_in_display = [
                     str(d.date())
                     for d in df_life[df_life["lifecycle_event"] == "RESTOCK"]["date"].tolist()
@@ -3064,6 +3059,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
