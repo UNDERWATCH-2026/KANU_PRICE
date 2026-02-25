@@ -930,13 +930,14 @@ def register_product_checkbox_key(product_url: str, widget_key: str):
 
 # remove_product_everywhere 수정
 def remove_product_everywhere(product_url: str):
-        # 🔥 임시 확인
+    clean_url = str(product_url).strip("_").strip()
     st.session_state["_debug_input_url"] = product_url
-    product_url = str(product_url).strip("_").strip()
-    st.session_state.selected_products.discard(product_url)
+    st.session_state["_debug_clean_url"] = clean_url
+    
+    st.session_state.selected_products.discard(clean_url)
     if "_removed_products" not in st.session_state:
         st.session_state["_removed_products"] = set()
-    st.session_state["_removed_products"].add(product_url)
+    st.session_state["_removed_products"].add(clean_url)  # 🔥 clean_url 사용
         
 # =========================
 # 4️⃣ 세션 상태 초기화
@@ -970,6 +971,11 @@ if "_removed_products" not in st.session_state:
 # 5️⃣ 메인 UI
 # =========================
 st.title("☕ Coffee Capsule Price Intelligence")
+
+if "_debug_clean_url" in st.session_state:
+    st.code(f"clean URL: [{st.session_state['_debug_clean_url']}]")
+if st.session_state.get("_removed_products"):
+    st.code(f"_removed: {st.session_state['_removed_products']}")
 
 if "_debug_input_url" in st.session_state:
     st.code(f"remove에 전달된 URL: [{st.session_state['_debug_input_url']}]")
@@ -2593,6 +2599,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
