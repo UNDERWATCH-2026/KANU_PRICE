@@ -1948,20 +1948,27 @@ if selected_products:   # 🔥 조건 반전
             # 정상가인 경우
             for idx, price_row in tmp[~tmp["is_discount"]].iterrows():
                 tmp.at[idx, "price_detail"] = f"정상가: {price_row['unit_price']:,.1f}원"
-            
-            # 🔥 lifecycle 데이터 불러오기
+                       
+            # 🔥 lifecycle 데이터 불러오기 - 기간 필터 없이 전체 조회
             df_life = load_lifecycle_events(row["product_url"])
             
             if not df_life.empty:
                 df_life["date"] = pd.to_datetime(df_life["date"], errors="coerce")
-            
-                # 🔥 기간 필터 적용 (이 줄이 핵심)
-                df_life = df_life[
-                    df_life["date"].between(filter_date_from, filter_date_to)
-                ]
-            
-                # 🔥 NaT 제거
                 df_life = df_life.dropna(subset=["date"])
+
+                # 품절/복원 구간 계산 (기간 필터 없이 전체 적용)
+                out_dates = df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]["date"].tolist()
+                restore_dates = df_life[df_life["lifecycle_event"] == "RESTOCK"]["date"].tolist()
+
+                for out_date in out_dates:
+                    restore_after = [d for d in restore_dates if d > out_date]
+                    if restore_after:
+                        restore_date = min(restore_after)
+                        mask = (tmp["event_date"] >= out_date) & (tmp["event_date"] < restore_date)
+                        tmp.loc[mask, "unit_price"] = None
+                    else:
+                        mask = tmp["event_date"] >= out_date
+                        tmp.loc[mask, "unit_price"] = None               
             
                 # 품절/복원 구간 계산
                 out_dates = df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]["date"].tolist()
@@ -2910,11 +2917,45 @@ if selected_products:   # 🔥 조건 반전
             
                     event_date = row["date"]
                     event_type = row["lifecycle_event"]
+
+                    # 🔥 품절/복원 날짜 기준으로 가격 정보 조회
+                    price_info = ""
+                    if event_type == "OUT_OF_STOCK":
+                        # 품절 직전 정상가 조회
+                        price_res = (
+                            supabase.table("product_all_events")
+                            .select("unit_price")
+                            .eq("product_url", p["product_url"])
+                            .eq("event_type", "NORMAL")
+                            .lt("date", event_date.strftime("%Y-%m-%d"))
+                            .order("date", desc=True)
+                            .limit(1)
+                            .execute()
+                        )
+                        if price_res.data:
+                            prev = float(price_res.data[0]["unit_price"])
+                            price_info = f"정상가 {prev:,.1f}원 → 품절"
+
+                    elif event_type == "RESTOCK":
+                        # 복원 이후 첫 정상가 조회
+                        price_res = (
+                            supabase.table("product_all_events")
+                            .select("unit_price")
+                            .eq("product_url", p["product_url"])
+                            .eq("event_type", "NORMAL")
+                            .gte("date", event_date.strftime("%Y-%m-%d"))
+                            .order("date", desc=False)
+                            .limit(1)
+                            .execute()
+                        )
+                        if price_res.data:
+                            after = float(price_res.data[0]["unit_price"])
+                            price_info = f"품절 → 정상가 {after:,.1f}원"
             
                     display_rows.append({
                         "날짜": event_date.strftime("%Y-%m-%d"),
                         "이벤트": lifecycle_map.get(event_type, ""),
-                        "가격 정보": ""
+                        "가격 정보": price_info
                     })
             # =========================
             # 4️⃣ 정렬 + 색상 강조
@@ -2938,6 +2979,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
