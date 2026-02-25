@@ -880,7 +880,10 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
                 str(r["product_url"]).strip().lower()
                 for r in all_results
                 if r.get("product_url")
-            ]
+            ],
+            # 🔥 구분 정보 추가
+            "new_products": [str(r["product_url"]).strip().lower() for r in new_results],
+            "out_products": [str(r["product_url"]).strip().lower() for r in out_results],
         }
             
     if intent == "VOLATILITY" and start_date:
@@ -956,6 +959,12 @@ def llm_fallback(question: str, df_summary: pd.DataFrame):
     prompt = f"""
 당신은 커피 캡슐 가격 분석 전문가입니다.
 아래 데이터 기반으로 질문에 답하세요.
+
+규칙:
+- 답변은 간결하게 핵심만 말하세요.
+- 데이터 컬럼명(is_new_product, is_discount 등 영문 필드명)은 절대 언급하지 마세요.
+- 기술적인 내부 정보(컬럼명, 값, 코드)는 노출하지 마세요.
+- 결과가 없으면 "해당 조건에 맞는 제품이 없습니다." 로만 답하세요.
 
 데이터:
 {context}
@@ -1752,64 +1761,57 @@ with col_tabs:
                                     "</div>",
                                     unsafe_allow_html=True
                                 )
-                    
-                                sorted_df = (
-                                    df_all[df_all["product_url"].isin(answer_data["products"])]
-                                    .fillna("")
-                                    .drop_duplicates(subset=["product_url"])
-                                    .sort_values(by=["brand", "category1", "category2", "product_name"])
-                                )
-                    
-                                if sorted_df.empty:
-                                    st.caption("⚠️ 매칭되는 제품이 없습니다.")
-                                else:
+    
+                                # 🔥 체크박스 렌더링 헬퍼
+                                def render_product_checkboxes(product_urls, scope_prefix):
+                                    sorted_df = (
+                                        df_all[df_all["product_url"].isin(product_urls)]
+                                        .fillna("")
+                                        .drop_duplicates(subset=["product_url"])
+                                        .sort_values(by=["brand", "category1", "category2", "product_name"])
+                                    )
+                                    if sorted_df.empty:
+                                        st.caption("⚠️ 매칭되는 제품이 없습니다.")
+                                        return
                                     for _, row in sorted_df.iterrows():
-                    
                                         product_url = row["product_url"]
                                         label = format_product_label(row)
-                    
-                                        scope = f"tab3_{idx}"
-                                
-                                        # 🔥 여기부터 교체
+                                        scope = f"tab3_{idx}_{scope_prefix}"
                                         is_selected = product_url in st.session_state.selected_products
                                         k = mk_widget_key("chk_tab3", product_url, scope) + ("_1" if is_selected else "_0")
                                         register_product_checkbox_key(product_url, k)
-                                
                                         col_chk, col_lbl = st.columns([0.02, 0.98], vertical_alignment="center")
-                                
                                         with col_chk:
-                                            checked = st.checkbox(
-                                                "",
-                                                key=k,
-                                                value=is_selected
-                                            )
-                                
+                                            checked = st.checkbox("", key=k, value=is_selected)
                                         with col_lbl:
                                             st.markdown(
-                                                f"""
-                                                <div style="
-                                                    white-space:normal;
-                                                    word-break:keep-all;
-                                                    overflow-wrap:break-word;
-                                                    line-height:1.35;
-                                                    padding:5px 0 6px 0;
-                                                ">
-                                                    {label}
-                                                </div>
-                                                """,
+                                                f"<div style='white-space:normal; word-break:keep-all; overflow-wrap:break-word; line-height:1.35; padding:5px 0 6px 0;'>{label}</div>",
                                                 unsafe_allow_html=True
                                             )
-                                
                                         if checked:
                                             st.session_state.selected_products.add(product_url)
                                         else:
                                             st.session_state.selected_products.discard(product_url)
-                                
-                                    # 🔽 for 밖
                                     st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
+    
+                                # 🔥 NEW_AND_OUT: 신제품/품절 구분 표시
+                                new_products = answer_data.get("new_products", [])
+                                out_products = answer_data.get("out_products", [])
+    
+                                if new_products or out_products:
+                                    if new_products:
+                                        st.markdown("**🆕 신제품**")
+                                        render_product_checkboxes(new_products, "new")
+                                    if out_products:
+                                        st.markdown("**❌ 품절 제품**")
+                                        render_product_checkboxes(out_products, "out")
+                                else:
+                                    # 기존 방식 (구분 없는 경우)
+                                    render_product_checkboxes(answer_data["products"], "all")
                     
                             else:
                                 st.caption("표시할 제품이 없습니다.")
+
                     
                         # =========================
                         # 일반 텍스트 답변
@@ -2780,6 +2782,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
