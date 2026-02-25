@@ -1888,12 +1888,13 @@ if selected_products:   # 🔥 조건 반전
 
             tmp["unit_price"] = tmp["unit_price"].astype(float)
 
-            # 0원 → None
+            # 🔥 0원 → None (품절 구간 선 끊기)
             tmp.loc[tmp["unit_price"] == 0, "unit_price"] = None
-            
+
+            # 🔥 할인 여부 추가
             tmp["is_discount"] = tmp["event_type"] == "DISCOUNT"
             tmp["price_status"] = tmp["is_discount"].map({True: "💸 할인 중", False: "정상가"})
-            
+
             # 🔥 None(품절)인 경우 덮어쓰기
             tmp.loc[tmp["unit_price"].isna(), "price_status"] = "품절"
             tmp.loc[tmp["unit_price"].isna(), "price_detail"] = "품절"
@@ -2712,9 +2713,27 @@ if selected_products:   # 🔥 조건 반전
                 }
         
                 for _, row in df_changes.iterrows():
-        
+    
                     prev_price = float(row["prev_price"]) if row["prev_price"] else 0
                     current_price = float(row["unit_price"]) if row["unit_price"] else 0
+
+                    # 🔥 정상가 0원 = 품절
+                    if current_price == 0 and row["price_change_type"] in ("NORMAL_DOWN", "NORMAL_UP"):
+                        display_rows.append({
+                            "날짜": row["date"],
+                            "이벤트": "❌ 품절",
+                            "가격 정보": f"정상가 {prev_price:,.1f}원 → 품절"
+                        })
+                        continue
+
+                    # 🔥 이전 0원 → 현재 1원 이상 = 복원
+                    if prev_price == 0 and current_price > 0 and row["price_change_type"] in ("NORMAL_DOWN", "NORMAL_UP"):
+                        display_rows.append({
+                            "날짜": row["date"],
+                            "이벤트": "🔄 복원",
+                            "가격 정보": f"품절 → 정상가 {current_price:,.1f}원"
+                        })
+                        continue
         
                     if prev_price > 0:
                         diff = current_price - prev_price
@@ -2919,6 +2938,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
