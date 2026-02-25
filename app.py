@@ -925,16 +925,13 @@ def register_product_checkbox_key(product_url: str, widget_key: str):
         st.session_state["product_checkbox_keys"] = {}
     st.session_state["product_checkbox_keys"].setdefault(product_url, set()).add(widget_key)
 
+# remove_product_everywhere 수정
 def remove_product_everywhere(product_url: str):
     st.session_state.selected_products.discard(product_url)
-    if "product_checkbox_keys" in st.session_state:
-        keys = st.session_state["product_checkbox_keys"].get(product_url, set())
-        for k in list(keys):
-            if k in st.session_state:
-                del st.session_state[k]
-        # 🔥 삭제 후 남은 전체 chk 키 확인
-        remaining_chk_keys = [k for k in st.session_state.keys() if k.startswith("chk_")]
-        print(f"[DEBUG] 삭제 후 남은 chk keys: {remaining_chk_keys}")
+    # 🔥 제거된 제품 별도 추적
+    if "_removed_products" not in st.session_state:
+        st.session_state["_removed_products"] = set()
+    st.session_state["_removed_products"].add(product_url)
         
 # =========================
 # 4️⃣ 세션 상태 초기화
@@ -1256,34 +1253,36 @@ with col_tabs:
                                         register_product_checkbox_key(product_url, k)
                                 
                                         col_chk, col_lbl = st.columns([0.06, 0.94], vertical_alignment="center")
-                                
-                                        with col_chk:
-                                            checked = st.checkbox(
-                                                "",
-                                                key=k,
-                                                value=(product_url in st.session_state.selected_products)
-                                            )
-                                
-                                        with col_lbl:
-                                            st.markdown(
-                                                f"""
-                                                <div style="
-                                                    white-space:normal;
-                                                    word-break:keep-all;
-                                                    overflow-wrap:break-word;
-                                                    line-height:1.35;
-                                                    padding:5px 0 6px 0;
-                                                ">
-                                                    {label}
-                                                </div>
-                                                """,
-                                                unsafe_allow_html=True
-                                            )
-                                
-                                        if checked:
-                                            st.session_state.selected_products.add(product_url)
-                                        else:
-                                            st.session_state.selected_products.discard(product_url)
+
+                                            with col_chk:
+                                                _removed = st.session_state.get("_removed_products", set())
+                                                checked = st.checkbox(
+                                                    "",
+                                                    key=k,
+                                                    value=(product_url in st.session_state.selected_products and product_url not in _removed)
+                                                )
+                                            
+                                            with col_lbl:
+                                                st.markdown(
+                                                    f"""
+                                                    <div style="
+                                                        white-space:normal;
+                                                        word-break:keep-all;
+                                                        overflow-wrap:break-word;
+                                                        line-height:1.35;
+                                                        padding:5px 0 6px 0;
+                                                    ">
+                                                        {label}
+                                                    </div>
+                                                    """,
+                                                    unsafe_allow_html=True
+                                                )
+                                            
+                                            # 🔥 checked 처리는 한 번만
+                                            if checked and product_url not in _removed:
+                                                st.session_state.selected_products.add(product_url)
+                                            else:
+                                                st.session_state.selected_products.discard(product_url)
                                 
                                     # 🔽 여기! (for 밖)
                                     st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
@@ -1377,12 +1376,13 @@ with col_tabs:
                 col_chk, col_lbl = st.columns([0.02, 0.98], vertical_alignment="center")
         
                 with col_chk:
+                    _removed = st.session_state.get("_removed_products", set())
                     checked = st.checkbox(
                         "",
                         key=k,
-                        value=(product_url in st.session_state.selected_products)
+                        value=(product_url in st.session_state.selected_products and product_url not in _removed)
                     )
-        
+                
                 with col_lbl:
                     st.markdown(
                         f"""
@@ -1398,8 +1398,9 @@ with col_tabs:
                         """,
                         unsafe_allow_html=True
                     )
-        
-                if checked:
+                
+                # 🔥 checked 처리는 한 번만
+                if checked and product_url not in _removed:
                     st.session_state.selected_products.add(product_url)
                 else:
                     st.session_state.selected_products.discard(product_url)
@@ -1544,13 +1545,15 @@ with col_tabs:
                     
                                         col_chk, col_lbl = st.columns([0.02, 0.98], vertical_alignment="center")
                     
+                                               
                                         with col_chk:
+                                            _removed = st.session_state.get("_removed_products", set())
                                             checked = st.checkbox(
                                                 "",
                                                 key=k,
-                                                value=(product_url in st.session_state.selected_products)
+                                                value=(product_url in st.session_state.selected_products and product_url not in _removed)
                                             )
-                    
+                                        
                                         with col_lbl:
                                             st.markdown(
                                                 f"""
@@ -1559,18 +1562,22 @@ with col_tabs:
                                                     word-break:keep-all;
                                                     overflow-wrap:break-word;
                                                     line-height:1.35;
-                                                    padding:4px 0;
+                                                    padding:5px 0 6px 0;
                                                 ">
                                                     {label}
                                                 </div>
                                                 """,
                                                 unsafe_allow_html=True
                                             )
-                    
-                                        if checked:
+                                        
+                                        # 🔥 checked 처리는 한 번만
+                                        if checked and product_url not in _removed:
                                             st.session_state.selected_products.add(product_url)
                                         else:
                                             st.session_state.selected_products.discard(product_url)
+                                
+                                    # 🔽 하단 여백 (for 밖)
+                                    st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
                     
                             else:
                                 st.caption("표시할 제품이 없습니다.")
@@ -2539,6 +2546,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
