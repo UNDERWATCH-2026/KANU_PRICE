@@ -1759,10 +1759,8 @@ if selected_products:   # 🔥 조건 반전
 
     # 🔥 임시 디버깅 - 확인 후 삭제
 if "일리" in str(row.get("brand", "")):
-    # 🔥 마크다운 렌더링 피하기 위해 st.code 사용
     st.code(f"product_url 실제값: [{row['product_url']}]")
     
-    # 🔥 product_all_events에서 직접 조회
     test_res = (
         supabase.table("product_all_events")
         .select("product_url, date, unit_price")
@@ -1772,7 +1770,6 @@ if "일리" in str(row.get("brand", "")):
     )
     st.code(f"직접 조회 결과: {test_res.data}")
     
-    # 🔥 LIKE로도 조회
     test_res2 = (
         supabase.table("product_all_events")
         .select("product_url")
@@ -1780,7 +1777,8 @@ if "일리" in str(row.get("brand", "")):
         .limit(3)
         .execute()
     )
-    st.code(f"LIKE 조회 결과: {test_res2.data}")head())
+    st.code(f"LIKE 조회 결과: {test_res2.data}")
+    
 #여기까지
     if timeline_rows:
     
@@ -2561,6 +2559,7 @@ if "일리" in str(row.get("brand", "")):
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
