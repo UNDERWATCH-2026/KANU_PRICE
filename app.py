@@ -2760,7 +2760,29 @@ if selected_products:   # 🔥 조건 반전
                     "NORMAL_UP": "📈 정상가 상승",
                     "NORMAL_DOWN": "📉 정상가 하락",
                 }
+
+                # 복원 날짜 미리 수집
+                restore_dates_in_display = [
+                    r["날짜"] for r in display_rows if r["이벤트"] == "🔄 복원"
+                ]
+
+                for _, row in df_changes.iterrows():
         
+                    prev_price = float(row["prev_price"]) if row["prev_price"] else 0
+                    current_price = float(row["unit_price"]) if row["unit_price"] else 0
+
+                    # 🔥 정상가 0원 = 품절
+                    if current_price == 0 and row["price_change_type"] in ("NORMAL_DOWN", "NORMAL_UP"):
+                        ...
+
+                    # 🔥 이전 0원 → 현재 1원 이상 = 복원
+                    if prev_price == 0 and current_price > 0 and row["price_change_type"] in ("NORMAL_DOWN", "NORMAL_UP"):
+                        ...
+
+                    # 🔥 복원 날짜와 같은 날 NORMAL_UP 스킵
+                    if row["price_change_type"] == "NORMAL_UP" and str(row["date"]) in restore_dates_in_display:
+                        continue
+                        
                 for _, row in df_changes.iterrows():
     
                     prev_price = float(row["prev_price"]) if row["prev_price"] else 0
@@ -3023,6 +3045,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
