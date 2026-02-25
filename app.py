@@ -969,6 +969,10 @@ if "_removed_products" not in st.session_state:
 # =========================
 st.title("☕ Coffee Capsule Price Intelligence")
 
+# 🔥 임시 확인
+if st.session_state.get("selected_products"):
+    st.code(list(st.session_state.selected_products)[:3])
+    
 # 🔥 임시 디버깅
 _removed_debug = st.session_state.get("_removed_products", set())
 if _removed_debug:
@@ -2579,6 +2583,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
