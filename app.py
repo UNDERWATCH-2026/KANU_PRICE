@@ -214,41 +214,34 @@ def extract_product_name_from_question(q: str) -> list:
 def classify_intent(q: str):
     q = q.lower()
 
-    # 복합 표현 먼저
+    # 🔥 복합 표현 먼저 - 신제품 + 품절
+    if any(word in q for word in ["신제품", "새로", "신규", "출시", "신상"]) and "품절" in q:
+        return "NEW_AND_OUT"
+
+    # 🔥 복합 표현 먼저 - 품절 + 복원
     if "품절" in q and ("복원" in q or "재입고" in q):
-        # 🔥 "품절 후 복원" 같은 순서 표현은 RESTORE
-        if "후" in q or "그 후" in q or "다시" in q:
+        if any(word in q for word in ["후", "다시", "그후"]):
             return "RESTORE"
-        # 🔥 "품절, 복원" / "품절 및 복원" / "품절과 복원" 은 둘 다 표시
         return "OUT_AND_RESTORE"
 
     if "할인" in q and ("기간" in q or "언제" in q):
         return "DISCOUNT_PERIOD"
     if "할인" in q or "행사" in q:
         return "DISCOUNT"
-
     if any(word in q for word in ["신제품", "새롭게", "새로", "신규", "출시", "새로운", "처음", "신상"]):
         return "NEW"
-
     if any(word in q for word in ["가장 싼", "제일 싼", "제일 저렴한", "가장 저렴한", "최저가"]):
         return "PRICE_MIN"
-
-    # 🔥 따옴표 통일
     if any(word in q for word in ["가장 비싼", "제일 비싼", "최고가"]):
         return "PRICE_MAX"
-
     if any(word in q for word in ["상승", "증가"]) and "않" not in q:
         return "PRICE_UP"
-
     if "변동" in q or "많이 바뀐" in q:
         return "VOLATILITY"
-
     if any(word in q for word in ["복원", "재입고", "입고", "돌아온"]):
         return "RESTORE"
-
     if "품절" in q:
         return "OUT"
-
     if "정상가" in q and ("변동" in q or "상승" in q):
         return "NORMAL_CHANGE"
 
@@ -268,6 +261,37 @@ def extract_period(q: str):
 
     return None
 
+def extract_period_label(q: str, date_from: datetime, date_to: datetime) -> str:
+    """질문에서 기간 표현을 추출해서 레이블 반환"""
+    q_lower = q.lower()
+    
+    # 최근 N 표현
+    if "최근 7일" in q_lower or "최근 일주일" in q_lower:
+        return "최근 7일 내"
+    if any(w in q_lower for w in ["최근 한 달", "최근 30일", "최근 1개월"]):
+        return "최근 1개월 내"
+    if "최근 3개월" in q_lower:
+        return "최근 3개월 내"
+    if "최근 1년" in q_lower:
+        return "최근 1년 내"
+    if "최근" in q_lower:
+        return "최근"
+    
+    # 연도+월 표현 (예: 2025년 10월)
+    import re
+    month_match = re.search(r"(\d{4})년\s*(\d{1,2})월", q)
+    if month_match:
+        return f"{month_match.group(1)}년 {month_match.group(2)}월"
+    
+    # 연도만 (예: 2025년)
+    year_match = re.search(r"(\d{4})년", q)
+    if year_match:
+        return f"{year_match.group(1)}년"
+    
+    # 기본값: 조회 기간
+    return f"{date_from.strftime('%Y-%m-%d')} ~ {date_to.strftime('%Y-%m-%d')}"
+
+
 def extract_brew_type(q: str, df_all: pd.DataFrame):
     q = q.lower()
     brew_list = df_all["brew_type_kr"].dropna().unique().tolist()
@@ -279,6 +303,13 @@ def extract_brew_type(q: str, df_all: pd.DataFrame):
 
 def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
     df_work = df_summary.copy()
+    
+    # 🔥 기간 레이블 생성
+    period_label = extract_period_label(
+        question,
+        date_from if date_from else datetime.now() - timedelta(days=90),
+        date_to if date_to else datetime.now()
+    )
 
     # 🔥 키워드 추출 (brew_type은 별도 처리)
     brew_condition = extract_brew_type(question, df_summary)
@@ -760,6 +791,84 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
             ]
         }
 
+    if intent == "NEW_AND_OUT":
+        # 신제품 조회
+        res_new = (
+            supabase.table("product_lifecycle_events")
+            .select("product_url, date")
+            .eq("lifecycle_event", "NEW_PRODUCT")
+        )
+        if date_from:
+            res_new = res_new.gte("date", date_from.strftime("%Y-%m-%d"))
+        if date_to:
+            res_new = res_new.lte("date", date_to.strftime("%Y-%m-%d"))
+        res_new = res_new.execute()
+        new_data = {r["product_url"]: r["date"] for r in (res_new.data or [])}
+
+        # 품절 조회
+        res_out = (
+            supabase.table("product_lifecycle_events")
+            .select("product_url, date")
+            .eq("lifecycle_event", "OUT_OF_STOCK")
+        )
+        if date_from:
+            res_out = res_out.gte("date", date_from.strftime("%Y-%m-%d"))
+        if date_to:
+            res_out = res_out.lte("date", date_to.strftime("%Y-%m-%d"))
+        res_out = res_out.execute()
+        out_data = {r["product_url"]: r["date"] for r in (res_out.data or [])}
+
+        all_urls = set(list(new_data.keys()) + list(out_data.keys()))
+        df = df_work[df_work["product_url"].isin(all_urls)]
+
+        if df.empty:
+            return "해당 기간 신제품 또는 품절 제품이 없습니다."
+
+        new_results = []
+        for _, row in df[df["product_url"].isin(new_data)].iterrows():
+            categories = []
+            if pd.notna(row.get("category1")) and row["category1"]:
+                categories.append(row["category1"])
+            if pd.notna(row.get("category2")) and row["category2"]:
+                categories.append(row["category2"])
+            category_str = f" [{' > '.join(categories)}]" if categories else ""
+            new_results.append({
+                "text": f"• {row['brand']} - {row['product_name']}{category_str}\n  🆕 출시일: {new_data[row['product_url']]}",
+                "product_url": str(row["product_url"])
+            })
+
+        out_results = []
+        for _, row in df[df["product_url"].isin(out_data)].iterrows():
+            categories = []
+            if pd.notna(row.get("category1")) and row["category1"]:
+                categories.append(row["category1"])
+            if pd.notna(row.get("category2")) and row["category2"]:
+                categories.append(row["category2"])
+            category_str = f" [{' > '.join(categories)}]" if categories else ""
+            out_results.append({
+                "text": f"• {row['brand']} - {row['product_name']}{category_str}\n  📅 품절일: {out_data[row['product_url']]}",
+                "product_url": str(row["product_url"])
+            })
+
+        all_results = new_results + out_results
+        text = ""
+        if new_results:
+            text += f"🆕 신제품:\n\n" + "\n\n".join([r["text"] for r in new_results])
+        if out_results:
+            if text:
+                text += "\n\n---\n\n"
+            text += f"❌ 품절 제품:\n\n" + "\n\n".join([r["text"] for r in out_results])
+
+        return {
+            "type": "product_list",
+            "text": text,
+            "products": [
+                str(r["product_url"]).strip().lower()
+                for r in all_results
+                if r.get("product_url")
+            ]
+        }
+            
     if intent == "VOLATILITY" and start_date:
         res = (
             supabase.table("product_all_events")
@@ -2648,6 +2757,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
