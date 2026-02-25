@@ -35,7 +35,7 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # 2️⃣ 데이터 로딩
 # =========================
 
-@st.cache_data(ttl=300)
+
 def load_product_summary():
     cols = [
         "product_url",
@@ -2566,6 +2566,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
