@@ -2019,25 +2019,25 @@ if selected_products:   # 🔥 조건 반전
                         df_life = pd.concat([df_life, new_row], ignore_index=True)
     
         # lifecycle 이벤트
+        df_life_all = load_lifecycle_events(row["product_url"])
         df_life = load_lifecycle_events(row["product_url"])
-        
-        if not df_life.empty:
-            df_life["date"] = pd.to_datetime(df_life["date"], errors="coerce")
-            df_life = df_life.dropna(subset=["date"])
+        if not df_life_all.empty:
+            df_life_all["date"] = pd.to_datetime(df_life_all["date"], errors="coerce")
+            df_life_all = df_life_all.dropna(subset=["date"])
             # 🔥 0원 가격 날짜를 OUT_OF_STOCK으로 추가
             zero_dates = tmp[tmp["unit_price"].isna()]["event_date"].tolist()
             for zdate in zero_dates:
-                existing = df_life[
-                    (df_life["lifecycle_event"] == "OUT_OF_STOCK") &
-                    (df_life["date"] == zdate)
+                existing = df_life_all[
+                    (df_life_all["lifecycle_event"] == "OUT_OF_STOCK") &
+                    (df_life_all["date"] == zdate)
                 ]
                 if existing.empty:
-                    df_life = pd.concat([df_life, pd.DataFrame([{
+                    df_life_all = pd.concat([df_life_all, pd.DataFrame([{
                         "date": zdate,
                         "lifecycle_event": "OUT_OF_STOCK"
                     }])], ignore_index=True)
-            out_dates = df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]["date"].tolist()
-            restore_dates = df_life[df_life["lifecycle_event"] == "RESTOCK"]["date"].tolist()
+            out_dates = df_life_all[df_life_all["lifecycle_event"] == "OUT_OF_STOCK"]["date"].tolist()
+            restore_dates = df_life_all[df_life_all["lifecycle_event"] == "RESTOCK"]["date"].tolist()
             for out_date in out_dates:
                 restore_after = [d for d in restore_dates if d > out_date]
                 if restore_after:
@@ -2048,18 +2048,19 @@ if selected_products:   # 🔥 조건 반전
                     mask = tmp["event_date"] >= out_date
                     tmp.loc[mask, "unit_price"] = None
         else:
-            # 🔥 df_life 없어도 0원 날짜로 선 끊기
-            df_life = pd.DataFrame(columns=["date", "lifecycle_event"])
+            # 🔥 df_life_all 없어도 0원 날짜로 선 끊기
+            df_life_all = pd.DataFrame(columns=["date", "lifecycle_event"])
             zero_dates = tmp[tmp["unit_price"].isna()]["event_date"].tolist()
             for zdate in zero_dates:
-                df_life = pd.concat([df_life, pd.DataFrame([{
+                df_life_all = pd.concat([df_life_all, pd.DataFrame([{
                     "date": zdate,
                     "lifecycle_event": "OUT_OF_STOCK"
                 }])], ignore_index=True)
-            out_dates = df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]["date"].tolist()
+            out_dates = df_life_all[df_life_all["lifecycle_event"] == "OUT_OF_STOCK"]["date"].tolist()
             for out_date in out_dates:
                 mask = tmp["event_date"] >= out_date
                 tmp.loc[mask, "unit_price"] = None
+
     # =========================
     # 8-1️⃣ 개당 가격 타임라인 비교 차트
     # =========================
@@ -2765,10 +2766,12 @@ if selected_products:   # 🔥 조건 반전
 
                 # 🔥 복원 날짜 df_life에서 직접 수집
 
-                restore_dates_in_display = [
-                    str(d.date())
-                    for d in df_life[df_life["lifecycle_event"] == "RESTOCK"]["date"].tolist()
-                ]
+                restore_dates_in_display = []
+                if not df_life_all.empty:
+                    restore_dates_in_display = [
+                        str(d.date())
+                        for d in df_life_all[df_life_all["lifecycle_event"] == "RESTOCK"]["date"].tolist()
+                    ]
 
                 for _, row in df_changes.iterrows():
         
@@ -2974,11 +2977,16 @@ if selected_products:   # 🔥 조건 반전
             # =========================
             # 3️⃣ Lifecycle 이벤트 (히스토리용 보정)
             # =========================
-            df_life = load_lifecycle_events(p["product_url"])
-            
-            if not df_life.empty:
-            
-                df_life["date"] = pd.to_datetime(df_life["date"], errors="coerce")
+            # 🔥 lifecycle 전체 (차트 선 끊기용 - 기간 필터 없음)
+            df_life_all = load_lifecycle_events(p["product_url"])
+            if not df_life_all.empty:
+                df_life_all["date"] = pd.to_datetime(df_life_all["date"], errors="coerce")
+                df_life_all = df_life_all.dropna(subset=["date"])
+                # 🔥 카드용 - 기간 필터 적용
+                df_life = df_life[
+                    (df_life["date"] >= pd.Timestamp(filter_date_from)) &
+                    (df_life["date"] <= pd.Timestamp(filter_date_to))
+                ]
             
                 # 🔥 조회 기간 필터 적용 (이 줄이 핵심)
                 df_life = df_life[
@@ -3059,6 +3067,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
