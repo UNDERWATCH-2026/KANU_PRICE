@@ -1482,76 +1482,89 @@ with col_tabs:
                             st.rerun()
         
                     answer_data = history["answer"]
+
+                    
+                    with st.expander("💬 답변 펼치기 / 접기", expanded=True):
+                    
+                        if isinstance(answer_data, dict) and answer_data.get("type") == "product_list":
+                            ...
+                    
+                        elif isinstance(answer_data, dict):
+                            st.markdown(f"**A:** {answer_data.get('text', str(answer_data))}")
+                    
+                        else:
+                            st.markdown(f"**A:** {answer_data}")
         
                     # =========================
                     # ✅ 제품 리스트 답변 처리
                     # =========================
                     if isinstance(answer_data, dict) and answer_data.get("type") == "product_list":
 
-                        st.markdown(f"**A:** {answer_data['text']}")
-                        
-
-                        
+                        # 🔥 헤더 텍스트만 출력 (제품 목록은 체크박스로 대체)
+                        header_text = answer_data['text'].split('\n')[0]
+                        st.markdown(f"**A:** {header_text}")
+                    
                         if answer_data.get("products"):
                     
-                   
-                            # 🔥 안내 문구
                             st.markdown(
                                 "<div style='font-size:13px; color:#6b7280; margin:6px 0 8px 0;'>"
                                 "* 비교할 제품을 선택해 주세요"
                                 "</div>",
                                 unsafe_allow_html=True
                             )
-                            
-                            # 🔥 매칭 (clean 필요 없음)
+                    
                             sorted_df = (
                                 df_all[df_all["product_url"].isin(answer_data["products"])]
                                 .fillna("")
                                 .drop_duplicates(subset=["product_url"])
-                                .sort_values(
-                                    by=["brand", "category1", "category2", "product_name"]
-                                )
+                                .sort_values(by=["brand", "category1", "category2", "product_name"])
                             )
-                                                                                                                                            
-                            for _, row in sorted_df.iterrows():
-                            
-                                product_url = row["product_url"]
-                                label = format_product_label(row)
-                            
-                                scope = f"tab3_{idx}"
-                            
-                                k = mk_widget_key("chk_tab3", product_url, scope)
-                                register_product_checkbox_key(product_url, k)
-                            
-                                col_chk, col_lbl = st.columns([0.06, 0.94], vertical_alignment="top")
-                            
-                                with col_chk:
-                                    checked = st.checkbox(
-                                        "",
-                                        key=k,
-                                        value=(product_url in st.session_state.selected_products)
-                                    )
-                            
-                                with col_lbl:
-                                    st.markdown(
-                                        f"""
-                                        <div style="
-                                            white-space:normal;
-                                            word-break:keep-all;
-                                            overflow-wrap:break-word;
-                                            line-height:1.35;
-                                            padding:4px 0;
-                                        ">
-                                            {label}
-                                        </div>
-                                        """,
-                                        unsafe_allow_html=True
-                                    )
-                            
-                                if checked:
-                                    st.session_state.selected_products.add(product_url)
-                                else:
-                                    st.session_state.selected_products.discard(product_url)
+                    
+                            if sorted_df.empty:
+                                st.caption("⚠️ 매칭되는 제품이 없습니다.")
+                            else:
+                                for _, row in sorted_df.iterrows():
+                    
+                                    product_url = row["product_url"]
+                                    label = format_product_label(row)
+                    
+                                    scope = f"tab3_{idx}"
+                    
+                                    k = mk_widget_key("chk_tab3", product_url, scope)
+                                    register_product_checkbox_key(product_url, k)
+                    
+                                    col_chk, col_lbl = st.columns([0.06, 0.94], vertical_alignment="top")
+                    
+                                    with col_chk:
+                                        checked = st.checkbox(
+                                            "",
+                                            key=k,
+                                            value=(product_url in st.session_state.selected_products)
+                                        )
+                    
+                                    with col_lbl:
+                                        st.markdown(
+                                            f"""
+                                            <div style="
+                                                white-space:normal;
+                                                word-break:keep-all;
+                                                overflow-wrap:break-word;
+                                                line-height:1.35;
+                                                padding:4px 0;
+                                            ">
+                                                {label}
+                                            </div>
+                                            """,
+                                            unsafe_allow_html=True
+                                        )
+                    
+                                    if checked:
+                                        st.session_state.selected_products.add(product_url)
+                                    else:
+                                        st.session_state.selected_products.discard(product_url)
+                    
+                        else:
+                            st.caption("표시할 제품이 없습니다.")
                                 
                     # =========================
                     # 일반 텍스트 답변
@@ -2515,6 +2528,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
