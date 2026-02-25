@@ -963,14 +963,13 @@ st.title("☕ Coffee Capsule Price Intelligence")
 # -------------------------
 df_all = load_product_summary()
 
+# 교체 - lower() 제거
 df_all["product_url"] = (
     df_all["product_url"]
     .astype(str)
     .str.strip()
-    .str.lower()
-    .str.replace(r"^_+|_+$", "", regex=True)  # 🔥 앞뒤 __ 제거
+    .str.replace(r"^_+|_+$", "", regex=True)
 )
-
 # 데이터 없으면 즉시 중단
 if df_all is None or df_all.empty:
     st.warning("아직 집계된 제품 데이터가 없습니다.")
@@ -2559,6 +2558,7 @@ if "일리" in str(row.get("brand", "")):
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
