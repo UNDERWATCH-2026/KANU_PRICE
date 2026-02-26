@@ -2664,20 +2664,20 @@ if selected_products:   # 🔥 조건 반전
             raw_df["normal_price"] = raw_df["normal_price"].astype(float)
             raw_df["date"] = pd.to_datetime(raw_df["date"])
 
-            # 0원 날짜 = 품절
-            out_rows = raw_df[raw_df["normal_price"] == 0]
+            # 0원 날짜 = 품절 (연속 구간의 첫 날짜만)
+            out_rows = raw_df[raw_df["normal_price"] == 0].copy()
+            out_rows["prev_normal"] = raw_df["normal_price"].shift(1)
+            out_start_rows = out_rows[out_rows["prev_normal"] != 0]  # 이전이 0이 아닌 것 = 품절 시작일
             lifecycle_out_dates = []
             if not df_life.empty:
                 lifecycle_out_dates = [
                     str(d.date()) for d in df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]["date"].tolist()
                 ]
-            missing_out = out_rows[~out_rows["date"].dt.strftime("%Y-%m-%d").isin(lifecycle_out_dates)]
-            
-            # 🔥 lifecycle 품절 날짜 + missing 날짜 합쳐서 하나의 카드로
+            missing_out = out_start_rows[~out_start_rows["date"].dt.strftime("%Y-%m-%d").isin(lifecycle_out_dates)]
+
             all_out_dates = lifecycle_out_dates + [
                 str(r["date"].date()) for _, r in missing_out.iterrows()
             ]
-            # 중복 제거 후 최신순 정렬
             all_out_dates = sorted(list(set(all_out_dates)), reverse=True)
             
             if all_out_dates and not any("품절" in c for c in cards):
@@ -3102,6 +3102,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
