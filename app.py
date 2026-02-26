@@ -82,6 +82,54 @@ def load_lifecycle_events(product_url: str):
     return pd.DataFrame(res.data)
 
 # =========================
+# 🚀 BULK 로딩 (API 최소화용)
+# =========================
+
+@st.cache_data(ttl=300)
+def load_events_bulk(product_urls, date_from, date_to):
+    if not product_urls:
+        return pd.DataFrame()
+    res = (
+        supabase.table("product_all_events")
+        .select("product_url, date, unit_price, event_type")
+        .in_("product_url", product_urls)
+        .gte("date", date_from.strftime("%Y-%m-%d"))
+        .lte("date", date_to.strftime("%Y-%m-%d"))
+        .execute()
+    )
+    return pd.DataFrame(res.data)
+
+
+@st.cache_data(ttl=300)
+def load_lifecycle_bulk(product_urls, date_from, date_to):
+    if not product_urls:
+        return pd.DataFrame()
+    res = (
+        supabase.table("product_lifecycle_events")
+        .select("product_url, date, lifecycle_event")
+        .in_("product_url", product_urls)
+        .gte("date", date_from.strftime("%Y-%m-%d"))
+        .lte("date", date_to.strftime("%Y-%m-%d"))
+        .execute()
+    )
+    return pd.DataFrame(res.data)
+
+
+@st.cache_data(ttl=300)
+def load_raw_unit_bulk(product_urls, date_from, date_to):
+    if not product_urls:
+        return pd.DataFrame()
+    res = (
+        supabase.table("raw_daily_prices_unit")
+        .select("product_url, date, unit_normal_price")
+        .in_("product_url", product_urls)
+        .gte("date", date_from.strftime("%Y-%m-%d"))
+        .lte("date", date_to.strftime("%Y-%m-%d"))
+        .execute()
+    )
+    return pd.DataFrame(res.data)
+
+# =========================
 # 2-1️⃣ 질문 로그 저장
 # =========================
 def save_question_log(question: str, q_type: str, used_llm: bool, answer: str = None, filters: dict = None):
@@ -1163,8 +1211,6 @@ def remove_product_everywhere(product_url: str):
 if "selected_products" not in st.session_state:
     st.session_state.selected_products = set()
 
-
-
 if "keyword_results" not in st.session_state:
     st.session_state.keyword_results = {}
 if "active_mode" not in st.session_state:
@@ -1176,11 +1222,9 @@ if "search_keyword" not in st.session_state:
 if "search_history" not in st.session_state:
     st.session_state.search_history = []  # 🔥 검색 이력 [{keyword: "쥬시", results: [...]}]
 
-# 세션 상태 초기화 부분에 추가
 if "selected_products" not in st.session_state:
     st.session_state.selected_products = set()
 
-# 🔥 추가
 if "_removed_products" not in st.session_state:
     st.session_state["_removed_products"] = set()
 
@@ -1855,6 +1899,28 @@ if selected_products:   # 🔥 조건 반전
     # 🔥 선택된 기간 가져오기
     filter_date_from = pd.to_datetime(date_from)
     filter_date_to = pd.to_datetime(date_to)
+
+    # 🚀 BULK 데이터 한 번에 로딩
+
+    df_all_events = load_events_bulk(
+        selected_products,
+        filter_date_from,
+        filter_date_to
+    )
+    
+    df_lifecycle_all = load_lifecycle_bulk(
+        selected_products,
+        filter_date_from,
+        filter_date_to
+    )
+    
+    df_raw_unit_all = load_raw_unit_bulk(
+        selected_products,
+        filter_date_from,
+        filter_date_to
+    )
+
+
     
     for product_url in selected_products:
         product_row = df_all[df_all["product_url"] == product_url]
@@ -1870,7 +1936,9 @@ if selected_products:   # 🔥 조건 반전
     
         
         # 가격 이벤트
-        df_price = load_events(row["product_url"])
+        df_price = df_all_events[
+            df_all_events["product_url"] == row["product_url"]
+        ].copy()
         if not df_price.empty:
             tmp = df_price.copy()
             # 🔥 브랜드 + 제품명으로 표시
@@ -1898,109 +1966,106 @@ if selected_products:   # 🔥 조건 반전
             # 3️⃣ 🔥 다시 0원 제거
             tmp.loc[tmp["unit_price"] == 0, "unit_price"] = None       
 
-            # 🔥 2️⃣ lifecycle 기반으로 품절 처리
-            df_life = load_lifecycle_events(row["product_url"])
-            
-            if not df_life.empty:
-            
-                df_life["date"] = pd.to_datetime(df_life["date"])
-                out_dates = sorted(df_life[df_life["lifecycle_event"]=="OUT_OF_STOCK"]["date"].dt.date)
-                restore_dates = sorted(df_life[df_life["lifecycle_event"]=="RESTOCK"]["date"].dt.date)
-            
-                for idx2, r2 in tmp.iterrows():
-            
-                    current_date = r2["event_date"].date()
-            
-                    past_out = [d for d in out_dates if d <= current_date]
-                    past_restore = [d for d in restore_dates if d <= current_date]
-            
-                    last_out = max(past_out) if past_out else None
-                    last_restore = max(past_restore) if past_restore else None
-            
-                    if last_out and (not last_restore or last_out > last_restore):
-                        tmp.at[idx2, "unit_price"] = None
-            
-            
-            # 🔥 3️⃣ 상태 계산은 맨 마지막
-            tmp["is_discount"] = tmp["event_type"] == "DISCOUNT"
-            tmp["price_status"] = tmp["is_discount"].map({True: "💸 할인 중", False: "정상가"})
-            tmp.loc[tmp["unit_price"].isna(), "price_status"] = "품절"
 
-            # 🔥 정상가와 할인율 정보 추가 (툴팁용)
+            # 🔥 1️⃣ 정상가/할인율/price_detail 초기화 (맨 위)
             tmp["normal_price"] = None
             tmp["discount_rate"] = None
             tmp["price_detail"] = ""
             
-            # 할인 중인 행에 대해 정상가 찾기
-            for idx, price_row in tmp[tmp["is_discount"]].iterrows():
+            # 🔥 2️⃣ raw_unit merge
+            df_raw_tmp = df_raw_unit_all[
+                df_raw_unit_all["product_url"] == row["product_url"]
+            ].copy()
             
-                # 🔥 개당 정상가 조회 (unit 기준)
-                normal_price_res = (
-                    supabase.table("raw_daily_prices_unit")
-                    .select("unit_normal_price")
-                    .eq("product_url", row["product_url"])
-                    .eq("date", price_row["event_date"].strftime("%Y-%m-%d"))
-                    .limit(1)
-                    .execute()
+            if not df_raw_tmp.empty:
+                df_raw_tmp["date"] = pd.to_datetime(df_raw_tmp["date"])
+            
+                tmp = tmp.merge(
+                    df_raw_tmp[["date", "unit_normal_price"]],
+                    left_on="event_date",
+                    right_on="date",
+                    how="left"
                 )
             
-                normal_price = (
-                    float(normal_price_res.data[0]["unit_normal_price"])
-                    if normal_price_res.data
-                    else None
-                )
+                tmp.rename(columns={"unit_normal_price": "normal_price"}, inplace=True)
+                tmp.drop(columns=["date"], inplace=True, errors="ignore")
+                
+            # 🔥 is_discount 컬럼 생성 (반드시 필요)
+            tmp["is_discount"] = tmp["event_type"] == "DISCOUNT"
             
-                discount_price = (
-                    float(price_row["unit_price"])
-                    if pd.notna(price_row["unit_price"])
-                    else None
-                )
+            # 🔥 3️⃣ 할인율 계산
+            mask = (
+                tmp["is_discount"] &
+                tmp["normal_price"].notna() &
+                tmp["unit_price"].notna() &
+                (tmp["normal_price"] > 0)
+            )
             
-                if normal_price and discount_price:
-                    discount_rate = ((normal_price - discount_price) / normal_price) * 100
+            tmp.loc[mask, "discount_rate"] = (
+                (tmp.loc[mask, "normal_price"] - tmp.loc[mask, "unit_price"])
+                / tmp.loc[mask, "normal_price"]
+            ) * 100
             
-                    tmp.at[idx, "normal_price"] = normal_price
-                    tmp.at[idx, "discount_rate"] = discount_rate
-                    tmp.at[idx, "price_detail"] = (
-                        f"정상가: {normal_price:,.1f}원 → "
-                        f"할인가: {discount_price:,.1f}원 "
-                        f"({discount_rate:.0f}% 할인)"
-                    )
+            # 🔥 4️⃣ price_detail 생성 (할인)
+            for idx, price_row in tmp.iterrows():
+
+                if pd.isna(price_row["unit_price"]):
+                    tmp.at[idx, "price_detail"] = "품절"
             
-                elif discount_price:
-                    tmp.at[idx, "price_detail"] = f"할인가: {discount_price:,.1f}원"
+                elif price_row["is_discount"]:
+                    if pd.notna(price_row["normal_price"]):
+                        tmp.at[idx, "price_detail"] = (
+                            f"정상가: {price_row['normal_price']:,.1f}원 → "
+                            f"할인가: {price_row['unit_price']:,.1f}원 "
+                            f"({price_row['discount_rate']:.0f}% 할인)"
+                        )
+                    else:
+                        tmp.at[idx, "price_detail"] = f"할인가: {price_row['unit_price']:,.1f}원"
             
                 else:
-                    tmp.at[idx, "price_detail"] = "-"
-            # 정상가인 경우
-            for idx, price_row in tmp[~tmp["is_discount"]].iterrows():
-                tmp.at[idx, "price_detail"] = f"정상가: {price_row['unit_price']:,.1f}원"
-                       
-            # 🔥 lifecycle 기반 상태 트래킹 방식
-            # 🔥 lifecycle 기반 상태 계산 (완전 안정 버전)
-            # 🔥 lifecycle 기반 상태 계산 (date 단위 비교)
-            # 🔥 raw_daily_prices 기준 품절 구간 계산
+                    tmp.at[idx, "price_detail"] = f"정상가: {price_row['unit_price']:,.1f}원"
             
-            df_life = load_lifecycle_events(row["product_url"])
+            # 🔥 5️⃣ lifecycle 처리 (여기서 unit_price를 None으로 바꿈)
+            df_life = df_lifecycle_all[
+                df_lifecycle_all["product_url"] == product_url
+            ].copy()
             
             if not df_life.empty:
-            
+
                 df_life["date"] = pd.to_datetime(df_life["date"])
-                out_dates = sorted(df_life[df_life["lifecycle_event"]=="OUT_OF_STOCK"]["date"].dt.date)
-                restore_dates = sorted(df_life[df_life["lifecycle_event"]=="RESTOCK"]["date"].dt.date)
+                out_dates = sorted(
+                    df_life[df_life["lifecycle_event"]=="OUT_OF_STOCK"]["date"].dt.date
+                )
+                restore_dates = sorted(
+                    df_life[df_life["lifecycle_event"]=="RESTOCK"]["date"].dt.date
+                )
             
-                for idx2, r2 in tmp.iterrows():
-                    current_date = r2["event_date"].date()
+                from bisect import bisect_right
             
-                    past_out = [d for d in out_dates if d <= current_date]
-                    past_restore = [d for d in restore_dates if d <= current_date]
+                out_dates_sorted = sorted(out_dates)
+                restore_dates_sorted = sorted(restore_dates)
             
-                    last_out = max(past_out) if past_out else None
-                    last_restore = max(past_restore) if past_restore else None
+                for r2 in tmp.itertuples():
+            
+                    current_date = r2.event_date.date()
+            
+                    i_out = bisect_right(out_dates_sorted, current_date) - 1
+                    last_out = out_dates_sorted[i_out] if i_out >= 0 else None
+            
+                    i_restore = bisect_right(restore_dates_sorted, current_date) - 1
+                    last_restore = restore_dates_sorted[i_restore] if i_restore >= 0 else None
             
                     if last_out and (not last_restore or last_out > last_restore):
-                        tmp.at[idx2, "unit_price"] = None
-                         
+                        tmp.at[r2.Index, "unit_price"] = None
+            
+            # 🔥 6️⃣ lifecycle 이후 price_detail 재반영
+            tmp.loc[tmp["unit_price"].isna(), "price_detail"] = "품절"
+            
+            # 🔥 7️⃣ 마지막에 price_status 계산
+            tmp["price_status"] = tmp["is_discount"].map({True: "💸 할인 중", False: "정상가"})
+            tmp.loc[tmp["unit_price"].isna(), "price_status"] = "품절"
+
+           
             tmp["product_url"] = row["product_url"]
     
             timeline_rows.append(
@@ -2009,12 +2074,14 @@ if selected_products:   # 🔥 조건 반전
 
 
             # ✅ lifecycle_rows append (차트 아이콘용)
-            df_life_full_lc = load_lifecycle_events(row["product_url"])
-            if not df_life_full_lc.empty:
-                df_life_full_lc["date"] = pd.to_datetime(df_life_full_lc["date"], errors="coerce")
-                df_life_full_lc = df_life_full_lc.dropna(subset=["date"])
+            df_life = df_lifecycle_all[
+                df_lifecycle_all["product_url"] == product_url
+            ].copy()
+            if not df_life.empty:
+                df_life["date"] = pd.to_datetime(df_life["date"], errors="coerce")
+                df_life = df_life.dropna(subset=["date"])
                 
-                lc_tmp = df_life_full_lc.copy()
+                lc_tmp = df_life.copy()
                 display_name = f"{row['brand']} - {pname}"
                 lc_tmp["product_name"] = display_name
                 lc_tmp["event_date"] = pd.to_datetime(lc_tmp["date"])
@@ -2100,50 +2167,7 @@ if selected_products:   # 🔥 조건 반전
                             "lifecycle_event": "OUT_OF_STOCK"
                         }])
                         df_life = pd.concat([df_life, new_row], ignore_index=True)
-    
-        # lifecycle 이벤트
-        df_life_all = load_lifecycle_events(row["product_url"])
-        df_life = load_lifecycle_events(row["product_url"])
-        if not df_life_all.empty:
-            df_life_all["date"] = pd.to_datetime(df_life_all["date"], errors="coerce")
-            df_life_all = df_life_all.dropna(subset=["date"])
-            # 🔥 0원 가격 날짜를 OUT_OF_STOCK으로 추가
-            zero_dates = tmp[tmp["unit_price"].isna()]["event_date"].tolist()
-            for zdate in zero_dates:
-                existing = df_life_all[
-                    (df_life_all["lifecycle_event"] == "OUT_OF_STOCK") &
-                    (df_life_all["date"] == zdate)
-                ]
-                if existing.empty:
-                    df_life_all = pd.concat([df_life_all, pd.DataFrame([{
-                        "date": zdate,
-                        "lifecycle_event": "OUT_OF_STOCK"
-                    }])], ignore_index=True)
-            out_dates = df_life_all[df_life_all["lifecycle_event"] == "OUT_OF_STOCK"]["date"].tolist()
-            restore_dates = df_life_all[df_life_all["lifecycle_event"] == "RESTOCK"]["date"].tolist()
-            for out_date in out_dates:
-                restore_after = [d for d in restore_dates if d > out_date]
-                if restore_after:
-                    restore_date = min(restore_after)
-                    mask = (tmp["event_date"] >= out_date) & (tmp["event_date"] < restore_date)
-                    tmp.loc[mask, "unit_price"] = None
-                else:
-                    mask = tmp["event_date"] >= out_date
-                    tmp.loc[mask, "unit_price"] = None
-        else:
-            # 🔥 df_life_all 없어도 0원 날짜로 선 끊기
-            df_life_all = pd.DataFrame(columns=["date", "lifecycle_event"])
-            zero_dates = tmp[tmp["unit_price"].isna()]["event_date"].tolist()
-            for zdate in zero_dates:
-                df_life_all = pd.concat([df_life_all, pd.DataFrame([{
-                    "date": zdate,
-                    "lifecycle_event": "OUT_OF_STOCK"
-                }])], ignore_index=True)
-            out_dates = df_life_all[df_life_all["lifecycle_event"] == "OUT_OF_STOCK"]["date"].tolist()
-            for out_date in out_dates:
-                mask = tmp["event_date"] >= out_date
-                tmp.loc[mask, "unit_price"] = None
-
+  
     # =========================
     # 8-1️⃣ 개당 가격 타임라인 비교 차트
     # =========================
@@ -3235,6 +3259,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
