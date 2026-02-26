@@ -2216,6 +2216,10 @@ if selected_products:   # 🔥 조건 반전
             if not df_raw_tmp.empty:
                 df_raw_tmp["date"] = pd.to_datetime(df_raw_tmp["date"])
             
+                # 🔥 merge 전에 기존 normal_price 제거 (핵심)
+                if "normal_price" in tmp.columns:
+                    tmp.drop(columns=["normal_price"], inplace=True)
+            
                 tmp = tmp.merge(
                     df_raw_tmp[["date", "unit_normal_price"]],
                     left_on="event_date",
@@ -2224,22 +2228,26 @@ if selected_products:   # 🔥 조건 반전
                 )
             
                 tmp.rename(columns={"unit_normal_price": "normal_price"}, inplace=True)
+            
                 tmp.drop(columns=["date"], inplace=True, errors="ignore")
-
-                # 🔥🔥🔥 여기 추가
+            
                 tmp = tmp.reset_index(drop=True)
+
+                tmp["normal_price"] = pd.to_numeric(tmp["normal_price"], errors="coerce")
+                tmp["unit_price"] = pd.to_numeric(tmp["unit_price"], errors="coerce")
                                 
             # 🔥 is_discount 컬럼 생성 (반드시 필요)
-            tmp["is_discount"] = tmp["event_type"] == "DISCOUNT"
+            tmp["discount_rate"] = None
+
+            tmp["is_discount"] = (tmp["event_type"] == "DISCOUNT").astype(bool)
             
-            # 🔥 3️⃣ 할인율 계산
             mask = (
-                tmp["is_discount"] &
-                tmp["normal_price"].notna() &
-                tmp["unit_price"].notna() &
+                (tmp["is_discount"]) &
+                (tmp["normal_price"].notna()) &
+                (tmp["unit_price"].notna()) &
                 (tmp["normal_price"] > 0)
             )
-            
+                        
             tmp.loc[mask, "discount_rate"] = (
                 (tmp.loc[mask, "normal_price"] - tmp.loc[mask, "unit_price"])
                 / tmp.loc[mask, "normal_price"]
@@ -3498,6 +3506,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
