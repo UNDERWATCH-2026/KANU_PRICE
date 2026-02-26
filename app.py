@@ -534,19 +534,19 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         results = []
         product_details = {}  # 🔥 추가
         for _, row in df.iterrows():
-            dates = sorted(out_map[row["product_url"]])
+            url = str(row["product_url"]).strip().lower()
+            dates = sorted(out_map.get(url, []))
             date_str = ", ".join(dates)
-            url = str(row["product_url"])
             results.append({
                 "text": f"• {row['brand']} - {row['product_name']}\n  ❌ 품절 날짜: {date_str}",
                 "product_url": url
             })
-            product_details[url] = f"❌ 품절 날짜: {date_str}"  # 🔥 추가
+            product_details[url] = f"❌ 품절 날짜: {date_str}"
         return {
             "type": "product_list",
             "text": f"품절 날짜 정보 ({len(results)}개)",
             "products": [r["product_url"] for r in results],
-            "product_details": product_details,  # 🔥 추가
+            "product_details": product_details,
         }
 
     # =========================
@@ -575,19 +575,19 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         results = []
         product_details = {}  # 🔥 추가
         for _, row in df.iterrows():
-            dates = sorted(restore_map[row["product_url"]])
+            url = str(row["product_url"]).strip().lower()
+            dates = sorted(restore_map.get(url, []))
             date_str = ", ".join(dates)
-            url = str(row["product_url"])
             results.append({
                 "text": f"• {row['brand']} - {row['product_name']}\n  🔄 복원 날짜: {date_str}",
                 "product_url": url
             })
-            product_details[url] = f"🔄 복원 날짜: {date_str}"  # 🔥 추가
+            product_details[url] = f"🔄 복원 날짜: {date_str}"
         return {
             "type": "product_list",
             "text": f"복원 날짜 정보 ({len(results)}개)",
             "products": [r["product_url"] for r in results],
-            "product_details": product_details,  # 🔥 추가
+            "product_details": product_details,
         }
 
     # =========================
@@ -662,13 +662,15 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
 
         out_map = {}
         for r in (res_out.data or []):
-            out_map.setdefault(r["product_url"], []).append(r["date"])
+            key = str(r["product_url"]).strip().lower()
+            out_map.setdefault(key, []).append(r["date"])
         restore_map = {}
         for r in (res_restore.data or []):
-            restore_map.setdefault(r["product_url"], []).append(r["date"])
+            key = str(r["product_url"]).strip().lower()
+            restore_map.setdefault(key, []).append(r["date"])
 
         all_urls = set(list(out_map.keys()) + list(restore_map.keys()))
-        df = df_work[df_work["product_url"].isin(all_urls)]
+        df = df_work[df_work["product_url"].str.strip().str.lower().isin(all_urls)]
         if df.empty:
             return "해당 제품의 품절 또는 복원 이력이 없습니다."
 
@@ -683,7 +685,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
                 [(d, "🔄 복원") for d in restore_dates]
             )
             all_events.sort(key=lambda x: x[0])
-            timeline_str = "  →  ".join([f"{label} {d}" for d, label in all_events])
+            timeline_str = " → ".join([f"{label} {d}" for d, label in all_events])
             results.append({
                 "text": f"• {row['brand']} - {row['product_name']}\n  {timeline_str}",
                 "product_url": url
@@ -799,7 +801,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
                 [(d, "🔄 복원") for d in restore_dates]
             )
             all_events.sort(key=lambda x: x[0])
-            timeline_str = "  →  ".join([f"{label} {d}" for d, label in all_events])
+            timeline_str = " → ".join([f"{label} {d}" for d, label in all_events])
 
             categories = []
             if pd.notna(row.get("category1")) and row["category1"]:
@@ -878,7 +880,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
                 [(d, "🔄 복원") for d in restore_dates]
             )
             all_events.sort(key=lambda x: x[0])
-            timeline_str = "  →  ".join([f"{label} {d}" for d, label in all_events])
+            timeline_str = " → ".join([f"{label} {d}" for d, label in all_events])
             categories = []
             if pd.notna(row.get("category1")) and row["category1"]:
                 categories.append(row["category1"])
@@ -955,7 +957,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
                 [(d, "🔄 복원") for d in restore_dates]
             )
             all_events.sort(key=lambda x: x[0])
-            timeline_str = "  →  ".join([f"{label} {d}" for d, label in all_events])
+            timeline_str = " → ".join([f"{label} {d}" for d, label in all_events])
             categories = []
             if pd.notna(row.get("category1")) and row["category1"]:
                 categories.append(row["category1"])
@@ -1812,7 +1814,7 @@ with col_tabs:
                                             # 🔥 날짜 정보 추가
                                             detail_html = ""
                                             if product_details and product_url_key in product_details:
-                                                detail_text = product_details[product_url_key].replace("  →  ", "<br>")
+                                                detail_text = product_details[product_url_key]
                                                 detail_html = (
                                                     f"<div style='font-size:12px; color:#6b7280; margin-top:4px; line-height:1.8;'>"
                                                     f"{detail_text}"
