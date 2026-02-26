@@ -2016,12 +2016,13 @@ if selected_products:   # 🔥 조건 반전
                     (lc_tmp["event_date"] >= filter_date_from) &
                     (lc_tmp["event_date"] <= filter_date_to)
                 ]
+
                 if not lc_tmp.empty:
                     out_mask = lc_tmp["lifecycle_event"] == "OUT_OF_STOCK"
                     restock_dates_dedup = lc_tmp[lc_tmp["lifecycle_event"] == "RESTOCK"]["event_date"].sort_values().tolist()
                     
                     kept_indices = []
-                    prev_boundary = None
+                    prev_boundary = "INIT"  # 🔥 None 대신 절대 매칭 안 될 초기값
                     
                     for idx2, r in lc_tmp[out_mask].sort_values("event_date").iterrows():
                         out_date = r["event_date"]
@@ -2031,12 +2032,6 @@ if selected_products:   # 🔥 조건 반전
                             kept_indices.append(idx2)
                             prev_boundary = boundary
                     
-                    # 🔥 디버그
-                    st.write(f"kept_indices: {kept_indices}")
-                    st.write(f"restock_dates_dedup: {restock_dates_dedup}")
-                    st.write(f"OUT_OF_STOCK 총 {out_mask.sum()}개 → {len(kept_indices)}개로 줄었나?")
-                    
-                    # OUT_OF_STOCK 아닌 행 + 중복제거된 OUT_OF_STOCK
                     lc_final = pd.concat([
                         lc_tmp[~out_mask],
                         lc_tmp.loc[kept_indices]
@@ -3173,6 +3168,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
