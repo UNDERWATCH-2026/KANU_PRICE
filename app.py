@@ -2650,7 +2650,7 @@ if selected_products:   # 🔥 조건 반전
         # 🔥 normal_price=0인 날짜로 품절 카드 보정
         if not any("품절" in c for c in cards):
             latest_price_res = (
-                supabase.table("daily_prices")
+                supabase.table("raw_daily_prices")
                 .select("date, normal_price")
                 .eq("product_url", p["product_url"])
                 .eq("normal_price", 0)
@@ -3111,6 +3111,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
