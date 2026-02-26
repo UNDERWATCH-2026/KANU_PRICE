@@ -2571,7 +2571,7 @@ if selected_products:   # 🔥 조건 반전
             ) * 100
             
             excel_data.loc[mask_valid, "discount_rate"] = (
-                discount_rate_series.round(1).astype(str) + "%"
+                discount_rate_series.round(1).map(lambda x: f"{x:.1f}%")
             )
         
             # ----------------------------
@@ -2614,17 +2614,31 @@ if selected_products:   # 🔥 조건 반전
         
                 workbook = writer.book
                 worksheet = writer.sheets['가격 데이터']
-        
-                header_fill = PatternFill(start_color="366092",
-                                          end_color="366092",
-                                          fill_type="solid")
+
+                # 🔥 헤더 스타일
+                header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
                 header_font = Font(bold=True, color="FFFFFF")
-        
+            
                 for cell in worksheet[1]:
                     cell.fill = header_fill
                     cell.font = header_font
                     cell.alignment = Alignment(horizontal="center")
-        
+            
+                # 🔥 정상가 / 할인가 열 위치 동적 계산
+                col_index_normal = excel_data.columns.get_loc("정상가") + 1
+                col_index_discount = excel_data.columns.get_loc("할인가") + 1
+            
+                # 🔥 소수점 1자리 포맷 지정
+                for row in worksheet.iter_rows(
+                    min_row=2,
+                    min_col=col_index_normal,
+                    max_col=col_index_discount
+                ):
+                    for cell in row:
+                        if cell.value is not None:
+                            cell.number_format = '#,##0.0'
+
+      
             output.seek(0)
         
             st.download_button(
@@ -3212,6 +3226,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
