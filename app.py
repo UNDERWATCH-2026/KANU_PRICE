@@ -87,8 +87,9 @@ def load_lifecycle_events(product_url: str):
 
 @st.cache_data(ttl=300)
 def load_events_bulk(product_urls, date_from, date_to):
+    empty = pd.DataFrame(columns=["product_url", "date", "unit_price", "event_type"])
     if not product_urls:
-        return pd.DataFrame()
+        return empty
     res = (
         supabase.table("product_all_events")
         .select("product_url, date, unit_price, event_type")
@@ -97,13 +98,17 @@ def load_events_bulk(product_urls, date_from, date_to):
         .lte("date", date_to.strftime("%Y-%m-%d"))
         .execute()
     )
+    if not res.data:
+        return empty
     return pd.DataFrame(res.data)
+
 
 
 @st.cache_data(ttl=300)
 def load_lifecycle_bulk(product_urls, date_from, date_to):
+    empty = pd.DataFrame(columns=["product_url", "date", "lifecycle_event"])
     if not product_urls:
-        return pd.DataFrame()
+        return empty
     res = (
         supabase.table("product_lifecycle_events")
         .select("product_url, date, lifecycle_event")
@@ -112,13 +117,17 @@ def load_lifecycle_bulk(product_urls, date_from, date_to):
         .lte("date", date_to.strftime("%Y-%m-%d"))
         .execute()
     )
+    if not res.data:
+        return empty
     return pd.DataFrame(res.data)
+
 
 
 @st.cache_data(ttl=300)
 def load_raw_unit_bulk(product_urls, date_from, date_to):
+    empty = pd.DataFrame(columns=["product_url", "date", "unit_normal_price"])
     if not product_urls:
-        return pd.DataFrame()
+        return empty
     res = (
         supabase.table("raw_daily_prices_unit")
         .select("product_url, date, unit_normal_price")
@@ -127,8 +136,9 @@ def load_raw_unit_bulk(product_urls, date_from, date_to):
         .lte("date", date_to.strftime("%Y-%m-%d"))
         .execute()
     )
+    if not res.data:
+        return empty
     return pd.DataFrame(res.data)
-
 # =========================
 # 2-1️⃣ 질문 로그 저장
 # =========================
