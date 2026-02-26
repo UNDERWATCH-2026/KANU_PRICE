@@ -2019,6 +2019,11 @@ if selected_products:   # 🔥 조건 반전
 
                 if not lc_tmp.empty:
                     out_mask = lc_tmp["lifecycle_event"] == "OUT_OF_STOCK"
+
+                        # 🔥 디버그 추가
+                    st.write(f"[{display_name}] lc_tmp 전체:", lc_tmp)
+                    st.write(f"restock_dates_dedup: {restock_dates_dedup}")
+                    st.write(f"kept_indices: {kept_indices}")
                     
                     # 🔥 RESTOCK은 전체 df_life(기간 필터 없음)에서 가져오기
                     df_life_full = load_lifecycle_events(row["product_url"])
@@ -3180,6 +3185,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
