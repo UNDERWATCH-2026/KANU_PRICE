@@ -2069,7 +2069,39 @@ if selected_products:   # 🔥 조건 반전
                     
                     if new_rows:
                         lc_final = pd.concat([lc_final, pd.DataFrame(new_rows)], ignore_index=True)
+                
 
+                # 🔥 raw_daily_prices에서 복원 날짜 추가
+                raw_lc_res = (
+                    supabase.table("raw_daily_prices")
+                    .select("date, normal_price")
+                    .eq("product_url", row["product_url"])
+                    .order("date", desc=False)
+                    .execute()
+                )
+                if raw_lc_res.data:
+                    raw_lc_df = pd.DataFrame(raw_lc_res.data)
+                    raw_lc_df["normal_price"] = raw_lc_df["normal_price"].astype(float)
+                    raw_lc_df["date"] = pd.to_datetime(raw_lc_df["date"])
+                    raw_lc_df["prev_price"] = raw_lc_df["normal_price"].shift(1)
+                    
+                    # 0→양수 전환 = 복원
+                    restock_from_raw = raw_lc_df[
+                        (raw_lc_df["prev_price"] == 0) & (raw_lc_df["normal_price"] > 0)
+                    ]["date"].tolist()
+                    
+                    existing_restock_dates = lc_final[lc_final["lifecycle_event"] == "RESTOCK"]["event_date"].tolist()
+                    
+                    for rdate in restock_from_raw:
+                        if rdate >= filter_date_from and rdate <= filter_date_to:
+                            if rdate not in existing_restock_dates:
+                                lc_final = pd.concat([lc_final, pd.DataFrame([{
+                                    "product_name": display_name,
+                                    "event_date": rdate,
+                                    "lifecycle_event": "RESTOCK"
+                                }])], ignore_index=True)
+
+                
                 if not lc_final.empty:
                     lifecycle_rows.append(
                         lc_final[["product_name", "event_date", "lifecycle_event"]]
@@ -3205,6 +3237,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
