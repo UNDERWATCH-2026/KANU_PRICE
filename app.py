@@ -2260,11 +2260,9 @@ if selected_products:   # 🔥 조건 반전
             # =========================
             if lifecycle_rows:
                 df_life_all = pd.concat(lifecycle_rows, ignore_index=True)
-
-                    # 🔥 디버그 - 확인 후 삭제
-                st.write("lifecycle_rows 컬럼:", df_life_all.columns.tolist())
-                st.write("lifecycle_rows 샘플:", df_life_all.head(10))
-                st.write("event_type 목록:", df_life_all["lifecycle_event"].unique().tolist())
+                
+                # 🔥 디버그
+                st.write("OUT_OF_STOCK 제거 후:", df_life_all[df_life_all["lifecycle_event"]=="OUT_OF_STOCK"])
                     
                 icon_config = {
                     "NEW_PRODUCT": {"color": "green", "label": "NEW"},
@@ -3146,6 +3144,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
