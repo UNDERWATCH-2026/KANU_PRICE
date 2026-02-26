@@ -262,6 +262,17 @@ def extract_product_name_from_question(q: str) -> list:
 def classify_intent(q: str):
     q = q.lower()
 
+    # 🔥 날짜 질문 우선 처리
+    if "날짜" in q:
+        if "품절" in q and "복원" in q:
+            return "OUT_AND_RESTORE_DATES"
+        if "품절" in q:
+            return "OUT_DATES"
+        if "복원" in q:
+            return "RESTORE_DATES"
+        if "신제품" in q or "출시" in q:
+            return "NEW_DATES"
+
     # 🔥 복합 표현 먼저 - 신제품 + 품절
     if any(word in q for word in ["신제품", "새로", "신규", "출시", "신상"]) and "품절" in q:
         return "NEW_AND_OUT"
@@ -584,6 +595,229 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         top = df.iloc[0]
         return f"가장 비싼 제품은 '{top['product_name']}'이며 {float(top['current_unit_price']):,.1f}원입니다."
 
+        
+    # =========================
+    # 🔥 날짜 전용: 품절 날짜
+    # =========================
+    if intent == "OUT_DATES":
+    
+        res = (
+            supabase.table("product_lifecycle_events")
+            .select("product_url, date")
+            .eq("lifecycle_event", "OUT_OF_STOCK")
+        )
+    
+        if date_from:
+            res = res.gte("date", date_from.strftime("%Y-%m-%d"))
+        if date_to:
+            res = res.lte("date", date_to.strftime("%Y-%m-%d"))
+    
+        res = res.execute()
+    
+        if not res.data:
+            return "해당 기간 내 품절 이력이 없습니다."
+    
+        out_map = {}
+        for r in res.data:
+            out_map.setdefault(r["product_url"], []).append(r["date"])
+    
+        df = df_work[df_work["product_url"].isin(out_map.keys())]
+        if df.empty:
+            return "해당 제품의 품절 이력이 없습니다."
+    
+        results = []
+        for _, row in df.iterrows():
+            dates = sorted(out_map[row["product_url"]])
+            date_str = ", ".join(dates)
+    
+            results.append({
+                "text": f"• {row['brand']} - {row['product_name']}\n  ❌ 품절 날짜: {date_str}",
+                "product_url": str(row["product_url"])
+            })
+    
+        return {
+            "type": "product_list",
+            "text": f"품절 날짜 정보 ({len(results)}개)",
+            "products": [r["product_url"] for r in results]
+        }
+    
+    # =========================
+    # 🔥 날짜 전용: 복원 날짜
+    # =========================
+    if intent == "RESTORE_DATES":
+    
+        res = (
+            supabase.table("product_lifecycle_events")
+            .select("product_url, date")
+            .eq("lifecycle_event", "RESTOCK")
+        )
+    
+        if date_from:
+            res = res.gte("date", date_from.strftime("%Y-%m-%d"))
+        if date_to:
+            res = res.lte("date", date_to.strftime("%Y-%m-%d"))
+    
+        res = res.execute()
+    
+        if not res.data:
+            return "해당 기간 내 복원 이력이 없습니다."
+    
+        restore_map = {}
+        for r in res.data:
+            restore_map.setdefault(r["product_url"], []).append(r["date"])
+    
+        df = df_work[df_work["product_url"].isin(restore_map.keys())]
+        if df.empty:
+            return "해당 제품의 복원 이력이 없습니다."
+    
+        results = []
+        for _, row in df.iterrows():
+            dates = sorted(restore_map[row["product_url"]])
+            date_str = ", ".join(dates)
+    
+            results.append({
+                "text": f"• {row['brand']} - {row['product_name']}\n  🔄 복원 날짜: {date_str}",
+                "product_url": str(row["product_url"])
+            })
+    
+        return {
+            "type": "product_list",
+            "text": f"복원 날짜 정보 ({len(results)}개)",
+            "products": [r["product_url"] for r in results]
+        }
+
+    # =========================
+    # 🔥 날짜 전용: 신제품 날짜
+    # =========================
+    if intent == "NEW_DATES":
+    
+        res = (
+            supabase.table("product_lifecycle_events")
+            .select("product_url, date")
+            .eq("lifecycle_event", "NEW_PRODUCT")
+        )
+    
+        if date_from:
+            res = res.gte("date", date_from.strftime("%Y-%m-%d"))
+        if date_to:
+            res = res.lte("date", date_to.strftime("%Y-%m-%d"))
+    
+        res = res.execute()
+    
+        if not res.data:
+            return "해당 기간 내 출시 이력이 없습니다."
+    
+        new_map = {}
+        for r in res.data:
+            new_map.setdefault(r["product_url"], []).append(r["date"])
+    
+        df = df_work[df_work["product_url"].isin(new_map.keys())]
+        if df.empty:
+            return "해당 제품의 출시 이력이 없습니다."
+    
+        results = []
+        for _, row in df.iterrows():
+            dates = sorted(new_map[row["product_url"]])
+            date_str = ", ".join(dates)
+    
+            results.append({
+                "text": f"• {row['brand']} - {row['product_name']}\n  🆕 출시 날짜: {date_str}",
+                "product_url": str(row["product_url"])
+            })
+    
+        return {
+            "type": "product_list",
+            "text": f"출시 날짜 정보 ({len(results)}개)",
+            "products": [r["product_url"] for r in results]
+        }
+
+    # =========================
+    # 🔥 날짜 전용: 품절 + 복원 날짜 모두
+    # =========================
+    if intent == "OUT_AND_RESTORE_DATES":
+    
+        # 1️⃣ 품절 조회
+        res_out = (
+            supabase.table("product_lifecycle_events")
+            .select("product_url, date")
+            .eq("lifecycle_event", "OUT_OF_STOCK")
+        )
+    
+        if date_from:
+            res_out = res_out.gte("date", date_from.strftime("%Y-%m-%d"))
+        if date_to:
+            res_out = res_out.lte("date", date_to.strftime("%Y-%m-%d"))
+    
+        res_out = res_out.execute()
+    
+    
+        # 2️⃣ 복원 조회
+        res_restore = (
+            supabase.table("product_lifecycle_events")
+            .select("product_url, date")
+            .eq("lifecycle_event", "RESTOCK")
+        )
+    
+        if date_from:
+            res_restore = res_restore.gte("date", date_from.strftime("%Y-%m-%d"))
+        if date_to:
+            res_restore = res_restore.lte("date", date_to.strftime("%Y-%m-%d"))
+    
+        res_restore = res_restore.execute()
+    
+    
+        if not res_out.data and not res_restore.data:
+            return "해당 기간 내 품절 또는 복원 이력이 없습니다."
+    
+    
+        # 3️⃣ 제품별 날짜 정리
+        out_map = {}
+        for r in (res_out.data or []):
+            out_map.setdefault(r["product_url"], []).append(r["date"])
+    
+        restore_map = {}
+        for r in (res_restore.data or []):
+            restore_map.setdefault(r["product_url"], []).append(r["date"])
+    
+    
+        all_urls = set(list(out_map.keys()) + list(restore_map.keys()))
+        df = df_work[df_work["product_url"].isin(all_urls)]
+    
+        if df.empty:
+            return "해당 제품의 품절 또는 복원 이력이 없습니다."
+    
+    
+        # 4️⃣ 결과 구성
+        results = []
+    
+        for _, row in df.iterrows():
+    
+            url = row["product_url"]
+    
+            out_dates = sorted(out_map.get(url, []))
+            restore_dates = sorted(restore_map.get(url, []))
+    
+            text_lines = []
+    
+            if out_dates:
+                text_lines.append(f"❌ 품절 날짜: {', '.join(out_dates)}")
+    
+            if restore_dates:
+                text_lines.append(f"🔄 복원 날짜: {', '.join(restore_dates)}")
+    
+            results.append({
+                "text": f"• {row['brand']} - {row['product_name']}\n  " + "\n  ".join(text_lines),
+                "product_url": str(url)
+            })
+    
+    
+        return {
+            "type": "product_list",
+            "text": f"품절 및 복원 날짜 정보 ({len(results)}개)",
+            "products": [r["product_url"] for r in results]
+        }
+
+
     if intent == "NEW":
         res = (
             supabase.table("product_lifecycle_events")
@@ -646,6 +880,8 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
             ]
         }
 
+
+    
     if intent == "OUT":
         res = (
             supabase.table("product_lifecycle_events")
@@ -3259,6 +3495,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
