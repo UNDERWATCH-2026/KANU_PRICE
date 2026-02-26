@@ -2019,10 +2019,19 @@ if selected_products:   # 🔥 조건 반전
 
                 if not lc_tmp.empty:
                     out_mask = lc_tmp["lifecycle_event"] == "OUT_OF_STOCK"
-                    restock_dates_dedup = lc_tmp[lc_tmp["lifecycle_event"] == "RESTOCK"]["event_date"].sort_values().tolist()
+                    
+                    # 🔥 RESTOCK은 전체 df_life(기간 필터 없음)에서 가져오기
+                    df_life_full = load_lifecycle_events(row["product_url"])
+                    if not df_life_full.empty:
+                        df_life_full["date"] = pd.to_datetime(df_life_full["date"], errors="coerce")
+                        restock_dates_dedup = df_life_full[
+                            df_life_full["lifecycle_event"] == "RESTOCK"
+                        ]["date"].sort_values().tolist()
+                    else:
+                        restock_dates_dedup = []
                     
                     kept_indices = []
-                    prev_boundary = "INIT"  # 🔥 None 대신 절대 매칭 안 될 초기값
+                    prev_boundary = "INIT"
                     
                     for idx2, r in lc_tmp[out_mask].sort_values("event_date").iterrows():
                         out_date = r["event_date"]
@@ -2745,6 +2754,9 @@ if selected_products:   # 🔥 조건 반전
                 str(r["date"].date()) for _, r in missing_out.iterrows()
             ]
             all_out_dates = sorted(list(set(all_out_dates)), reverse=True)
+
+            # 🔥 NaT 제거 추가
+            all_out_dates = [d for d in all_out_dates if d and str(d) != "NaT"]
             
             if all_out_dates and not any("품절" in c for c in cards):
                 out_dates_str = "<br>".join([f"날짜: {d}" for d in all_out_dates])
@@ -3168,6 +3180,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
