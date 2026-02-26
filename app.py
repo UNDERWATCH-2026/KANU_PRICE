@@ -1955,6 +1955,7 @@ if selected_products:   # 🔥 조건 반전
             if not df_life.empty:
                 df_life["date"] = pd.to_datetime(df_life["date"], errors="coerce")
                 df_life = df_life.dropna(subset=["date"])
+                
                 # 🔥 0원 가격 날짜를 OUT_OF_STOCK으로 추가
                 zero_dates = tmp[tmp["unit_price"].isna()]["event_date"].tolist()
                 for zdate in zero_dates:
@@ -2647,28 +2648,41 @@ if selected_products:   # 🔥 조건 반전
                     content=out_dates_str
                 ))
 
-        # 🔥 normal_price=0인 날짜로 품절 카드 보정
-        if not any("품절" in c for c in cards):
-            latest_price_res = (
-                supabase.table("raw_daily_prices")
-                .select("date, normal_price")
-                .eq("product_url", p["product_url"])
-                .eq("normal_price", 0)
-                .gte("date", filter_date_from.strftime("%Y-%m-%d"))
-                .lte("date", filter_date_to.strftime("%Y-%m-%d"))
-                .order("date", desc=True)
-                .limit(1)
-                .execute()
-            )
-            if latest_price_res.data:
-                out_date = latest_price_res.data[0]["date"]
+        # 🔥 normal_price_events에서 품절/복원 보정
+        normal_all_res = (
+            supabase.table("product_normal_price_events")
+            .select("date, prev_price, normal_price")
+            .eq("product_url", p["product_url"])
+            .gte("date", filter_date_from.strftime("%Y-%m-%d"))
+            .lte("date", filter_date_to.strftime("%Y-%m-%d"))
+            .order("date", desc=True)
+            .execute()
+        )
+        if normal_all_res.data:
+            # 품절: normal_price = 0
+            out_rows = [r for r in normal_all_res.data if float(r["normal_price"]) == 0]
+            if out_rows and not any("품절" in c for c in cards):
+                out_dates_str = "<br>".join([f"날짜: {r['date']}" for r in out_rows])
                 cards.append(render_card(
                     bg="#e8f0f8",
                     border="#2c5aa0",
                     title="❌ 품절",
-                    content=f"날짜: {out_date}"
+                    content=out_dates_str
                 ))
-        # 🔄 복원
+            # 복원: prev_price = 0, normal_price > 0
+            restore_rows = [
+                r for r in normal_all_res.data
+                if float(r["prev_price"]) == 0 and float(r["normal_price"]) > 0
+            ]
+            if restore_rows and not any("복원" in c for c in cards):
+                restore_dates_str = "<br>".join([f"날짜: {r['date']}" for r in restore_rows])
+                cards.append(render_card(
+                    bg="#fff8e1",
+                    border="#f59e0b",
+                    title="🔄 복원",
+                    content=restore_dates_str
+                ))
+        # 🔄 복원 (lifecycle)
         if not df_life.empty:
             restore_events = df_life[df_life["lifecycle_event"] == "RESTOCK"]
             if not restore_events.empty:
@@ -2683,33 +2697,38 @@ if selected_products:   # 🔥 조건 반전
                     content=restore_dates_str
                 ))
 
-        # 🔥 normal_price 0→양수 복원 보정 (lifecycle에 없는 경우)
-        if not any("복원" in c for c in cards):
-            restock_res = (
-                supabase.table("product_normal_price_events")
-                .select("date, prev_price, normal_price")
-                .eq("product_url", p["product_url"])
-                .gte("date", filter_date_from.strftime("%Y-%m-%d"))
-                .lte("date", filter_date_to.strftime("%Y-%m-%d"))
-                .order("date", desc=True)
-                .execute()
-            )
-            if restock_res.data:
-                restore_rows = [
-                    r for r in restock_res.data
-                    if float(r["prev_price"]) == 0 and float(r["normal_price"]) > 0
-                ]
-                if restore_rows:
-                    restore_dates_str = "<br>".join([
-                        f"날짜: {r['date']}"
-                        for r in restore_rows
-                    ])
-                    cards.append(render_card(
-                        bg="#fff8e1",
-                        border="#f59e0b",
-                        title="🔄 복원",
-                        content=restore_dates_str
-                    ))
+        # 🔥 normal_price_events에서 품절/복원 보정
+        normal_all_res = (
+            supabase.table("product_normal_price_events")
+            .select("date, prev_price, normal_price")
+            .eq("product_url", p["product_url"])
+            .gte("date", filter_date_from.strftime("%Y-%m-%d"))
+            .lte("date", filter_date_to.strftime("%Y-%m-%d"))
+            .order("date", desc=True)
+            .execute()
+        )
+        if normal_all_res.data:
+            out_rows = [r for r in normal_all_res.data if float(r["normal_price"]) == 0]
+            if out_rows and not any("품절" in c for c in cards):
+                out_dates_str = "<br>".join([f"날짜: {r['date']}" for r in out_rows])
+                cards.append(render_card(
+                    bg="#e8f0f8",
+                    border="#2c5aa0",
+                    title="❌ 품절",
+                    content=out_dates_str
+                ))
+            restore_rows = [
+                r for r in normal_all_res.data
+                if float(r["prev_price"]) == 0 and float(r["normal_price"]) > 0
+            ]
+            if restore_rows and not any("복원" in c for c in cards):
+                restore_dates_str = "<br>".join([f"날짜: {r['date']}" for r in restore_rows])
+                cards.append(render_card(
+                    bg="#fff8e1",
+                    border="#f59e0b",
+                    title="🔄 복원",
+                    content=restore_dates_str
+                ))
         # 📈 정상가 변동 / 품절 / 복원
         if normal_change_rows:
             latest_change = normal_change_rows[0]
