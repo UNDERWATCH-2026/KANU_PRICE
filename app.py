@@ -2006,55 +2006,47 @@ if selected_products:   # 🔥 조건 반전
                 tmp[["product_url", "product_name", "event_date", "unit_price", "price_status", "price_detail"]]
             )
 
-            # ✅ 이 블록을 추가
-            if not df_life.empty:
-                lc_tmp = df_life.copy()
+
+            # ✅ lifecycle_rows append (차트 아이콘용)
+            df_life_full_lc = load_lifecycle_events(row["product_url"])
+            if not df_life_full_lc.empty:
+                df_life_full_lc["date"] = pd.to_datetime(df_life_full_lc["date"], errors="coerce")
+                df_life_full_lc = df_life_full_lc.dropna(subset=["date"])
+                
+                lc_tmp = df_life_full_lc.copy()
                 display_name = f"{row['brand']} - {pname}"
                 lc_tmp["product_name"] = display_name
                 lc_tmp["event_date"] = pd.to_datetime(lc_tmp["date"])
-                lc_tmp = lc_tmp[
-                    (lc_tmp["event_date"] >= filter_date_from) &
-                    (lc_tmp["event_date"] <= filter_date_to)
+                
+                out_mask = lc_tmp["lifecycle_event"] == "OUT_OF_STOCK"
+                restock_dates_dedup = lc_tmp[lc_tmp["lifecycle_event"] == "RESTOCK"]["event_date"].sort_values().tolist()
+                
+                kept_indices = []
+                prev_boundary = "INIT"
+                
+                for idx2, r in lc_tmp[out_mask].sort_values("event_date").iterrows():
+                    out_date = r["event_date"]
+                    prior = [d for d in restock_dates_dedup if d <= out_date]
+                    boundary = max(prior) if prior else None
+                    if boundary != prev_boundary:
+                        kept_indices.append(idx2)
+                        prev_boundary = boundary
+                
+                lc_final = pd.concat([
+                    lc_tmp[~out_mask],
+                    lc_tmp.loc[kept_indices]
+                ], ignore_index=True)
+                
+                lc_final = lc_final[
+                    (lc_final["event_date"] >= filter_date_from) &
+                    (lc_final["event_date"] <= filter_date_to)
                 ]
+                
+                if not lc_final.empty:
+                    lifecycle_rows.append(
+                        lc_final[["product_name", "event_date", "lifecycle_event"]]
+                    )
 
-                if not lc_tmp.empty:
-                    out_mask = lc_tmp["lifecycle_event"] == "OUT_OF_STOCK"
-
-                        # 🔥 디버그 추가
-                    st.write(f"[{display_name}] lc_tmp 전체:", lc_tmp)
-                    st.write(f"restock_dates_dedup: {restock_dates_dedup}")
-                    st.write(f"kept_indices: {kept_indices}")
-                    
-                    # 🔥 RESTOCK은 전체 df_life(기간 필터 없음)에서 가져오기
-                    df_life_full = load_lifecycle_events(row["product_url"])
-                    if not df_life_full.empty:
-                        df_life_full["date"] = pd.to_datetime(df_life_full["date"], errors="coerce")
-                        restock_dates_dedup = df_life_full[
-                            df_life_full["lifecycle_event"] == "RESTOCK"
-                        ]["date"].sort_values().tolist()
-                    else:
-                        restock_dates_dedup = []
-                    
-                    kept_indices = []
-                    prev_boundary = "INIT"
-                    
-                    for idx2, r in lc_tmp[out_mask].sort_values("event_date").iterrows():
-                        out_date = r["event_date"]
-                        prior = [d for d in restock_dates_dedup if d <= out_date]
-                        boundary = max(prior) if prior else None
-                        if boundary != prev_boundary:
-                            kept_indices.append(idx2)
-                            prev_boundary = boundary
-                    
-                    lc_final = pd.concat([
-                        lc_tmp[~out_mask],
-                        lc_tmp.loc[kept_indices]
-                    ], ignore_index=True)
-                    
-                    if not lc_final.empty:
-                        lifecycle_rows.append(
-                            lc_final[["product_name", "event_date", "lifecycle_event"]]
-                        )
             # 🔥 0원 = 품절 → lifecycle에 없어도 OUT_OF_STOCK 이벤트 강제 추가
             zero_price_dates = tmp[tmp["unit_price"].isna() & (tmp["price_detail"] == "품절")]["event_date"].tolist()
 
@@ -3185,6 +3177,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
