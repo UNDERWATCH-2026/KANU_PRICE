@@ -2828,6 +2828,79 @@ if selected_products:   # 🔥 조건 반전
   
             
             # =========================
+            # 3️⃣ Lifecycle 이벤트 (히스토리용 보정)
+            # =========================
+            # 🔥 lifecycle 전체 (차트 선 끊기용 - 기간 필터 없음)
+            df_life_all = load_lifecycle_events(p["product_url"])
+            if not df_life_all.empty:
+                df_life_all["date"] = pd.to_datetime(df_life_all["date"], errors="coerce")
+                df_life_all = df_life_all.dropna(subset=["date"])
+                # 🔥 카드용 - 기간 필터 적용
+                df_life = df_life[
+                    (df_life["date"] >= pd.Timestamp(filter_date_from)) &
+                    (df_life["date"] <= pd.Timestamp(filter_date_to))
+                ]
+            
+                # 🔥 조회 기간 필터 적용 (이 줄이 핵심)
+                df_life = df_life[
+                    df_life["date"].between(filter_date_from, filter_date_to)
+                ]
+            
+                lifecycle_map = {
+                    "NEW_PRODUCT": "🆕 신제품",
+                    "OUT_OF_STOCK": "❌ 품절",
+                    "RESTOCK": "🔄 복원",
+                }
+            
+                for _, row in df_life.iterrows():
+            
+                    event_date = row["date"]
+                    event_type = row["lifecycle_event"]
+
+                    # 🔥 품절/복원 날짜 기준으로 가격 정보 조회
+                    price_info = ""
+                    if event_type == "OUT_OF_STOCK":
+                        # 🔥 품절 직전 정상가 또는 할인가 조회
+                        price_res = (
+                            supabase.table("product_all_events")
+                            .select("unit_price, event_type")
+                            .eq("product_url", p["product_url"])
+                            .lt("date", event_date.strftime("%Y-%m-%d"))
+                            .order("date", desc=True)
+                            .limit(1)
+                            .execute()
+                        )
+                        if price_res.data:
+                            prev = float(price_res.data[0]["unit_price"])
+                            etype = price_res.data[0]["event_type"]
+                            price_label = "할인가" if etype == "DISCOUNT" else "정상가"
+                            price_info = f"{price_label} {prev:,.1f}원 → 품절"
+
+                    elif event_type == "RESTOCK":
+                        # 🔥 복원 이후 첫 정상가 또는 할인가 조회
+                        price_res = (
+                            supabase.table("product_all_events")
+                            .select("unit_price, event_type")
+                            .eq("product_url", p["product_url"])
+                            .gte("date", event_date.strftime("%Y-%m-%d"))
+                            .order("date", desc=False)
+                            .limit(1)
+                            .execute()
+                        )
+                        if price_res.data:
+                            after = float(price_res.data[0]["unit_price"])
+                            etype = price_res.data[0]["event_type"]
+                            price_label = "할인가" if etype == "DISCOUNT" else "정상가"
+                            price_info = f"품절 → {price_label} {after:,.1f}원"
+            
+                    display_rows.append({
+                        "날짜": event_date.strftime("%Y-%m-%d"),
+                        "이벤트": lifecycle_map.get(event_type, ""),
+                        "가격 정보": price_info
+                    })
+
+            
+            # =========================
             # 1️⃣ 가격 변동 이벤트
             # =========================
             df_life = load_lifecycle_events(p["product_url"])
@@ -2966,77 +3039,6 @@ if selected_products:   # 🔥 조건 반전
                 })
 
             # =========================
-            # 3️⃣ Lifecycle 이벤트 (히스토리용 보정)
-            # =========================
-            # 🔥 lifecycle 전체 (차트 선 끊기용 - 기간 필터 없음)
-            df_life_all = load_lifecycle_events(p["product_url"])
-            if not df_life_all.empty:
-                df_life_all["date"] = pd.to_datetime(df_life_all["date"], errors="coerce")
-                df_life_all = df_life_all.dropna(subset=["date"])
-                # 🔥 카드용 - 기간 필터 적용
-                df_life = df_life[
-                    (df_life["date"] >= pd.Timestamp(filter_date_from)) &
-                    (df_life["date"] <= pd.Timestamp(filter_date_to))
-                ]
-            
-                # 🔥 조회 기간 필터 적용 (이 줄이 핵심)
-                df_life = df_life[
-                    df_life["date"].between(filter_date_from, filter_date_to)
-                ]
-            
-                lifecycle_map = {
-                    "NEW_PRODUCT": "🆕 신제품",
-                    "OUT_OF_STOCK": "❌ 품절",
-                    "RESTOCK": "🔄 복원",
-                }
-            
-                for _, row in df_life.iterrows():
-            
-                    event_date = row["date"]
-                    event_type = row["lifecycle_event"]
-
-                    # 🔥 품절/복원 날짜 기준으로 가격 정보 조회
-                    price_info = ""
-                    if event_type == "OUT_OF_STOCK":
-                        # 🔥 품절 직전 정상가 또는 할인가 조회
-                        price_res = (
-                            supabase.table("product_all_events")
-                            .select("unit_price, event_type")
-                            .eq("product_url", p["product_url"])
-                            .lt("date", event_date.strftime("%Y-%m-%d"))
-                            .order("date", desc=True)
-                            .limit(1)
-                            .execute()
-                        )
-                        if price_res.data:
-                            prev = float(price_res.data[0]["unit_price"])
-                            etype = price_res.data[0]["event_type"]
-                            price_label = "할인가" if etype == "DISCOUNT" else "정상가"
-                            price_info = f"{price_label} {prev:,.1f}원 → 품절"
-
-                    elif event_type == "RESTOCK":
-                        # 🔥 복원 이후 첫 정상가 또는 할인가 조회
-                        price_res = (
-                            supabase.table("product_all_events")
-                            .select("unit_price, event_type")
-                            .eq("product_url", p["product_url"])
-                            .gte("date", event_date.strftime("%Y-%m-%d"))
-                            .order("date", desc=False)
-                            .limit(1)
-                            .execute()
-                        )
-                        if price_res.data:
-                            after = float(price_res.data[0]["unit_price"])
-                            etype = price_res.data[0]["event_type"]
-                            price_label = "할인가" if etype == "DISCOUNT" else "정상가"
-                            price_info = f"품절 → {price_label} {after:,.1f}원"
-            
-                    display_rows.append({
-                        "날짜": event_date.strftime("%Y-%m-%d"),
-                        "이벤트": lifecycle_map.get(event_type, ""),
-                        "가격 정보": price_info
-                    })
-            # =========================
             # 4️⃣ 정렬 + 색상 강조
             # =========================
             if display_rows:
@@ -3058,6 +3060,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
