@@ -2017,28 +2017,30 @@ if selected_products:   # 🔥 조건 반전
                     (lc_tmp["event_date"] <= filter_date_to)
                 ]
                 if not lc_tmp.empty:
-                    # 🔥 OUT_OF_STOCK 중복 제거 (구간별 첫 날짜만)
-                    restock_dates_for_dedup = lc_tmp[lc_tmp["lifecycle_event"] == "RESTOCK"]["event_date"].sort_values().tolist()
+                    # 🔥 OUT_OF_STOCK 중복 제거 (구간별 첫 날짜만, 제품별)
+                    out_mask = lc_tmp["lifecycle_event"] == "OUT_OF_STOCK"
+                    restock_dates_dedup = lc_tmp[lc_tmp["lifecycle_event"] == "RESTOCK"]["event_date"].sort_values().tolist()
                     
-                    out_rows = lc_tmp[lc_tmp["lifecycle_event"] == "OUT_OF_STOCK"].sort_values("event_date")
-                    kept_out = []
+                    kept_indices = []
                     prev_boundary = None
                     
-                    for _, r in out_rows.iterrows():
+                    for idx2, r in lc_tmp[out_mask].sort_values("event_date").iterrows():
                         out_date = r["event_date"]
-                        prior = [d for d in restock_dates_for_dedup if d <= out_date]
+                        prior = [d for d in restock_dates_dedup if d <= out_date]
                         boundary = max(prior) if prior else None
                         if boundary != prev_boundary:
-                            kept_out.append(r)
+                            kept_indices.append(idx2)
                             prev_boundary = boundary
                     
-                    # 🔥 OUT_OF_STOCK 제외한 나머지 + 중복제거된 OUT_OF_STOCK 합치기
-                    lc_others = lc_tmp[lc_tmp["lifecycle_event"] != "OUT_OF_STOCK"]
-                    lc_tmp = pd.concat([lc_others, pd.DataFrame(kept_out)], ignore_index=True) if kept_out else lc_others
+                    # OUT_OF_STOCK 아닌 행 + 중복제거된 OUT_OF_STOCK
+                    lc_final = pd.concat([
+                        lc_tmp[~out_mask],
+                        lc_tmp.loc[kept_indices]
+                    ], ignore_index=True)
                     
-                    if not lc_tmp.empty:
+                    if not lc_final.empty:
                         lifecycle_rows.append(
-                            lc_tmp[["product_name", "event_date", "lifecycle_event"]]
+                            lc_final[["product_name", "event_date", "lifecycle_event"]]
                         )
             # 🔥 0원 = 품절 → lifecycle에 없어도 OUT_OF_STOCK 이벤트 강제 추가
             zero_price_dates = tmp[tmp["unit_price"].isna() & (tmp["price_detail"] == "품절")]["event_date"].tolist()
@@ -3167,6 +3169,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
