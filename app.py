@@ -2632,7 +2632,7 @@ if selected_products:   # 🔥 조건 반전
                     content=f"발견일: {latest_new['date'].date()}"
                 ))
         
-        # ❌ 품절
+        # ❌ 품절 (lifecycle)
         if not df_life.empty:
             out_events = df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]
             if not out_events.empty:
@@ -2647,6 +2647,27 @@ if selected_products:   # 🔥 조건 반전
                     content=out_dates_str
                 ))
 
+        # 🔥 normal_price=0인 날짜로 품절 카드 보정
+        if not any("품절" in c for c in cards):
+            latest_price_res = (
+                supabase.table("daily_prices")
+                .select("date, normal_price")
+                .eq("product_url", p["product_url"])
+                .eq("normal_price", 0)
+                .gte("date", filter_date_from.strftime("%Y-%m-%d"))
+                .lte("date", filter_date_to.strftime("%Y-%m-%d"))
+                .order("date", desc=True)
+                .limit(1)
+                .execute()
+            )
+            if latest_price_res.data:
+                out_date = latest_price_res.data[0]["date"]
+                cards.append(render_card(
+                    bg="#e8f0f8",
+                    border="#2c5aa0",
+                    title="❌ 품절",
+                    content=f"날짜: {out_date}"
+                ))
         # 🔄 복원
         if not df_life.empty:
             restore_events = df_life[df_life["lifecycle_event"] == "RESTOCK"]
@@ -3062,6 +3083,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
