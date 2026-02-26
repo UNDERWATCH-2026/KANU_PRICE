@@ -2018,47 +2018,7 @@ if selected_products:   # 🔥 조건 반전
                 lc_tmp["product_name"] = display_name
                 lc_tmp["event_date"] = pd.to_datetime(lc_tmp["date"])
 
-                out_mask = lc_tmp["lifecycle_event"] == "OUT_OF_STOCK"
-                
-                # raw_daily_prices 복원 포함한 전체 복원 날짜 수집
-                restock_from_lc = lc_tmp[lc_tmp["lifecycle_event"] == "RESTOCK"]["event_date"].sort_values().tolist()
-                
-                # raw_daily_prices에서도 복원 날짜 미리 가져오기
-                raw_restock_res = (
-                    supabase.table("raw_daily_prices")
-                    .select("date, normal_price")
-                    .eq("product_url", row["product_url"])
-                    .order("date", desc=False)
-                    .execute()
-                )
-                restock_from_raw_early = []
-                if raw_restock_res.data:
-                    raw_tmp = pd.DataFrame(raw_restock_res.data)
-                    raw_tmp["normal_price"] = raw_tmp["normal_price"].astype(float)
-                    raw_tmp["date"] = pd.to_datetime(raw_tmp["date"])
-                    raw_tmp["prev_price"] = raw_tmp["normal_price"].shift(1)
-                    restock_from_raw_early = raw_tmp[
-                        (raw_tmp["prev_price"] == 0) & (raw_tmp["normal_price"] > 0)
-                    ]["date"].tolist()
-                
-                # 모든 복원 날짜 합치기
-                all_restock_dates = sorted(set(restock_from_lc + restock_from_raw_early))
-                
-                kept_indices = []
-                prev_boundary = "INIT"
-                
-                for idx2, r in lc_tmp[out_mask].sort_values("event_date").iterrows():
-                    out_date = r["event_date"]
-                    prior = [d for d in all_restock_dates if d <= out_date]
-                    boundary = max(prior) if prior else None
-                    if boundary != prev_boundary:
-                        kept_indices.append(idx2)
-                        prev_boundary = boundary
-                
-                lc_final = pd.concat([
-                    lc_tmp[~out_mask],
-                    lc_tmp.loc[kept_indices]
-                ], ignore_index=True)
+                lc_final = lc_tmp.drop_duplicates(subset=["product_name", "event_date", "lifecycle_event"])
                 
                 lc_final = lc_final[
                     (lc_final["event_date"] >= filter_date_from) &
@@ -3228,6 +3188,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
