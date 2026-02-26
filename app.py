@@ -2664,43 +2664,43 @@ if selected_products:   # 🔥 조건 반전
                     content=restore_dates_str
                 ))
 
-        # 🔥 normal_price_events에서 품절/복원 보정
-        normal_all_res = (
-            supabase.table("product_normal_price_events")
-            .select("date, prev_price, normal_price")
+        # 🔥 raw_daily_prices에서 품절/복원 보정
+        raw_res = (
+            supabase.table("raw_daily_prices")
+            .select("date, normal_price")
             .eq("product_url", p["product_url"])
             .gte("date", filter_date_from.strftime("%Y-%m-%d"))
             .lte("date", filter_date_to.strftime("%Y-%m-%d"))
-            .order("date", desc=True)
+            .order("date", desc=False)
             .execute()
         )
-   
-        if normal_all_res.data:
-            # 🔥 lifecycle에 없는 품절 날짜만 추가
-            out_rows = [r for r in normal_all_res.data if float(r["normal_price"]) == 0]
-            if out_rows:
-                lifecycle_out_dates = []
-                if not df_life.empty:
-                    lifecycle_out_dates = [
-                        str(d.date()) for d in df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]["date"].tolist()
-                    ]
-                missing_out_rows = [r for r in out_rows if r["date"] not in lifecycle_out_dates]
-                if missing_out_rows:
-                    extra_dates_str = "<br>".join([f"날짜: {r['date']}" for r in missing_out_rows])
-                    cards.append(render_card(
-                        bg="#e8f0f8",
-                        border="#2c5aa0",
-                        title="❌ 품절",
-                        content=extra_dates_str
-                    ))
+        if raw_res.data:
+            raw_df = pd.DataFrame(raw_res.data)
+            raw_df["normal_price"] = raw_df["normal_price"].astype(float)
+            raw_df["date"] = pd.to_datetime(raw_df["date"])
 
-            # 🔥 lifecycle에 없는 복원 날짜만 추가
-            restore_rows = [
-                r for r in normal_all_res.data
-                if float(r["prev_price"]) == 0 and float(r["normal_price"]) > 0
-            ]
-            if restore_rows and not any("복원" in c for c in cards):
-                restore_dates_str = "<br>".join([f"날짜: {r['date']}" for r in restore_rows])
+            # 0원 날짜 = 품절
+            out_rows = raw_df[raw_df["normal_price"] == 0]
+            lifecycle_out_dates = []
+            if not df_life.empty:
+                lifecycle_out_dates = [
+                    str(d.date()) for d in df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]["date"].tolist()
+                ]
+            missing_out = out_rows[~out_rows["date"].dt.strftime("%Y-%m-%d").isin(lifecycle_out_dates)]
+            if not missing_out.empty and not any("품절" in c for c in cards):
+                out_dates_str = "<br>".join([f"날짜: {r['date'].date()}" for _, r in missing_out.iterrows()])
+                cards.append(render_card(
+                    bg="#e8f0f8",
+                    border="#2c5aa0",
+                    title="❌ 품절",
+                    content=out_dates_str
+                ))
+
+            # 0→양수 전환 날짜 = 복원
+            raw_df["prev_price"] = raw_df["normal_price"].shift(1)
+            restore_rows = raw_df[(raw_df["prev_price"] == 0) & (raw_df["normal_price"] > 0)]
+            if not restore_rows.empty and not any("복원" in c for c in cards):
+                restore_dates_str = "<br>".join([f"날짜: {r['date'].date()}" for _, r in restore_rows.iterrows()])
                 cards.append(render_card(
                     bg="#fff8e1",
                     border="#f59e0b",
@@ -3109,6 +3109,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
