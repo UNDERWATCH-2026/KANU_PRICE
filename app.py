@@ -748,40 +748,52 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         }
 
     if intent == "OUT":
-        # 품절 이력 전체 조회 (복원도 함께)
-        res_out = (
-            supabase.table("product_lifecycle_events")
-            .select("product_url, date")
-            .eq("lifecycle_event", "OUT_OF_STOCK")
-        )
-        if date_from:
-            res_out = res_out.gte("date", date_from.strftime("%Y-%m-%d"))
-        if date_to:
-            res_out = res_out.lte("date", date_to.strftime("%Y-%m-%d"))
-        res_out = res_out.execute()
-        if not res_out.data:
+        date_from_str = date_from.strftime("%Y-%m-%d") if date_from else None
+        date_to_str = date_to.strftime("%Y-%m-%d") if date_to else None
+
+        # 1) product_lifecycle_events 에서 OUT_OF_STOCK / RESTOCK 수집
+        res_lc = supabase.table("product_lifecycle_events").select("product_url, date, lifecycle_event")
+        if date_from_str:
+            res_lc = res_lc.gte("date", date_from_str)
+        if date_to_str:
+            res_lc = res_lc.lte("date", date_to_str)
+        res_lc = res_lc.execute()
+
+        out_map = {}
+        restore_map = {}
+        for r in (res_lc.data or []):
+            key = str(r["product_url"]).strip().lower()
+            if r["lifecycle_event"] == "OUT_OF_STOCK":
+                out_map.setdefault(key, set()).add(r["date"])
+            elif r["lifecycle_event"] == "RESTOCK":
+                restore_map.setdefault(key, set()).add(r["date"])
+
+        # 2) product_price_change_events 에서 추가 품절(unit_price=0) / 복원(prev_price=0) 수집
+        res_pc = supabase.table("product_price_change_events").select("product_url, date, unit_price, prev_price")
+        if date_from_str:
+            res_pc = res_pc.gte("date", date_from_str)
+        if date_to_str:
+            res_pc = res_pc.lte("date", date_to_str)
+        res_pc = res_pc.execute()
+
+        for r in (res_pc.data or []):
+            key = str(r["product_url"]).strip().lower()
+            try:
+                cur = float(r["unit_price"]) if r["unit_price"] is not None else None
+                prv = float(r["prev_price"]) if r["prev_price"] is not None else None
+            except (TypeError, ValueError):
+                continue
+            if cur == 0 and prv and prv > 0:
+                out_map.setdefault(key, set()).add(r["date"])
+            elif prv == 0 and cur and cur > 0:
+                restore_map.setdefault(key, set()).add(r["date"])
+
+        if not out_map:
             return None
 
-        res_restore = (
-            supabase.table("product_lifecycle_events")
-            .select("product_url, date")
-            .eq("lifecycle_event", "RESTOCK")
-        )
-        if date_from:
-            res_restore = res_restore.gte("date", date_from.strftime("%Y-%m-%d"))
-        if date_to:
-            res_restore = res_restore.lte("date", date_to.strftime("%Y-%m-%d"))
-        res_restore = res_restore.execute()
-
-        # 리스트 맵으로 수집 (복수 날짜 지원) - URL 정규화
-        out_map = {}
-        for r in res_out.data:
-            key = str(r["product_url"]).strip().lower()
-            out_map.setdefault(key, []).append(r["date"])
-        restore_map = {}
-        for r in (res_restore.data or []):
-            key = str(r["product_url"]).strip().lower()
-            restore_map.setdefault(key, []).append(r["date"])
+        # set → sorted list
+        out_map = {k: sorted(v) for k, v in out_map.items()}
+        restore_map = {k: sorted(v) for k, v in restore_map.items()}
 
         urls = list(out_map.keys())
         df = df_work[df_work["product_url"].str.strip().str.lower().isin(urls)]
@@ -792,10 +804,9 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         product_details = {}
         for _, row in df.iterrows():
             url = str(row["product_url"]).strip().lower()
-            out_dates = sorted(out_map.get(url, []))
-            restore_dates = sorted(restore_map.get(url, []))
+            out_dates = out_map.get(url, [])
+            restore_dates = restore_map.get(url, [])
 
-            # 품절-복원 시간순 인터리브
             all_events = (
                 [(d, "❌ 품절") for d in out_dates] +
                 [(d, "🔄 복원") for d in restore_dates]
@@ -809,10 +820,9 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
             if pd.notna(row.get("category2")) and row["category2"]:
                 categories.append(row["category2"])
             category_str = f" [{' > '.join(categories)}]" if categories else ""
-            product_name = row['product_name']
 
             results.append({
-                "text": f"• {row['brand']} - {product_name}{category_str}\n  {timeline_str}",
+                "text": f"• {row['brand']} - {row['product_name']}{category_str}\n  {timeline_str}",
                 "product_url": url
             })
             product_details[url] = timeline_str
@@ -822,11 +832,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         return {
             "type": "product_list",
             "text": f"{period_label} 품절 제품 ({len(results)}개)",
-            "products": [
-                str(r["product_url"]).strip().lower()
-                for r in results
-                if r.get("product_url")
-            ],
+            "products": [r["product_url"] for r in results],
             "product_details": product_details,
         }
 
