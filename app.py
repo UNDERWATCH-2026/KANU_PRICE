@@ -2044,7 +2044,32 @@ if selected_products:   # 🔥 조건 반전
                     (lc_final["event_date"] >= filter_date_from) &
                     (lc_final["event_date"] <= filter_date_to)
                 ]
-                
+
+                # 🔥 0원(품절) 날짜 강제 추가 - lifecycle DB에 없는 경우 보완
+                if not tmp.empty:
+                    zero_dates = tmp[tmp["unit_price"].isna()]["event_date"].tolist()
+                    existing_out = lc_final[lc_final["lifecycle_event"] == "OUT_OF_STOCK"]["event_date"].tolist()
+                    existing_restock = lc_final[lc_final["lifecycle_event"] == "RESTOCK"]["event_date"].tolist()
+                    
+                    new_rows = []
+                    for zdate in sorted(zero_dates):
+                        # 이미 있으면 스킵
+                        if zdate in existing_out:
+                            continue
+                        # 이전 복원 이후 첫 0원 날짜만 추가
+                        prior_restocks = [d for d in existing_restock if d <= zdate]
+                        prior_outs = [d for d in existing_out + [r["event_date"] for r in new_rows] if d <= zdate]
+                        if not prior_outs or (prior_restocks and max(prior_restocks) > max(prior_outs)):
+                            new_rows.append({
+                                "product_name": display_name,
+                                "event_date": zdate,
+                                "lifecycle_event": "OUT_OF_STOCK"
+                            })
+                            existing_out.append(zdate)
+                    
+                    if new_rows:
+                        lc_final = pd.concat([lc_final, pd.DataFrame(new_rows)], ignore_index=True)
+
                 if not lc_final.empty:
                     lifecycle_rows.append(
                         lc_final[["product_name", "event_date", "lifecycle_event"]]
@@ -3180,6 +3205,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
