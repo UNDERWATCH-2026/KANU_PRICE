@@ -2017,11 +2017,29 @@ if selected_products:   # 🔥 조건 반전
                     (lc_tmp["event_date"] <= filter_date_to)
                 ]
                 if not lc_tmp.empty:
-                    # 🔥 디버그
-                    st.write(f"[{display_name}] lifecycle append 전:", lc_tmp)
-                    lifecycle_rows.append(
-                        lc_tmp[["product_name", "event_date", "lifecycle_event"]]
-                    )
+                    # 🔥 OUT_OF_STOCK 중복 제거 (구간별 첫 날짜만)
+                    restock_dates_for_dedup = lc_tmp[lc_tmp["lifecycle_event"] == "RESTOCK"]["event_date"].sort_values().tolist()
+                    
+                    out_rows = lc_tmp[lc_tmp["lifecycle_event"] == "OUT_OF_STOCK"].sort_values("event_date")
+                    kept_out = []
+                    prev_boundary = None
+                    
+                    for _, r in out_rows.iterrows():
+                        out_date = r["event_date"]
+                        prior = [d for d in restock_dates_for_dedup if d <= out_date]
+                        boundary = max(prior) if prior else None
+                        if boundary != prev_boundary:
+                            kept_out.append(r)
+                            prev_boundary = boundary
+                    
+                    # 🔥 OUT_OF_STOCK 제외한 나머지 + 중복제거된 OUT_OF_STOCK 합치기
+                    lc_others = lc_tmp[lc_tmp["lifecycle_event"] != "OUT_OF_STOCK"]
+                    lc_tmp = pd.concat([lc_others, pd.DataFrame(kept_out)], ignore_index=True) if kept_out else lc_others
+                    
+                    if not lc_tmp.empty:
+                        lifecycle_rows.append(
+                            lc_tmp[["product_name", "event_date", "lifecycle_event"]]
+                        )
             # 🔥 0원 = 품절 → lifecycle에 없어도 OUT_OF_STOCK 이벤트 강제 추가
             zero_price_dates = tmp[tmp["unit_price"].isna() & (tmp["price_detail"] == "품절")]["event_date"].tolist()
 
@@ -3149,6 +3167,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
