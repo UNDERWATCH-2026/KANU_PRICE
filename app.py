@@ -2723,15 +2723,16 @@ if selected_products:   # 🔥 조건 반전
                 "📊 특이 이벤트 없음",
                 ""
             ))
+
         # =========================
-        # C2~C4에 카드 배치 (3등분 유지)
+        # 카드 배치 (3개씩 2줄)
         # =========================
-        card_columns = [c2, c3, c4]
-        
-        for i in range(3):
-            with card_columns[i]:
-                if i < len(cards):
-                    st.markdown(cards[i], unsafe_allow_html=True)
+        for row_start in range(0, len(cards), 3):
+            row_cards = cards[row_start:row_start + 3]
+            cols = st.columns(3)
+            for i, card in enumerate(row_cards):
+                with cols[i]:
+                    st.markdown(card, unsafe_allow_html=True)
     
         st.markdown("<br><br>", unsafe_allow_html=True)
         
@@ -3061,6 +3062,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
