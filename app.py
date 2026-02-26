@@ -1950,6 +1950,7 @@ if selected_products:   # 🔥 조건 반전
                 tmp.at[idx, "price_detail"] = f"정상가: {price_row['unit_price']:,.1f}원"
                        
             # 🔥 lifecycle 기반 상태 트래킹 방식
+            # 🔥 lifecycle 기반 상태 계산 (완전 안정 버전)
             df_life = load_lifecycle_events(row["product_url"])
             
             if not df_life.empty:
@@ -1957,23 +1958,28 @@ if selected_products:   # 🔥 조건 반전
                 df_life["date"] = pd.to_datetime(df_life["date"], errors="coerce")
                 df_life = df_life.dropna(subset=["date"]).sort_values("date")
             
-                out_dates = set(df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]["date"])
-                restore_dates = set(df_life[df_life["lifecycle_event"] == "RESTOCK"]["date"])
+                out_dates = sorted(
+                    df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]["date"].tolist()
+                )
+                restore_dates = sorted(
+                    df_life[df_life["lifecycle_event"] == "RESTOCK"]["date"].tolist()
+                )
             
                 tmp = tmp.sort_values("event_date")
             
-                is_out = False
-            
                 for idx2, r2 in tmp.iterrows():
+            
                     current_date = r2["event_date"]
             
-                    if current_date in out_dates:
-                        is_out = True
+                    # 🔥 가장 최근 품절 찾기
+                    past_out = [d for d in out_dates if d <= current_date]
+                    past_restore = [d for d in restore_dates if d <= current_date]
             
-                    if current_date in restore_dates:
-                        is_out = False
+                    last_out = max(past_out) if past_out else None
+                    last_restore = max(past_restore) if past_restore else None
             
-                    if is_out:
+                    # 🔥 마지막 이벤트가 품절이면 None
+                    if last_out and (not last_restore or last_out > last_restore):
                         tmp.at[idx2, "unit_price"] = None
                          
             tmp["product_url"] = row["product_url"]
@@ -3167,6 +3173,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
