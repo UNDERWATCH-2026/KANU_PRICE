@@ -1474,7 +1474,7 @@ with col_tabs:
                                 )
                             
 
-                                with st.expander(f"목록 펼치기 / 접기 ({len(sorted_df)}개)", expanded=False):
+                                with st.expander(f"목록 펼치기 / 접기 ({len(sorted_df)}개)", expanded=True):
 
                                     for _, row in sorted_df.iterrows():
                                 
@@ -3194,6 +3194,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
