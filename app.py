@@ -2729,13 +2729,13 @@ if selected_products:   # 🔥 조건 반전
         # =========================
         for row_start in range(0, len(cards), 3):
             row_cards = cards[row_start:row_start + 3]
-            cols = st.columns(3)
-            for i, card in enumerate(row_cards):
-                with cols[i]:
-                    st.markdown(card, unsafe_allow_html=True)
+            _, col1, col2, col3 = st.columns(4)
+            for i, col in enumerate([col1, col2, col3]):
+                if i < len(row_cards):
+                    with col:
+                        st.markdown(row_cards[i], unsafe_allow_html=True)
     
         st.markdown("<br><br>", unsafe_allow_html=True)
-        
         # =========================
     
         with st.expander("📅 이벤트 히스토리"):
@@ -3062,6 +3062,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
