@@ -2689,24 +2689,27 @@ if selected_products:   # 🔥 조건 반전
                 supabase.table("product_normal_price_events")
                 .select("date, prev_price, normal_price")
                 .eq("product_url", p["product_url"])
-                .eq("prev_price", 0)
-                .gt("normal_price", 0)
                 .gte("date", filter_date_from.strftime("%Y-%m-%d"))
                 .lte("date", filter_date_to.strftime("%Y-%m-%d"))
                 .order("date", desc=True)
                 .execute()
             )
             if restock_res.data:
-                restore_dates_str = "<br>".join([
-                    f"날짜: {r['date']}"
-                    for r in restock_res.data
-                ])
-                cards.append(render_card(
-                    bg="#fff8e1",
-                    border="#f59e0b",
-                    title="🔄 복원",
-                    content=restore_dates_str
-                ))
+                restore_rows = [
+                    r for r in restock_res.data
+                    if float(r["prev_price"]) == 0 and float(r["normal_price"]) > 0
+                ]
+                if restore_rows:
+                    restore_dates_str = "<br>".join([
+                        f"날짜: {r['date']}"
+                        for r in restore_rows
+                    ])
+                    cards.append(render_card(
+                        bg="#fff8e1",
+                        border="#f59e0b",
+                        title="🔄 복원",
+                        content=restore_dates_str
+                    ))
         # 📈 정상가 변동 / 품절 / 복원
         if normal_change_rows:
             latest_change = normal_change_rows[0]
@@ -3108,6 +3111,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
