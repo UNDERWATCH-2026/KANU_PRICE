@@ -1189,6 +1189,10 @@ if "_removed_products" not in st.session_state:
 # =========================
 st.title("☕ Coffee Capsule Price Intelligence")
 
+# 아래 한 줄 추가
+if st.secrets.get("ENV") == "dev":
+    st.warning("🚧 개발용 환경입니다.", icon="⚠️")
+
 # -------------------------
 # 데이터 로딩 (탭 이전에 로드)
 # -------------------------
@@ -3235,6 +3239,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
