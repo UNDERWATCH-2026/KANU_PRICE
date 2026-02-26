@@ -1972,13 +1972,24 @@ if selected_products:   # 🔥 조건 반전
                 out_dates = df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]["date"].tolist()
                 restore_dates = df_life[df_life["lifecycle_event"] == "RESTOCK"]["date"].tolist()
 
-                for out_date in out_dates:
+                # 🔥 품절-복원 쌍 단위로 처리
+                for out_date in sorted(out_dates):
+                
+                    # 해당 품절 이후 첫 복원
                     restore_after = [d for d in restore_dates if d > out_date]
+                
                     if restore_after:
                         restore_date = min(restore_after)
-                        mask = (tmp["event_date"] >= out_date) & (tmp["event_date"] < restore_date)
+                
+                        # 🔥 품절 ~ 복원 전까지만 제거
+                        mask = (
+                            (tmp["event_date"] >= out_date) &
+                            (tmp["event_date"] < restore_date)
+                        )
                         tmp.loc[mask, "unit_price"] = None
+                
                     else:
+                        # 🔥 마지막 품절 이후만 제거
                         mask = tmp["event_date"] >= out_date
                         tmp.loc[mask, "unit_price"] = None
                         
@@ -3174,6 +3185,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
