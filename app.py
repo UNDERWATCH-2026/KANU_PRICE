@@ -1951,6 +1951,7 @@ if selected_products:   # 🔥 조건 반전
                        
             # 🔥 lifecycle 기반 상태 트래킹 방식
             # 🔥 lifecycle 기반 상태 계산 (완전 안정 버전)
+            # 🔥 lifecycle 기반 상태 계산 (date 단위 비교)
             df_life = load_lifecycle_events(row["product_url"])
             
             if not df_life.empty:
@@ -1959,26 +1960,24 @@ if selected_products:   # 🔥 조건 반전
                 df_life = df_life.dropna(subset=["date"]).sort_values("date")
             
                 out_dates = sorted(
-                    df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]["date"].tolist()
+                    [d.date() for d in df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]["date"]]
                 )
                 restore_dates = sorted(
-                    df_life[df_life["lifecycle_event"] == "RESTOCK"]["date"].tolist()
+                    [d.date() for d in df_life[df_life["lifecycle_event"] == "RESTOCK"]["date"]]
                 )
             
                 tmp = tmp.sort_values("event_date")
             
                 for idx2, r2 in tmp.iterrows():
             
-                    current_date = r2["event_date"]
+                    current_date = r2["event_date"].date()  # 🔥 여기 핵심
             
-                    # 🔥 가장 최근 품절 찾기
                     past_out = [d for d in out_dates if d <= current_date]
                     past_restore = [d for d in restore_dates if d <= current_date]
             
                     last_out = max(past_out) if past_out else None
                     last_restore = max(past_restore) if past_restore else None
             
-                    # 🔥 마지막 이벤트가 품절이면 None
                     if last_out and (not last_restore or last_out > last_restore):
                         tmp.at[idx2, "unit_price"] = None
                          
@@ -3173,6 +3172,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
