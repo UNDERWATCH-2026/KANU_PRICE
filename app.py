@@ -1880,7 +1880,23 @@ if selected_products:   # 🔥 조건 반전
             tmp["product_name"] = display_name
             tmp["event_date"] = pd.to_datetime(tmp["date"])
 
-            # 🔥 날짜 리샘플링 (일 단위 채우기)
+
+
+            # 🔥 기간 필터 적용
+            tmp = tmp[(tmp["event_date"] >= filter_date_from) & (tmp["event_date"] <= filter_date_to)]
+            
+            if tmp.empty:
+                continue
+            
+            tmp["unit_price"] = tmp["unit_price"].astype(float)
+            
+            # 🔥 0원 → None
+            tmp.loc[tmp["unit_price"] == 0, "unit_price"] = None
+            
+            
+            # ================================
+            # 🔥 1️⃣ 날짜 리샘플링
+            # ================================
             tmp = tmp.sort_values("event_date")
             
             all_dates = pd.date_range(
@@ -1892,28 +1908,17 @@ if selected_products:   # 🔥 조건 반전
             tmp = tmp.set_index("event_date").reindex(all_dates).reset_index()
             tmp.rename(columns={"index": "event_date"}, inplace=True)
             
-            # 이전 가격 forward fill
+            # 🔥 unit_price만 ffill
             tmp["unit_price"] = tmp["unit_price"].ffill()
             tmp["product_name"] = tmp["product_name"].ffill()
-            tmp["price_status"] = tmp["price_status"].ffill()
-            tmp["price_detail"] = tmp["price_detail"].ffill()
-
-            # 🔥 기간 필터 적용
-            tmp = tmp[(tmp["event_date"] >= filter_date_from) & (tmp["event_date"] <= filter_date_to)]
             
-            if tmp.empty:
-                continue
-
-            tmp["unit_price"] = tmp["unit_price"].astype(float)
-
-            # 🔥 0원 → None (품절 구간 선 끊기)
-            tmp.loc[tmp["unit_price"] == 0, "unit_price"] = None
-
-            # 🔥 할인 여부 추가
+            
+            # ================================
+            # 🔥 2️⃣ 상태 다시 계산
+            # ================================
             tmp["is_discount"] = tmp["event_type"] == "DISCOUNT"
             tmp["price_status"] = tmp["is_discount"].map({True: "💸 할인 중", False: "정상가"})
-
-            # 🔥 None(품절)인 경우 덮어쓰기
+            
             tmp.loc[tmp["unit_price"].isna(), "price_status"] = "품절"
             tmp.loc[tmp["unit_price"].isna(), "price_detail"] = "품절"
 
@@ -3183,6 +3188,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
