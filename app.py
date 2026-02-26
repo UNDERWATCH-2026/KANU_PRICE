@@ -1337,6 +1337,7 @@ with col_tabs:
             search_keyword = keyword_input.strip()
             st.session_state.search_keyword = search_keyword
             st.session_state.active_mode = "키워드 검색"
+            st.session_state["_auto_expand"] = True   # 🔥 검색 직후 자동 펼침
             
             # 🔥 검색 결과 계산
             # 쉼표로 구분: OR 검색 (예: "쥬시, 멜로지오" → 쥬시 OR 멜로지오)
@@ -1414,56 +1415,52 @@ with col_tabs:
             else:
                 st.session_state.search_history.append(search_result)
             
-
-
+        
         # 📦 제품 선택 - 검색 이력별로 구획화
         st.markdown("### 📦 비교할 제품 선택")
         
         if not st.session_state.search_history:
             st.info("검색 결과가 없습니다.")
         else:
-            # 🔥 검색어를 3개씩 가로로 배열
             num_cols = 3
             total_searches = len(st.session_state.search_history)
-            
+        
             for row_idx in range(0, total_searches, num_cols):
                 cols = st.columns(num_cols)
-                
+        
                 for col_idx in range(num_cols):
                     history_idx = row_idx + col_idx
-                    
                     if history_idx >= total_searches:
                         break
-                    
+        
                     history = st.session_state.search_history[history_idx]
-                    
+        
                     with cols[col_idx]:
-                        # 🔥 박스 스타일로 표시
                         with st.container(border=True):
-                            # 검색어 제목과 삭제 버튼
+        
                             col_title, col_delete = st.columns([4, 1])
-                            
+        
                             with col_title:
                                 st.markdown(f"**🔍 {history['keyword']}**")
-                            
+        
                             with col_delete:
                                 if st.button("🗑️", key=f"delete_search_{history_idx}", help="검색 결과 삭제"):
                                     for product_url in history["results"]:
                                         st.session_state.selected_products.discard(product_url)
-                                        # 🔥 체크박스 위젯 상태도 False로 초기화
+        
                                         if "product_checkbox_keys" in st.session_state:
                                             keys = st.session_state["product_checkbox_keys"].get(product_url, set())
                                             for k in list(keys):
                                                 if k in st.session_state:
-                                                    del st.session_state[k]  # 🔥 False 대신 삭제
+                                                    del st.session_state[k]
+        
                                     st.session_state.search_history.pop(history_idx)
                                     st.rerun()
-                                                                                       
+        
                             if not history['results']:
                                 st.caption("📭 검색 결과 없음")
-                            
+        
                             else:
-                                # 🔥 product_url 기준 정렬
                                 sorted_df = (
                                     df_all[df_all["product_url"].isin(history["results"])]
                                     .fillna("")
@@ -1472,31 +1469,27 @@ with col_tabs:
                                         by=["brand", "category1", "category2", "product_name"]
                                     )
                                 )
-                            
-
-                                with st.expander(f"목록 펼치기 / 접기 ({len(sorted_df)}개)", expanded=True):
-
+        
+                                with st.expander(
+                                    f"목록 펼치기 / 접기 ({len(sorted_df)}개)",
+                                    expanded=st.session_state.get("_auto_expand", False)
+                                ):
+        
                                     for _, row in sorted_df.iterrows():
-                                
+        
                                         product_url = row["product_url"]
                                         label = format_product_label(row)
-                                
                                         scope = f"hist_{history_idx}"
-                                
-                                        # 🔥 여기부터 교체
+        
                                         is_selected = product_url in st.session_state.selected_products
                                         k = mk_widget_key("chk_tab1", product_url, scope) + ("_1" if is_selected else "_0")
                                         register_product_checkbox_key(product_url, k)
-                                
+        
                                         col_chk, col_lbl = st.columns([0.06, 0.94], vertical_alignment="center")
-                                
+        
                                         with col_chk:
-                                            checked = st.checkbox(
-                                                "",
-                                                key=k,
-                                                value=is_selected
-                                            )
-                                
+                                            checked = st.checkbox("", key=k, value=is_selected)
+        
                                         with col_lbl:
                                             st.markdown(
                                                 f"""
@@ -1512,14 +1505,19 @@ with col_tabs:
                                                 """,
                                                 unsafe_allow_html=True
                                             )
-                                
+        
                                         if checked:
                                             st.session_state.selected_products.add(product_url)
                                         else:
                                             st.session_state.selected_products.discard(product_url)
-                                
-                                    # 🔽 for 밖
+        
                                     st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
+        
+            # 🔥 모든 검색 결과 렌더링 후 자동 펼침 플래그 해제
+            if "_auto_expand" in st.session_state:
+                st.session_state["_auto_expand"] = False
+                                    
+
     # =========================
     # TAB 2: 필터 선택
     # =========================
@@ -3194,6 +3192,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
