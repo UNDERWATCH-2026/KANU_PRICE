@@ -2022,14 +2022,37 @@ if selected_products:   # 🔥 조건 반전
                 st.write(f"[{display_name}] lc_tmp 전체 (중복제거 전):", lc_tmp)        
                 
                 out_mask = lc_tmp["lifecycle_event"] == "OUT_OF_STOCK"
-                restock_dates_dedup = lc_tmp[lc_tmp["lifecycle_event"] == "RESTOCK"]["event_date"].sort_values().tolist()
+                
+                # raw_daily_prices 복원 포함한 전체 복원 날짜 수집
+                restock_from_lc = lc_tmp[lc_tmp["lifecycle_event"] == "RESTOCK"]["event_date"].sort_values().tolist()
+                
+                # raw_daily_prices에서도 복원 날짜 미리 가져오기
+                raw_restock_res = (
+                    supabase.table("raw_daily_prices")
+                    .select("date, normal_price")
+                    .eq("product_url", row["product_url"])
+                    .order("date", desc=False)
+                    .execute()
+                )
+                restock_from_raw_early = []
+                if raw_restock_res.data:
+                    raw_tmp = pd.DataFrame(raw_restock_res.data)
+                    raw_tmp["normal_price"] = raw_tmp["normal_price"].astype(float)
+                    raw_tmp["date"] = pd.to_datetime(raw_tmp["date"])
+                    raw_tmp["prev_price"] = raw_tmp["normal_price"].shift(1)
+                    restock_from_raw_early = raw_tmp[
+                        (raw_tmp["prev_price"] == 0) & (raw_tmp["normal_price"] > 0)
+                    ]["date"].tolist()
+                
+                # 모든 복원 날짜 합치기
+                all_restock_dates = sorted(set(restock_from_lc + restock_from_raw_early))
                 
                 kept_indices = []
                 prev_boundary = "INIT"
                 
                 for idx2, r in lc_tmp[out_mask].sort_values("event_date").iterrows():
                     out_date = r["event_date"]
-                    prior = [d for d in restock_dates_dedup if d <= out_date]
+                    prior = [d for d in all_restock_dates if d <= out_date]
                     boundary = max(prior) if prior else None
                     if boundary != prev_boundary:
                         kept_indices.append(idx2)
@@ -3237,6 +3260,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
