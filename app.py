@@ -2017,7 +2017,6 @@ if selected_products:   # 🔥 조건 반전
                     (lc_tmp["event_date"] <= filter_date_to)
                 ]
                 if not lc_tmp.empty:
-                    # 🔥 OUT_OF_STOCK 중복 제거 (구간별 첫 날짜만, 제품별)
                     out_mask = lc_tmp["lifecycle_event"] == "OUT_OF_STOCK"
                     restock_dates_dedup = lc_tmp[lc_tmp["lifecycle_event"] == "RESTOCK"]["event_date"].sort_values().tolist()
                     
@@ -2031,6 +2030,11 @@ if selected_products:   # 🔥 조건 반전
                         if boundary != prev_boundary:
                             kept_indices.append(idx2)
                             prev_boundary = boundary
+                    
+                    # 🔥 디버그
+                    st.write(f"kept_indices: {kept_indices}")
+                    st.write(f"restock_dates_dedup: {restock_dates_dedup}")
+                    st.write(f"OUT_OF_STOCK 총 {out_mask.sum()}개 → {len(kept_indices)}개로 줄었나?")
                     
                     # OUT_OF_STOCK 아닌 행 + 중복제거된 OUT_OF_STOCK
                     lc_final = pd.concat([
@@ -3169,6 +3173,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
