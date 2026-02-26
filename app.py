@@ -796,7 +796,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         restore_map = {k: sorted(v) for k, v in restore_map.items()}
 
         urls = list(out_map.keys())
-        df = df_work[df_work["product_url"].str.strip().str.lower().isin(urls)]
+        df = df_work[df_work["product_url"].str.strip().str.lower().isin(urls)].drop_duplicates(subset=["product_url"])
         if df.empty:
             return None
 
@@ -829,9 +829,11 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
 
         if not results:
             return None
+        # 제품 수 기준 (품절 횟수 아님)
+        unique_product_count = len(set(r["product_url"] for r in results))
         return {
             "type": "product_list",
-            "text": f"{period_label} 품절 제품 ({len(results)}개)",
+            "text": f"{period_label} 품절 제품 ({unique_product_count}개)",
             "products": [r["product_url"] for r in results],
             "product_details": product_details,
         }
