@@ -2277,7 +2277,7 @@ if selected_products:   # 🔥 조건 반전
 
 
                     # 🔥 OUT_OF_STOCK: 제품별 구간 첫 날짜만 남기기
-                    if event_type == "OUT_OF_STOCK":
+                    
                         restock_df = df_life_all[df_life_all["lifecycle_event"] == "RESTOCK"].copy()
                         df_filtered = df_filtered.sort_values(["product_name", "event_date"])
                         kept_rows = []
@@ -2312,14 +2312,15 @@ if selected_products:   # 🔥 조건 반전
                     # 품절/복원 아이콘은 가격선 위에만 표시되도록 보정
                     if event_type in ["OUT_OF_STOCK", "RESTOCK"]:
                         if event_type == "OUT_OF_STOCK":
-                            for idx2, r2 in df_filtered[df_filtered["unit_price"].isna()].iterrows():
+                            for idx2, r2 in df_filtered.iterrows():
+                                # 🔥 품절 당일 포함, 이전 날짜에서 가격 찾기
                                 product_prices = df_timeline[
                                     (df_timeline["product_name"] == r2["product_name"]) &
-                                    (df_timeline["event_date"] < r2["event_date"]) &
+                                    (df_timeline["event_date"] <= r2["event_date"]) &  # < → <=  로 변경
                                     (df_timeline["unit_price"].notna())
                                 ]
                                 if not product_prices.empty:
-                                    closest = product_prices.nsmallest(1, "event_date").iloc[-1]
+                                    closest = product_prices.sort_values("event_date").iloc[-1]
                                     df_filtered.at[idx2, "unit_price"] = closest["unit_price"]
                             df_filtered["price_detail"] = "-"
                             df_filtered["price_status"] = "품절"
@@ -3147,6 +3148,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
