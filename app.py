@@ -2603,48 +2603,57 @@ if selected_products:   # 🔥 조건 반전
                 "할인가",
                 "할인율"
             ]
-        
+
+
+            # 🔥 정상가/할인가를 숫자로 강제 + 소수점 1자리
+            excel_data["정상가"] = pd.to_numeric(excel_data["정상가"], errors="coerce").round(1)
+            excel_data["할인가"] = pd.to_numeric(excel_data["할인가"], errors="coerce").round(1)
+
+
             # ----------------------------
             # 7️⃣ 엑셀 생성
             # ----------------------------
             output = BytesIO()
         
-            with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                excel_data.to_excel(writer, sheet_name='가격 데이터', index=False)
-        
-                workbook = writer.book
-                worksheet = writer.sheets['가격 데이터']
+            from openpyxl.utils import get_column_letter
 
+            with pd.ExcelWriter(output, engine="openpyxl") as writer:
+                excel_data.to_excel(writer, sheet_name="가격 데이터", index=False)
+            
+                ws = writer.sheets["가격 데이터"]
+            
                 # 🔥 헤더 스타일
                 header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
                 header_font = Font(bold=True, color="FFFFFF")
-            
-                for cell in worksheet[1]:
+                for cell in ws[1]:
                     cell.fill = header_fill
                     cell.font = header_font
                     cell.alignment = Alignment(horizontal="center")
             
-                # 🔥 정상가 / 할인가 열 위치 동적 계산
-                col_index_normal = excel_data.columns.get_loc("정상가") + 1
-                col_index_discount = excel_data.columns.get_loc("할인가") + 1
-            
-                # 🔥 소수점 1자리 포맷 지정
-                for row in worksheet.iter_rows(
-                    min_row=2,
-                    min_col=col_index_normal,
-                    max_col=col_index_discount
-                ):
+                # 🔥 정상가/할인가 소수점 1자리 포맷 (동적 컬럼)
+                col_normal = excel_data.columns.get_loc("정상가") + 1
+                col_discount = excel_data.columns.get_loc("할인가") + 1
+                for row in ws.iter_rows(min_row=2, min_col=col_normal, max_col=col_discount):
                     for cell in row:
                         if cell.value is not None:
                             cell.number_format = '#,##0.0'
-
-      
+            
+                # 🔥 열 너비 자동 설정 (헤더 포함, 적당한 상/하한)
+                for i, col_name in enumerate(excel_data.columns, start=1):
+                    # 값 길이(문자열) 최대치 계산
+                    series_as_str = excel_data[col_name].astype(str).fillna("")
+                    max_len = max([len(str(col_name))] + series_as_str.map(len).tolist())
+            
+                    # 너무 넓어지지 않게 제한 (원하면 값 조정)
+                    width = min(max(max_len + 2, 10), 60)
+                    ws.column_dimensions[get_column_letter(i)].width = width
+                    
             output.seek(0)
         
             st.download_button(
                 label="📥 엑셀 다운로드",
                 data=output.getvalue(),
-                file_name=f"가격비교_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                file_name=f"Coffee Capsule Price Intelligence_{datetime.now().strftime('%Y%m%d')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
@@ -3226,6 +3235,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
