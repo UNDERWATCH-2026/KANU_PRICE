@@ -2017,6 +2017,9 @@ if selected_products:   # 🔥 조건 반전
                 display_name = f"{row['brand']} - {pname}"
                 lc_tmp["product_name"] = display_name
                 lc_tmp["event_date"] = pd.to_datetime(lc_tmp["date"])
+
+                # 🔥 디버그
+                st.write(f"[{display_name}] lc_tmp 전체 (중복제거 전):", lc_tmp)        
                 
                 out_mask = lc_tmp["lifecycle_event"] == "OUT_OF_STOCK"
                 restock_dates_dedup = lc_tmp[lc_tmp["lifecycle_event"] == "RESTOCK"]["event_date"].sort_values().tolist()
@@ -3177,6 +3180,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
