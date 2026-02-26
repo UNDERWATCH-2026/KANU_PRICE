@@ -2299,6 +2299,9 @@ if selected_products:   # 🔥 조건 반전
                             continue
                         df_filtered = pd.DataFrame(kept_rows)[["product_name", "event_date", "lifecycle_event"]]
 
+                        # 🔥 디버그 - 여기서 확인
+                        st.write("중복 제거 후 df_filtered:", df_filtered)
+
                     # 가격선 위치 맞추기 위해 join
                     df_filtered = df_filtered.merge(
                         df_timeline[["product_name", "event_date", "unit_price", "price_detail"]],
@@ -3144,6 +3147,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
