@@ -1982,24 +1982,7 @@ if selected_products:   # 🔥 조건 반전
                         mask = tmp["event_date"] >= out_date
                         tmp.loc[mask, "unit_price"] = None
                         
-                # 품절/복원 구간 계산
-                out_dates = df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]["date"].tolist()
-                restore_dates = df_life[df_life["lifecycle_event"] == "RESTOCK"]["date"].tolist()
-            
-                for out_date in out_dates:
-                    # 해당 품절 이후 첫 복원 날짜 찾기
-                    restore_after = [d for d in restore_dates if d > out_date]
-                    if restore_after:
-                        restore_date = min(restore_after)
-            
-                        # 🔥 품절(포함) ~ 복원(제외) 사이 가격 제거
-                        mask = (tmp["event_date"] >= out_date) & (tmp["event_date"] < restore_date)
-                        tmp.loc[mask, "unit_price"] = None
-                    else:
-                        # 복원 이벤트가 없으면 품절 이후 모든 데이터 제거
-                        mask = tmp["event_date"] >= out_date
-                        tmp.loc[mask, "unit_price"] = None
-            
+                         
             tmp["product_url"] = row["product_url"]
     
             timeline_rows.append(
@@ -2362,14 +2345,18 @@ if selected_products:   # 🔥 조건 반전
                             df_filtered["price_status"] = "품절"
                 
                         elif event_type == "RESTOCK":
-                            for idx2, r2 in df_filtered[df_filtered["unit_price"].isna()].iterrows():
+                            for idx2, r2 in df_filtered.iterrows():
                                 product_prices = df_timeline[
                                     (df_timeline["product_name"] == r2["product_name"]) &
-                                    (df_timeline["event_date"] >= r2["event_date"]) &
                                     (df_timeline["unit_price"].notna())
                                 ]
+                        
                                 if not product_prices.empty:
-                                    closest = product_prices.nsmallest(1, "event_date").iloc[0]
+                                    # 🔥 가장 가까운 이후 가격
+                                    pp = product_prices.copy()
+                                    pp["date_diff"] = (pp["event_date"] - r2["event_date"]).abs()
+                                    closest = pp.sort_values("date_diff").iloc[0]
+                        
                                     df_filtered.at[idx2, "unit_price"] = closest["unit_price"]
                                     df_filtered.at[idx2, "price_detail"] = closest["price_detail"]
                     else:
@@ -2386,7 +2373,6 @@ if selected_products:   # 🔥 조건 반전
                                 df_filtered.at[idx2, "unit_price"] = closest["unit_price"]
                                 df_filtered.at[idx2, "price_detail"] = closest["price_detail"]
                 
-                    df_filtered = df_filtered.dropna(subset=["unit_price"])
                     if df_filtered.empty:
                         continue
                 
@@ -3188,6 +3174,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
