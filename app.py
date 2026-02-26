@@ -2935,6 +2935,13 @@ if selected_products:   # 🔥 조건 반전
                 ]
                 restore_dates_in_display += discount_end_dates
 
+                # 🔥 할인 종료 다음 날도 추가
+                discount_end_dates_plus1 = [
+                    str((pd.Timestamp(d) + pd.Timedelta(days=1)).date())
+                    for d in discount_end_dates
+                ]
+                restore_dates_in_display += discount_end_dates_plus1
+
                 for _, row in df_changes.iterrows():
         
                     prev_price = float(row["prev_price"]) if row["prev_price"] else 0
@@ -2978,6 +2985,8 @@ if selected_products:   # 🔥 조건 반전
                             f"{rate_text}"
                         )
                     })
+
+            
             # =========================
             # 정상가 변동 이벤트 추가
             # =========================
@@ -3052,6 +3061,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
