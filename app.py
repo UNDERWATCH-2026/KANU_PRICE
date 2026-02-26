@@ -526,8 +526,9 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
             return "해당 기간 내 품절 이력이 없습니다."
         out_map = {}
         for r in res.data:
-            out_map.setdefault(r["product_url"], []).append(r["date"])
-        df = df_work[df_work["product_url"].isin(out_map.keys())]
+            key = str(r["product_url"]).strip().lower()
+            out_map.setdefault(key, []).append(r["date"])
+        df = df_work[df_work["product_url"].str.strip().str.lower().isin(out_map.keys())]
         if df.empty:
             return "해당 제품의 품절 이력이 없습니다."
         results = []
@@ -566,8 +567,9 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
             return "해당 기간 내 복원 이력이 없습니다."
         restore_map = {}
         for r in res.data:
-            restore_map.setdefault(r["product_url"], []).append(r["date"])
-        df = df_work[df_work["product_url"].isin(restore_map.keys())]
+            key = str(r["product_url"]).strip().lower()
+            restore_map.setdefault(key, []).append(r["date"])
+        df = df_work[df_work["product_url"].str.strip().str.lower().isin(restore_map.keys())]
         if df.empty:
             return "해당 제품의 복원 이력이 없습니다."
         results = []
@@ -606,8 +608,9 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
             return "해당 기간 내 출시 이력이 없습니다."
         new_map = {}
         for r in res.data:
-            new_map.setdefault(r["product_url"], []).append(r["date"])
-        df = df_work[df_work["product_url"].isin(new_map.keys())]
+            key = str(r["product_url"]).strip().lower()
+            new_map.setdefault(key, []).append(r["date"])
+        df = df_work[df_work["product_url"].str.strip().str.lower().isin(new_map.keys())]
         if df.empty:
             return "해당 제품의 출시 이력이 없습니다."
         results = []
@@ -672,7 +675,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         results = []
         product_details = {}
         for _, row in df.iterrows():
-            url = str(row["product_url"])
+            url = str(row["product_url"]).strip().lower()
             out_dates = sorted(out_map.get(url, []))
             restore_dates = sorted(restore_map.get(url, []))
             all_events = (
@@ -768,23 +771,25 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
             res_restore = res_restore.lte("date", date_to.strftime("%Y-%m-%d"))
         res_restore = res_restore.execute()
 
-        # 리스트 맵으로 수집 (복수 날짜 지원)
+        # 리스트 맵으로 수집 (복수 날짜 지원) - URL 정규화
         out_map = {}
         for r in res_out.data:
-            out_map.setdefault(r["product_url"], []).append(r["date"])
+            key = str(r["product_url"]).strip().lower()
+            out_map.setdefault(key, []).append(r["date"])
         restore_map = {}
         for r in (res_restore.data or []):
-            restore_map.setdefault(r["product_url"], []).append(r["date"])
+            key = str(r["product_url"]).strip().lower()
+            restore_map.setdefault(key, []).append(r["date"])
 
         urls = list(out_map.keys())
-        df = df_work[df_work["product_url"].isin(urls)]
+        df = df_work[df_work["product_url"].str.strip().str.lower().isin(urls)]
         if df.empty:
             return None
 
         results = []
         product_details = {}
         for _, row in df.iterrows():
-            url = str(row["product_url"])
+            url = str(row["product_url"]).strip().lower()
             out_dates = sorted(out_map.get(url, []))
             restore_dates = sorted(restore_map.get(url, []))
 
@@ -850,20 +855,22 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
 
         restore_map = {}
         for r in res_restore.data:
-            restore_map.setdefault(r["product_url"], []).append(r["date"])
+            key = str(r["product_url"]).strip().lower()
+            restore_map.setdefault(key, []).append(r["date"])
         out_map = {}
         for r in (res_out.data or []):
-            out_map.setdefault(r["product_url"], []).append(r["date"])
+            key = str(r["product_url"]).strip().lower()
+            out_map.setdefault(key, []).append(r["date"])
 
         urls = list(restore_map.keys())
-        df = df_work[df_work["product_url"].isin(urls)]
+        df = df_work[df_work["product_url"].str.strip().str.lower().isin(urls)]
         if df.empty:
             return None
 
         results = []
         product_details = {}
         for _, row in df.iterrows():
-            url = str(row["product_url"])
+            url = str(row["product_url"]).strip().lower()
             out_dates = sorted(out_map.get(url, []))
             restore_dates = sorted(restore_map.get(url, []))
             all_events = (
@@ -921,23 +928,25 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
             res_restore = res_restore.lte("date", date_to.strftime("%Y-%m-%d"))
         res_restore = res_restore.execute()
 
-        # 리스트 맵 (복수 날짜 지원)
+        # 리스트 맵 (복수 날짜 지원) - URL 정규화
         out_map = {}
         for r in (res_out.data or []):
-            out_map.setdefault(r["product_url"], []).append(r["date"])
+            key = str(r["product_url"]).strip().lower()
+            out_map.setdefault(key, []).append(r["date"])
         restore_map = {}
         for r in (res_restore.data or []):
-            restore_map.setdefault(r["product_url"], []).append(r["date"])
+            key = str(r["product_url"]).strip().lower()
+            restore_map.setdefault(key, []).append(r["date"])
 
         all_urls = set(list(out_map.keys()) + list(restore_map.keys()))
-        df = df_work[df_work["product_url"].isin(all_urls)]
+        df = df_work[df_work["product_url"].str.strip().str.lower().isin(all_urls)]
         if df.empty:
             return "해당 기간 품절 또는 복원 제품이 없습니다."
 
         results = []
         product_details = {}
         for _, row in df.iterrows():
-            url = str(row["product_url"])
+            url = str(row["product_url"]).strip().lower()
             out_dates = sorted(out_map.get(url, []))
             restore_dates = sorted(restore_map.get(url, []))
             # 시간순 인터리브
@@ -1790,6 +1799,7 @@ with col_tabs:
                                         return
                                     for _, row in sorted_df.iterrows():
                                         product_url = row["product_url"]
+                                        product_url_key = str(product_url).strip().lower()  # 🔥 product_details 키 조회용
                                         label = format_product_label(row)
                                         scope = f"tab3_{idx}_{scope_prefix}"
                                         is_selected = product_url in st.session_state.selected_products
@@ -1801,10 +1811,11 @@ with col_tabs:
                                         with col_lbl:
                                             # 🔥 날짜 정보 추가
                                             detail_html = ""
-                                            if product_details and product_url in product_details:
+                                            if product_details and product_url_key in product_details:
+                                                detail_text = product_details[product_url_key].replace("  →  ", "<br>")
                                                 detail_html = (
-                                                    f"<div style='font-size:12px; color:#6b7280; margin-top:2px;'>"
-                                                    f"{product_details[product_url]}"
+                                                    f"<div style='font-size:12px; color:#6b7280; margin-top:4px; line-height:1.8;'>"
+                                                    f"{detail_text}"
                                                     f"</div>"
                                                 )
                                             st.markdown(
