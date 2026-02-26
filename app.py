@@ -2633,22 +2633,7 @@ if selected_products:   # 🔥 조건 반전
                     content=f"발견일: {latest_new['date'].date()}"
                 ))
         
-        # ❌ 품절 (lifecycle)
-        if not df_life.empty:
-            out_events = df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]
-            if not out_events.empty:
-                out_dates_str = "<br>".join([
-                    f"날짜: {r['date'].date()}"
-                    for _, r in out_events.sort_values("date", ascending=False).iterrows()
-                ])
-                cards.append(render_card(
-                    bg="#e8f0f8",
-                    border="#2c5aa0",
-                    title="❌ 품절",
-                    content=out_dates_str
-                ))
-
-      
+     
         # 🔄 복원 (lifecycle)
         if not df_life.empty:
             restore_events = df_life[df_life["lifecycle_event"] == "RESTOCK"]
@@ -2687,8 +2672,16 @@ if selected_products:   # 🔥 조건 반전
                     str(d.date()) for d in df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]["date"].tolist()
                 ]
             missing_out = out_rows[~out_rows["date"].dt.strftime("%Y-%m-%d").isin(lifecycle_out_dates)]
-            if not missing_out.empty and not any("품절" in c for c in cards):
-                out_dates_str = "<br>".join([f"날짜: {r['date'].date()}" for _, r in missing_out.iterrows()])
+            
+            # 🔥 lifecycle 품절 날짜 + missing 날짜 합쳐서 하나의 카드로
+            all_out_dates = lifecycle_out_dates + [
+                str(r["date"].date()) for _, r in missing_out.iterrows()
+            ]
+            # 중복 제거 후 최신순 정렬
+            all_out_dates = sorted(list(set(all_out_dates)), reverse=True)
+            
+            if all_out_dates and not any("품절" in c for c in cards):
+                out_dates_str = "<br>".join([f"날짜: {d}" for d in all_out_dates])
                 cards.append(render_card(
                     bg="#e8f0f8",
                     border="#2c5aa0",
@@ -3109,6 +3102,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
