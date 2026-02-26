@@ -2225,7 +2225,10 @@ if selected_products:   # 🔥 조건 반전
             
                 tmp.rename(columns={"unit_normal_price": "normal_price"}, inplace=True)
                 tmp.drop(columns=["date"], inplace=True, errors="ignore")
-                
+
+                # 🔥🔥🔥 여기 추가
+                tmp = tmp.reset_index(drop=True)
+                                
             # 🔥 is_discount 컬럼 생성 (반드시 필요)
             tmp["is_discount"] = tmp["event_type"] == "DISCOUNT"
             
@@ -3495,6 +3498,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
