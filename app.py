@@ -2271,26 +2271,26 @@ if selected_products:   # 🔥 조건 반전
                     df_filtered = df_life_all[df_life_all["lifecycle_event"] == event_type].copy()
                     if df_filtered.empty:
                         continue
-                
+
                     # 🔥 OUT_OF_STOCK: 구간별 첫 날짜만 남기기
                     if event_type == "OUT_OF_STOCK":
                         restock_dates = df_life_all[
                             df_life_all["lifecycle_event"] == "RESTOCK"
-                        ]["date"].sort_values().tolist()
-                
-                        df_filtered = df_filtered.sort_values("date")
+                        ]["event_date"].sort_values().tolist()  # "date" → "event_date"
+                    
+                        df_filtered = df_filtered.sort_values("event_date")  # "date" → "event_date"
                         kept_rows = []
                         last_restock = pd.Timestamp.min
-                
+                    
                         for _, r in df_filtered.iterrows():
-                            out_date = r["date"]
+                            out_date = r["event_date"]  # "date" → "event_date"
                             prior_restocks = [d for d in restock_dates if d <= out_date]
                             current_boundary = max(prior_restocks) if prior_restocks else pd.Timestamp.min
-                
+                    
                             if current_boundary != last_restock:
                                 kept_rows.append(r)
                                 last_restock = current_boundary
-                
+                    
                         if not kept_rows:
                             continue
                         df_filtered = pd.DataFrame(kept_rows)
@@ -3140,6 +3140,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
