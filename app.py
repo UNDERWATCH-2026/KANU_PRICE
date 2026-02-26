@@ -1897,7 +1897,9 @@ if selected_products:   # 🔥 조건 반전
             tmp["unit_price"] = tmp["unit_price"].ffill()
             tmp["product_name"] = tmp["product_name"].ffill()
             
-            
+            # 3️⃣ 🔥 다시 0원 제거
+            tmp.loc[tmp["unit_price"] == 0, "unit_price"] = None       
+
             # 🔥 2️⃣ lifecycle 기반으로 품절 처리
             df_life = load_lifecycle_events(row["product_url"])
             
@@ -3192,6 +3194,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
