@@ -2554,13 +2554,25 @@ if selected_products:   # 🔥 조건 반전
                 (excel_data["normal_price"] > 0)
             )
         
+            # 🔥 숫자형 강제 변환
+            excel_data["normal_price"] = pd.to_numeric(excel_data["normal_price"], errors="coerce")
+            excel_data["discount_price"] = pd.to_numeric(excel_data["discount_price"], errors="coerce")
+            
+            mask_valid = (
+                mask_discount &
+                excel_data["normal_price"].notna() &
+                (excel_data["normal_price"] > 0)
+            )
+            
+            discount_rate_series = (
+                (excel_data.loc[mask_valid, "normal_price"]
+                 - excel_data.loc[mask_valid, "discount_price"])
+                / excel_data.loc[mask_valid, "normal_price"]
+            ) * 100
+            
             excel_data.loc[mask_valid, "discount_rate"] = (
-                (
-                    (excel_data.loc[mask_valid, "normal_price"]
-                     - excel_data.loc[mask_valid, "discount_price"])
-                    / excel_data.loc[mask_valid, "normal_price"]
-                ) * 100
-            ).round(1).astype(str) + "%"
+                discount_rate_series.round(1).astype(str) + "%"
+            )
         
             # ----------------------------
             # 5️⃣ 정상가 상태 처리
@@ -2624,7 +2636,7 @@ if selected_products:   # 🔥 조건 반전
             )
     
     else:
-        st.info("비교 가능한 이벤트 데이터가 없습니다.")
+        st.info("다운로드할 데이터가 없습니다.")
     
     
     
@@ -3200,6 +3212,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
