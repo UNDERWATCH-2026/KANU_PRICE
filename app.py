@@ -660,30 +660,28 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
             return "해당 제품의 품절 또는 복원 이력이 없습니다."
 
         results = []
-        product_details = {}  # 🔥 추가
+        product_details = {}
         for _, row in df.iterrows():
-            url = row["product_url"]
+            url = str(row["product_url"])
             out_dates = sorted(out_map.get(url, []))
             restore_dates = sorted(restore_map.get(url, []))
-            text_lines = []
-            detail_parts = []
-            if out_dates:
-                text_lines.append(f"❌ 품절 날짜: {', '.join(out_dates)}")
-                detail_parts.append(f"❌ 품절 날짜: {', '.join(out_dates)}")
-            if restore_dates:
-                text_lines.append(f"🔄 복원 날짜: {', '.join(restore_dates)}")
-                detail_parts.append(f"🔄 복원 날짜: {', '.join(restore_dates)}")
+            all_events = (
+                [(d, "❌ 품절") for d in out_dates] +
+                [(d, "🔄 복원") for d in restore_dates]
+            )
+            all_events.sort(key=lambda x: x[0])
+            timeline_str = "  →  ".join([f"{label} {d}" for d, label in all_events])
             results.append({
-                "text": f"• {row['brand']} - {row['product_name']}\n  " + "\n  ".join(text_lines),
-                "product_url": str(url)
+                "text": f"• {row['brand']} - {row['product_name']}\n  {timeline_str}",
+                "product_url": url
             })
-            product_details[str(url)] = " | ".join(detail_parts)  # 🔥 추가
+            product_details[url] = timeline_str
 
         return {
             "type": "product_list",
             "text": f"품절 및 복원 날짜 정보 ({len(results)}개)",
             "products": [r["product_url"] for r in results],
-            "product_details": product_details,  # 🔥 추가
+            "product_details": product_details,
         }
 
     if intent == "NEW":
@@ -735,62 +733,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         }
 
     if intent == "OUT":
-        res = (
-            supabase.table("product_lifecycle_events")
-            .select("product_url, date")
-            .eq("lifecycle_event", "OUT_OF_STOCK")
-        )
-        if date_from:
-            res = res.gte("date", date_from.strftime("%Y-%m-%d"))
-        if date_to:
-            res = res.lte("date", date_to.strftime("%Y-%m-%d"))
-        res = res.execute()
-        if not res.data:
-            return None
-        out_of_stock_data = {r["product_url"]: r["date"] for r in res.data}
-        urls = list(out_of_stock_data.keys())
-        df = df_work[df_work["product_url"].isin(urls)]
-        if df.empty:
-            return None
-        results = []
-        product_details = {}  # 🔥 추가
-        for _, row in df.iterrows():
-            out_date = out_of_stock_data.get(row["product_url"])
-            categories = []
-            if pd.notna(row.get("category1")) and row["category1"]:
-                categories.append(row["category1"])
-            if pd.notna(row.get("category2")) and row["category2"]:
-                categories.append(row["category2"])
-            category_str = f" [{' > '.join(categories)}]" if categories else ""
-            product_name = row['product_name']
-            url = str(row["product_url"])
-            results.append({
-                "text": f"• {row['brand']} - {product_name}{category_str}\n  📅 품절일: {out_date}",
-                "product_url": url
-            })
-            product_details[url] = f"📅 품절일: {out_date}"  # 🔥 추가
-        if not results:
-            return None
-        return {
-            "type": "product_list",
-            "text": f"{period_label} 품절 제품 ({len(results)}개)",
-            "products": [
-                str(r["product_url"]).strip().lower()
-                for r in results
-                if r.get("product_url")
-            ],
-            "product_details": product_details,  # 🔥 추가
-        }
-
-    if intent == "RESTORE":
-        res = (
-            supabase.table("product_lifecycle_events")
-            .select("product_url, date")
-            .eq("lifecycle_event", "RESTOCK")
-        )
-
-    if intent == "OUT_AND_RESTORE":
-        results = []
+        # 품절 이력 전체 조회 (복원도 함께)
         res_out = (
             supabase.table("product_lifecycle_events")
             .select("product_url, date")
@@ -801,7 +744,8 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         if date_to:
             res_out = res_out.lte("date", date_to.strftime("%Y-%m-%d"))
         res_out = res_out.execute()
-        out_data = {r["product_url"]: r["date"] for r in (res_out.data or [])}
+        if not res_out.data:
+            return None
 
         res_restore = (
             supabase.table("product_lifecycle_events")
@@ -813,81 +757,35 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         if date_to:
             res_restore = res_restore.lte("date", date_to.strftime("%Y-%m-%d"))
         res_restore = res_restore.execute()
-        restore_data = {r["product_url"]: r["date"] for r in (res_restore.data or [])}
 
-        all_urls = set(list(out_data.keys()) + list(restore_data.keys()))
-        df = df_work[df_work["product_url"].isin(all_urls)]
-        if df.empty:
-            return "해당 기간 품절 또는 복원 제품이 없습니다."
+        # 리스트 맵으로 수집 (복수 날짜 지원)
+        out_map = {}
+        for r in res_out.data:
+            out_map.setdefault(r["product_url"], []).append(r["date"])
+        restore_map = {}
+        for r in (res_restore.data or []):
+            restore_map.setdefault(r["product_url"], []).append(r["date"])
 
-        out_results = []
-        product_details = {}  # 🔥 추가
-        for _, row in df[df["product_url"].isin(out_data)].iterrows():
-            categories = []
-            if pd.notna(row.get("category1")) and row["category1"]:
-                categories.append(row["category1"])
-            if pd.notna(row.get("category2")) and row["category2"]:
-                categories.append(row["category2"])
-            category_str = f" [{' > '.join(categories)}]" if categories else ""
-            url = str(row["product_url"])
-            out_results.append({
-                "text": f"• {row['brand']} - {row['product_name']}{category_str}\n  📅 품절일: {out_data[row['product_url']]}",
-                "product_url": url
-            })
-            product_details[url] = f"📅 품절일: {out_data[row['product_url']]}"  # 🔥 추가
-
-        restore_results = []
-        for _, row in df[df["product_url"].isin(restore_data)].iterrows():
-            categories = []
-            if pd.notna(row.get("category1")) and row["category1"]:
-                categories.append(row["category1"])
-            if pd.notna(row.get("category2")) and row["category2"]:
-                categories.append(row["category2"])
-            category_str = f" [{' > '.join(categories)}]" if categories else ""
-            url = str(row["product_url"])
-            restore_results.append({
-                "text": f"• {row['brand']} - {row['product_name']}{category_str}\n  🔄 복원일: {restore_data[row['product_url']]}",
-                "product_url": url
-            })
-            product_details[url] = f"🔄 복원일: {restore_data[row['product_url']]}"  # 🔥 추가
-
-        all_results = out_results + restore_results
-        text = ""
-        if out_results:
-            text += "❌ 품절 제품:\n\n" + "\n\n".join([r["text"] for r in out_results])
-        if restore_results:
-            if text:
-                text += "\n\n---\n\n"
-            text += "🔄 복원 제품:\n\n" + "\n\n".join([r["text"] for r in restore_results])
-
-        return {
-            "type": "product_list",
-            "text": text,
-            "products": [
-                str(r["product_url"]).strip().lower()
-                for r in all_results
-                if r.get("product_url")
-            ],
-            "product_details": product_details,  # 🔥 추가
-        }
-
-        # 🔥 조회 기간 필터링
-        if date_from:
-            res = res.gte("date", date_from.strftime("%Y-%m-%d"))
-        if date_to:
-            res = res.lte("date", date_to.strftime("%Y-%m-%d"))
-        res = res.execute()
-        if not res.data:
-            return None
-        restock_data = {r["product_url"]: r["date"] for r in res.data}
-        urls = list(restock_data.keys())
+        urls = list(out_map.keys())
         df = df_work[df_work["product_url"].isin(urls)]
         if df.empty:
             return None
+
         results = []
-        product_details = {}  # 🔥 추가
+        product_details = {}
         for _, row in df.iterrows():
-            restock_date = restock_data.get(row["product_url"])
+            url = str(row["product_url"])
+            out_dates = sorted(out_map.get(url, []))
+            restore_dates = sorted(restore_map.get(url, []))
+
+            # 품절-복원 시간순 인터리브
+            all_events = (
+                [(d, "❌ 품절") for d in out_dates] +
+                [(d, "🔄 복원") for d in restore_dates]
+            )
+            all_events.sort(key=lambda x: x[0])
+            timeline_str = "  →  ".join([f"{label} {d}" for d, label in all_events])
+
             categories = []
             if pd.notna(row.get("category1")) and row["category1"]:
                 categories.append(row["category1"])
@@ -895,12 +793,88 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
                 categories.append(row["category2"])
             category_str = f" [{' > '.join(categories)}]" if categories else ""
             product_name = row['product_name']
-            url = str(row["product_url"])
+
             results.append({
-                "text": f"• {row['brand']} - {product_name}{category_str}\n  🔄 복원일: {restock_date}",
+                "text": f"• {row['brand']} - {product_name}{category_str}\n  {timeline_str}",
                 "product_url": url
             })
-            product_details[url] = f"🔄 복원일: {restock_date}"  # 🔥 추가
+            product_details[url] = timeline_str
+
+        if not results:
+            return None
+        return {
+            "type": "product_list",
+            "text": f"{period_label} 품절 제품 ({len(results)}개)",
+            "products": [
+                str(r["product_url"]).strip().lower()
+                for r in results
+                if r.get("product_url")
+            ],
+            "product_details": product_details,
+        }
+
+    if intent == "RESTORE":
+        res_restore = (
+            supabase.table("product_lifecycle_events")
+            .select("product_url, date")
+            .eq("lifecycle_event", "RESTOCK")
+        )
+        if date_from:
+            res_restore = res_restore.gte("date", date_from.strftime("%Y-%m-%d"))
+        if date_to:
+            res_restore = res_restore.lte("date", date_to.strftime("%Y-%m-%d"))
+        res_restore = res_restore.execute()
+        if not res_restore.data:
+            return None
+
+        res_out = (
+            supabase.table("product_lifecycle_events")
+            .select("product_url, date")
+            .eq("lifecycle_event", "OUT_OF_STOCK")
+        )
+        if date_from:
+            res_out = res_out.gte("date", date_from.strftime("%Y-%m-%d"))
+        if date_to:
+            res_out = res_out.lte("date", date_to.strftime("%Y-%m-%d"))
+        res_out = res_out.execute()
+
+        restore_map = {}
+        for r in res_restore.data:
+            restore_map.setdefault(r["product_url"], []).append(r["date"])
+        out_map = {}
+        for r in (res_out.data or []):
+            out_map.setdefault(r["product_url"], []).append(r["date"])
+
+        urls = list(restore_map.keys())
+        df = df_work[df_work["product_url"].isin(urls)]
+        if df.empty:
+            return None
+
+        results = []
+        product_details = {}
+        for _, row in df.iterrows():
+            url = str(row["product_url"])
+            out_dates = sorted(out_map.get(url, []))
+            restore_dates = sorted(restore_map.get(url, []))
+            all_events = (
+                [(d, "❌ 품절") for d in out_dates] +
+                [(d, "🔄 복원") for d in restore_dates]
+            )
+            all_events.sort(key=lambda x: x[0])
+            timeline_str = "  →  ".join([f"{label} {d}" for d, label in all_events])
+            categories = []
+            if pd.notna(row.get("category1")) and row["category1"]:
+                categories.append(row["category1"])
+            if pd.notna(row.get("category2")) and row["category2"]:
+                categories.append(row["category2"])
+            category_str = f" [{' > '.join(categories)}]" if categories else ""
+            product_name = row['product_name']
+            results.append({
+                "text": f"• {row['brand']} - {product_name}{category_str}\n  {timeline_str}",
+                "product_url": url
+            })
+            product_details[url] = timeline_str
+
         if not results:
             return None
         return {
@@ -911,7 +885,79 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
                 for r in results
                 if r.get("product_url")
             ],
-            "product_details": product_details,  # 🔥 추가
+            "product_details": product_details,
+        }
+
+    if intent == "OUT_AND_RESTORE":
+        res_out = (
+            supabase.table("product_lifecycle_events")
+            .select("product_url, date")
+            .eq("lifecycle_event", "OUT_OF_STOCK")
+        )
+        if date_from:
+            res_out = res_out.gte("date", date_from.strftime("%Y-%m-%d"))
+        if date_to:
+            res_out = res_out.lte("date", date_to.strftime("%Y-%m-%d"))
+        res_out = res_out.execute()
+
+        res_restore = (
+            supabase.table("product_lifecycle_events")
+            .select("product_url, date")
+            .eq("lifecycle_event", "RESTOCK")
+        )
+        if date_from:
+            res_restore = res_restore.gte("date", date_from.strftime("%Y-%m-%d"))
+        if date_to:
+            res_restore = res_restore.lte("date", date_to.strftime("%Y-%m-%d"))
+        res_restore = res_restore.execute()
+
+        # 리스트 맵 (복수 날짜 지원)
+        out_map = {}
+        for r in (res_out.data or []):
+            out_map.setdefault(r["product_url"], []).append(r["date"])
+        restore_map = {}
+        for r in (res_restore.data or []):
+            restore_map.setdefault(r["product_url"], []).append(r["date"])
+
+        all_urls = set(list(out_map.keys()) + list(restore_map.keys()))
+        df = df_work[df_work["product_url"].isin(all_urls)]
+        if df.empty:
+            return "해당 기간 품절 또는 복원 제품이 없습니다."
+
+        results = []
+        product_details = {}
+        for _, row in df.iterrows():
+            url = str(row["product_url"])
+            out_dates = sorted(out_map.get(url, []))
+            restore_dates = sorted(restore_map.get(url, []))
+            # 시간순 인터리브
+            all_events = (
+                [(d, "❌ 품절") for d in out_dates] +
+                [(d, "🔄 복원") for d in restore_dates]
+            )
+            all_events.sort(key=lambda x: x[0])
+            timeline_str = "  →  ".join([f"{label} {d}" for d, label in all_events])
+            categories = []
+            if pd.notna(row.get("category1")) and row["category1"]:
+                categories.append(row["category1"])
+            if pd.notna(row.get("category2")) and row["category2"]:
+                categories.append(row["category2"])
+            category_str = f" [{' > '.join(categories)}]" if categories else ""
+            results.append({
+                "text": f"• {row['brand']} - {row['product_name']}{category_str}\n  {timeline_str}",
+                "product_url": url
+            })
+            product_details[url] = timeline_str
+
+        return {
+            "type": "product_list",
+            "text": f"{period_label} 품절/복원 제품 ({len(results)}개)",
+            "products": [
+                str(r["product_url"]).strip().lower()
+                for r in results
+                if r.get("product_url")
+            ],
+            "product_details": product_details,
         }
 
     if intent == "NEW_AND_OUT":
