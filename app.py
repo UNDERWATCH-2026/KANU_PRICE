@@ -1488,7 +1488,7 @@ with col_tabs:
                                         k = mk_widget_key("chk_tab1", product_url, scope) + ("_1" if is_selected else "_0")
                                         register_product_checkbox_key(product_url, k)
                                 
-                                        col_chk, col_lbl = st.columns([0.1, 0.9], vertical_alignment="center")
+                                        col_chk, col_lbl = st.columns([0.06, 0.94], vertical_alignment="center")
                                 
                                         with col_chk:
                                             checked = st.checkbox(
@@ -2018,9 +2018,6 @@ if selected_products:   # 🔥 조건 반전
                 lc_tmp["product_name"] = display_name
                 lc_tmp["event_date"] = pd.to_datetime(lc_tmp["date"])
 
-                # 🔥 디버그
-                st.write(f"[{display_name}] lc_tmp 전체 (중복제거 전):", lc_tmp)        
-                
                 out_mask = lc_tmp["lifecycle_event"] == "OUT_OF_STOCK"
                 
                 # raw_daily_prices 복원 포함한 전체 복원 날짜 수집
@@ -2369,30 +2366,27 @@ if selected_products:   # 🔥 조건 반전
             # =========================
             if lifecycle_rows:
                 df_life_all = pd.concat(lifecycle_rows, ignore_index=True)
-                
-                # 🔥 디버그
-                st.write("OUT_OF_STOCK 제거 후:", df_life_all[df_life_all["lifecycle_event"]=="OUT_OF_STOCK"])
-                    
+
                 icon_config = {
                     "NEW_PRODUCT": {"color": "green", "label": "NEW"},
                     "OUT_OF_STOCK": {"color": "red", "label": "품절"},
                     "RESTOCK": {"color": "orange", "label": "복원"},
                 }
         
+
                 for event_type, cfg in icon_config.items():
                     df_filtered = df_life_all[df_life_all["lifecycle_event"] == event_type].copy()
                     if df_filtered.empty:
                         continue
-
-
+                
                     # 🔥 OUT_OF_STOCK: 제품별 구간 첫 날짜만 남기기
-                    
+                    if event_type == "OUT_OF_STOCK":
                         restock_df = df_life_all[df_life_all["lifecycle_event"] == "RESTOCK"].copy()
                         df_filtered = df_filtered.sort_values(["product_name", "event_date"])
                         kept_rows = []
                 
-                        for pname, grp in df_filtered.groupby("product_name"):
-                            restock_dates = restock_df[restock_df["product_name"] == pname]["event_date"].sort_values().tolist()
+                        for pname_lc, grp in df_filtered.groupby("product_name"):
+                            restock_dates = restock_df[restock_df["product_name"] == pname_lc]["event_date"].sort_values().tolist()
                             last_restock = pd.Timestamp.min
                 
                             for _, r in grp.iterrows():
@@ -2407,10 +2401,7 @@ if selected_products:   # 🔥 조건 반전
                         if not kept_rows:
                             continue
                         df_filtered = pd.DataFrame(kept_rows)[["product_name", "event_date", "lifecycle_event"]]
-
-                        # 🔥 디버그 - 여기서 확인
-                        st.write("중복 제거 후 df_filtered:", df_filtered)
-
+                
                     # 가격선 위치 맞추기 위해 join
                     df_filtered = df_filtered.merge(
                         df_timeline[["product_name", "event_date", "unit_price", "price_detail"]],
@@ -2422,10 +2413,9 @@ if selected_products:   # 🔥 조건 반전
                     if event_type in ["OUT_OF_STOCK", "RESTOCK"]:
                         if event_type == "OUT_OF_STOCK":
                             for idx2, r2 in df_filtered.iterrows():
-                                # 🔥 품절 당일 포함, 이전 날짜에서 가격 찾기
                                 product_prices = df_timeline[
                                     (df_timeline["product_name"] == r2["product_name"]) &
-                                    (df_timeline["event_date"] <= r2["event_date"]) &  # < → <=  로 변경
+                                    (df_timeline["event_date"] <= r2["event_date"]) &
                                     (df_timeline["unit_price"].notna())
                                 ]
                                 if not product_prices.empty:
@@ -2462,14 +2452,14 @@ if selected_products:   # 🔥 조건 반전
                     df_filtered = df_filtered.dropna(subset=["unit_price"])
                     if df_filtered.empty:
                         continue
-                        
+                
                     event_label_map = {
                         "NEW_PRODUCT": "신제품",
                         "OUT_OF_STOCK": "품절",
                         "RESTOCK": "복원",
                     }
                     df_filtered["event_label"] = df_filtered["lifecycle_event"].map(event_label_map).fillna(df_filtered["lifecycle_event"])
-        
+                
                     point_layer = (
                         alt.Chart(df_filtered)
                         .mark_point(size=150, shape="triangle-up", color=cfg["color"])
@@ -2484,7 +2474,7 @@ if selected_products:   # 🔥 조건 반전
                             ],
                         )
                     )
-        
+                
                     text_layer = (
                         alt.Chart(df_filtered)
                         .mark_text(dy=12, fontSize=11, fontWeight="bold", color=cfg["color"])
@@ -2494,10 +2484,11 @@ if selected_products:   # 🔥 조건 반전
                             text=alt.value(cfg["label"]),
                         )
                     )
-        
+                
                     layers.append(point_layer)
                     layers.append(text_layer)
-        
+
+                
             chart = alt.layer(*layers).properties(height=420).interactive()
             st.altair_chart(chart, use_container_width=True)
         
@@ -3260,6 +3251,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
