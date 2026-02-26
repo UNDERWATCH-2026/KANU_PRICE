@@ -2006,6 +2006,21 @@ if selected_products:   # 🔥 조건 반전
                 tmp[["product_url", "product_name", "event_date", "unit_price", "price_status", "price_detail"]]
             )
 
+            # ✅ 이 블록을 추가
+            if not df_life.empty:
+                lc_tmp = df_life.copy()
+                display_name = f"{row['brand']} - {pname}"
+                lc_tmp["product_name"] = display_name
+                lc_tmp["event_date"] = pd.to_datetime(lc_tmp["date"])
+                lc_tmp = lc_tmp[
+                    (lc_tmp["event_date"] >= filter_date_from) &
+                    (lc_tmp["event_date"] <= filter_date_to)
+                ]
+                if not lc_tmp.empty:
+                    lifecycle_rows.append(
+                        lc_tmp[["product_name", "event_date", "lifecycle_event"]]
+                    )
+
             # 🔥 0원 = 품절 → lifecycle에 없어도 OUT_OF_STOCK 이벤트 강제 추가
             zero_price_dates = tmp[tmp["unit_price"].isna() & (tmp["price_detail"] == "품절")]["event_date"].tolist()
 
@@ -3102,37 +3117,5 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
