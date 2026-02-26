@@ -2764,14 +2764,17 @@ if selected_products:   # 🔥 조건 반전
                     "NORMAL_DOWN": "📉 정상가 하락",
                 }
 
-                # 🔥 복원 날짜 df_life에서 직접 수집
-
+                # 🔥 복원 + 할인 종료 날짜 수집
                 restore_dates_in_display = []
                 if not df_life_all.empty:
                     restore_dates_in_display = [
                         str(d.date())
                         for d in df_life_all[df_life_all["lifecycle_event"] == "RESTOCK"]["date"].tolist()
                     ]
+                discount_end_dates = [
+                    r["날짜"] for r in display_rows if r["이벤트"] == "💸 할인 종료"
+                ]
+                restore_dates_in_display += discount_end_dates
 
                 for _, row in df_changes.iterrows():
         
@@ -2796,33 +2799,10 @@ if selected_products:   # 🔥 조건 반전
                         })
                         continue
 
-                    # 🔥 복원 날짜와 같은 날 NORMAL_UP 스킵
+                    # 🔥 복원/할인종료 날짜와 같은 날 NORMAL_UP 스킵
                     if row["price_change_type"] == "NORMAL_UP" and str(row["date"]) in restore_dates_in_display:
                         continue
-                        
-                for _, row in df_changes.iterrows():
-    
-                    prev_price = float(row["prev_price"]) if row["prev_price"] else 0
-                    current_price = float(row["unit_price"]) if row["unit_price"] else 0
 
-                    # 🔥 정상가 0원 = 품절
-                    if current_price == 0 and row["price_change_type"] in ("NORMAL_DOWN", "NORMAL_UP"):
-                        display_rows.append({
-                            "날짜": row["date"],
-                            "이벤트": "❌ 품절",
-                            "가격 정보": f"정상가 {prev_price:,.1f}원 → 품절"
-                        })
-                        continue
-
-                    # 🔥 이전 0원 → 현재 1원 이상 = 복원
-                    if prev_price == 0 and current_price > 0 and row["price_change_type"] in ("NORMAL_DOWN", "NORMAL_UP"):
-                        display_rows.append({
-                            "날짜": row["date"],
-                            "이벤트": "🔄 복원",
-                            "가격 정보": f"품절 → 정상가 {current_price:,.1f}원"
-                        })
-                        continue
-        
                     if prev_price > 0:
                         diff = current_price - prev_price
                         diff_rate = (diff / prev_price) * 100
@@ -3067,6 +3047,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
