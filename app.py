@@ -1257,7 +1257,9 @@ with col_controls:
         st.write("시작일")
         date_from = st.date_input(
             "시작일",
-            value=datetime.now() - timedelta(days=90),
+            value=datetime(2025, 10, 1),
+            min_value=datetime(2025, 10, 1),
+            max_value=datetime(2025, 10, 31),
             key="date_from",
             label_visibility="collapsed"
         )
@@ -1265,7 +1267,9 @@ with col_controls:
         st.write("종료일")
         date_to = st.date_input(
             "종료일",
-            value=datetime.now(),
+            value=datetime(2025, 10, 31),
+            min_value=datetime(2025, 10, 1),
+            max_value=datetime(2025, 10, 31),
             key="date_to",
             label_visibility="collapsed"
         )
@@ -1288,11 +1292,7 @@ with col_controls:
         if "question_history" in st.session_state:
             st.session_state.question_history = []
         
-        # 🔥 기간 초기화
-        if "date_from" in st.session_state:
-            del st.session_state.date_from
-        if "date_to" in st.session_state:
-            del st.session_state.date_to
+
         
         # 🔥 필터 selectbox 상태 완전 초기화 (삭제)
         st.session_state["filter_brand"] = "(전체)"
@@ -3235,6 +3235,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
