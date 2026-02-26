@@ -2378,30 +2378,7 @@ if selected_products:   # 🔥 조건 반전
                     df_filtered = df_life_all[df_life_all["lifecycle_event"] == event_type].copy()
                     if df_filtered.empty:
                         continue
-                
-                    # 🔥 OUT_OF_STOCK: 제품별 구간 첫 날짜만 남기기
-                    if event_type == "OUT_OF_STOCK":
-                        restock_df = df_life_all[df_life_all["lifecycle_event"] == "RESTOCK"].copy()
-                        df_filtered = df_filtered.sort_values(["product_name", "event_date"])
-                        kept_rows = []
-                
-                        for pname_lc, grp in df_filtered.groupby("product_name"):
-                            restock_dates = restock_df[restock_df["product_name"] == pname_lc]["event_date"].sort_values().tolist()
-                            last_restock = pd.Timestamp.min
-                
-                            for _, r in grp.iterrows():
-                                out_date = r["event_date"]
-                                prior_restocks = [d for d in restock_dates if d <= out_date]
-                                current_boundary = max(prior_restocks) if prior_restocks else pd.Timestamp.min
-                
-                                if current_boundary != last_restock:
-                                    kept_rows.append(r)
-                                    last_restock = current_boundary
-                
-                        if not kept_rows:
-                            continue
-                        df_filtered = pd.DataFrame(kept_rows)[["product_name", "event_date", "lifecycle_event"]]
-                
+
                     # 가격선 위치 맞추기 위해 join
                     df_filtered = df_filtered.merge(
                         df_timeline[["product_name", "event_date", "unit_price", "price_detail"]],
@@ -3251,6 +3228,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
