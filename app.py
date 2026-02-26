@@ -2629,7 +2629,7 @@ if selected_products:   # 🔥 조건 반전
             out_events = df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]
             if not out_events.empty:
                 out_dates_str = "<br>".join([
-                    f"날짜: {r['date'].date()}"
+                    f"날짜: {r['date'].date()}
                     for _, r in out_events.sort_values("date", ascending=False).iterrows()
                 ])
                 cards.append(render_card(
@@ -3047,6 +3047,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
