@@ -1226,6 +1226,13 @@ def format_product_label(row):
     if brand in {"카누 바리스타", "네슬레", "일리카페"}:
         return f"{brand} - {product_name}"
 
+    if brand == "네스프레소":
+        parts = [brand]
+        if category2:
+            parts.append(category2)
+        parts.append(product_name)
+        return " - ".join(parts)
+
     parts = [brand]
     if category1:
         parts.append(category1)
