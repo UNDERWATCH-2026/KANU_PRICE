@@ -2550,8 +2550,16 @@ if selected_products:   # 🔥 조건 반전
         st.markdown(f"### {label}")
     
         # 🔥 lifecycle 데이터 1회만 로딩
+        df_life = load_lifecycle_events(p["product_url"])
+        if not df_life.empty:
+            df_life["date"] = pd.to_datetime(df_life["date"], errors="coerce")
+            df_life = df_life.dropna(subset=["date"])
+            df_life = df_life[
+                (df_life["date"] >= pd.Timestamp(filter_date_from)) &
+                (df_life["date"] <= pd.Timestamp(filter_date_to))
+            ]
 
-    
+        
         # 🔥 정상가 변동 조회 (카드용)
         normal_change_res = (
             supabase.table("product_normal_price_events")
@@ -3050,6 +3058,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
