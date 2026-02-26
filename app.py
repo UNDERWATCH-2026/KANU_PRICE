@@ -1881,22 +1881,7 @@ if selected_products:   # 🔥 조건 반전
             tmp["event_date"] = pd.to_datetime(tmp["date"])
 
 
-
-            # 🔥 기간 필터 적용
-            tmp = tmp[(tmp["event_date"] >= filter_date_from) & (tmp["event_date"] <= filter_date_to)]
-            
-            if tmp.empty:
-                continue
-            
-            tmp["unit_price"] = tmp["unit_price"].astype(float)
-            
-            # 🔥 0원 → None
-            tmp.loc[tmp["unit_price"] == 0, "unit_price"] = None
-            
-            
-            # ================================
-            # 🔥 1️⃣ 날짜 리샘플링
-            # ================================
+            # 🔥 1️⃣ 날짜 리샘플링 먼저
             tmp = tmp.sort_values("event_date")
             
             all_dates = pd.date_range(
@@ -1908,19 +1893,38 @@ if selected_products:   # 🔥 조건 반전
             tmp = tmp.set_index("event_date").reindex(all_dates).reset_index()
             tmp.rename(columns={"index": "event_date"}, inplace=True)
             
-            # 🔥 unit_price만 ffill
+            # 🔥 unit_price forward fill
             tmp["unit_price"] = tmp["unit_price"].ffill()
             tmp["product_name"] = tmp["product_name"].ffill()
             
             
-            # ================================
-            # 🔥 2️⃣ 상태 다시 계산
-            # ================================
+            # 🔥 2️⃣ lifecycle 기반으로 품절 처리
+            df_life = load_lifecycle_events(row["product_url"])
+            
+            if not df_life.empty:
+            
+                df_life["date"] = pd.to_datetime(df_life["date"])
+                out_dates = sorted(df_life[df_life["lifecycle_event"]=="OUT_OF_STOCK"]["date"].dt.date)
+                restore_dates = sorted(df_life[df_life["lifecycle_event"]=="RESTOCK"]["date"].dt.date)
+            
+                for idx2, r2 in tmp.iterrows():
+            
+                    current_date = r2["event_date"].date()
+            
+                    past_out = [d for d in out_dates if d <= current_date]
+                    past_restore = [d for d in restore_dates if d <= current_date]
+            
+                    last_out = max(past_out) if past_out else None
+                    last_restore = max(past_restore) if past_restore else None
+            
+                    if last_out and (not last_restore or last_out > last_restore):
+                        tmp.at[idx2, "unit_price"] = None
+            
+            
+            # 🔥 3️⃣ 상태 계산은 맨 마지막
             tmp["is_discount"] = tmp["event_type"] == "DISCOUNT"
             tmp["price_status"] = tmp["is_discount"].map({True: "💸 할인 중", False: "정상가"})
-            
             tmp.loc[tmp["unit_price"].isna(), "price_status"] = "품절"
-            tmp.loc[tmp["unit_price"].isna(), "price_detail"] = "품절"
 
             # 🔥 정상가와 할인율 정보 추가 (툴팁용)
             tmp["normal_price"] = None
@@ -3188,6 +3192,7 @@ if selected_products:   # 🔥 조건 반전
         
             else:
                 st.caption("이벤트 없음")
+
 
 
 
