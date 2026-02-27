@@ -597,9 +597,14 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
                 if key not in normal_map or p > normal_map[key]:
                     normal_map[key] = p
 
+        # df_work 기준 URL만 사용 (브랜드/키워드 필터 반영)
+        df_work_urls = set(df_work["product_url"].str.strip().str.lower().tolist())
+
         # 할인율 계산
         rate_list = []
         for url, disc_price in discount_map.items():
+            if url not in df_work_urls:
+                continue
             norm_price = normal_map.get(url)
             if not norm_price or norm_price <= disc_price:
                 # summary에서 정상가 조회
