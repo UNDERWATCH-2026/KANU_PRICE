@@ -455,35 +455,50 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         }
 
     if intent == "DISCOUNT" and not start_date:
-        df = df_work[df_work["is_discount"] == True]
+        # 조회 기간 내 DISCOUNT 이벤트가 있는 제품을 product_all_events에서 직접 조회
+        res_discount = supabase.table("product_all_events").select("product_url, unit_price, date").eq("event_type", "DISCOUNT")
+        if date_from:
+            res_discount = res_discount.gte("date", date_from.strftime("%Y-%m-%d"))
+        if date_to:
+            res_discount = res_discount.lte("date", date_to.strftime("%Y-%m-%d"))
+        res_discount = res_discount.execute()
+
+        if not res_discount.data:
+            # fallback: 현재 is_discount 기준
+            df = df_work[df_work["is_discount"] == True]
+        else:
+            discount_map = {}
+            for r in res_discount.data:
+                key = str(r["product_url"]).strip().lower()
+                price = float(r["unit_price"]) if r["unit_price"] else 0
+                if price > 0:
+                    discount_map.setdefault(key, []).append(price)
+            df = df_work[df_work["product_url"].str.strip().str.lower().isin(discount_map.keys())]
+
         if df.empty:
             return None
+
+        df = df.drop_duplicates(subset=["product_url"])
         results = []
+        product_details = {}
         for _, row in df.iterrows():
-            categories = []
-            if pd.notna(row.get("category1")) and row["category1"]:
-                categories.append(row["category1"])
-            if pd.notna(row.get("category2")) and row["category2"]:
-                categories.append(row["category2"])
-            category_str = f" [{' > '.join(categories)}]" if categories else ""
-            product_name = row['product_name']
             url = str(row["product_url"]).strip().lower()
-            results.append({
-                "text": f"• {row['brand']} - {product_name}{category_str}\n  💰 현재가: {float(row['current_unit_price']):,.1f}원",
-                "product_url": url
-            })
+            # 기간 내 할인가 평균 or 최저
+            if res_discount.data and url in discount_map:
+                prices = discount_map[url]
+                price = min(prices)
+                detail = f"💰 할인가: {price:,.1f}원"
+            else:
+                price = float(row["current_unit_price"])
+                detail = f"💰 현재 할인가: {price:,.1f}원"
+            results.append({"product_url": url})
+            product_details[url] = detail
+
         if not results:
             return None
-        product_details = {}
-        for r in results:
-            url = r["product_url"]
-            match = df_work[df_work["product_url"].str.strip().str.lower() == url]
-            if not match.empty:
-                price = float(match.iloc[0]["current_unit_price"])
-                product_details[url] = f"💰 현재 할인가: {price:,.1f}원"
         return {
             "type": "product_list",
-            "text": f"{period_label} 할인 중 제품 ({len(results)}개)",
+            "text": f"{period_label} 할인 제품 ({len(results)}개)",
             "products": [r["product_url"] for r in results],
             "product_details": product_details,
         }
@@ -1923,8 +1938,10 @@ with col_tabs:
 
                                 # 🔥 체크박스 렌더링 헬퍼 - product_details 파라미터 추가
                                 def render_product_checkboxes(product_urls, scope_prefix, product_details=None):
+                                    # product_urls는 strip().lower() 정규화된 값 → df_all도 동일하게 비교
+                                    product_urls_set = set(str(u).strip().lower() for u in product_urls)
                                     sorted_df = (
-                                        df_all[df_all["product_url"].isin(product_urls)]
+                                        df_all[df_all["product_url"].str.strip().str.lower().isin(product_urls_set)]
                                         .fillna("")
                                         .drop_duplicates(subset=["product_url"])
                                         .sort_values(by=["brand", "category1", "category2", "product_name"])
