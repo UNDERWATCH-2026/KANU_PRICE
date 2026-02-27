@@ -347,14 +347,22 @@ def extract_period_from_question(q: str, base_date=None):
     return None
 
 def extract_brew_type(q: str, df_all: pd.DataFrame):
-    q = q.lower()
+    q_lower = q.lower()
     brew_list = df_all["brew_type_kr"].dropna().unique().tolist()
-    # 완전 일치 또는 부분 일치 (예: "에스프레소" → "에스프레소 (LTO)" 포함)
+    # 브랜드명은 brew_type으로 잘못 매칭되지 않도록 제외
+    brand_list = [str(b).lower() for b in df_all["brand"].dropna().unique().tolist()]
+    # 1단계: brew가 질문에 포함 (예: "에스프레소 질문" → "에스프레소")
     for brew in brew_list:
-        if brew and brew.lower() in q:
+        if brew and brew.lower() in q_lower:
+            # brew 값이 브랜드명과 동일하면 스킵
+            if brew.lower() in brand_list:
+                continue
             return brew
+    # 2단계: 질문이 brew에 포함 (예: "에스프레소" → "에스프레소 (LTO)")
     for brew in brew_list:
-        if brew and q in brew.lower():
+        if brew and q_lower in brew.lower():
+            if brew.lower() in brand_list or q_lower in brand_list:
+                continue
             return brew
     return None
 
@@ -643,14 +651,33 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
 
         results = []
         product_details = {}
+        # 원본 URL 맵 (기간 조회용)
+        url_orig_map_for_period = {str(r["product_url"]).strip().lower(): r["product_url"] for r in (res_d.data or [])}
+        date_from_str2 = date_from.strftime("%Y-%m-%d") if date_from else (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+        date_to_str2 = date_to.strftime("%Y-%m-%d") if date_to else datetime.now().strftime("%Y-%m-%d")
+
         for url, disc_price, norm_price, rate in rate_list:
             results.append({"product_url": url})
-            disc_date = discount_date_map.get(url, "")
-            date_str = f"  |  📅 {disc_date}" if disc_date else ""
-            if norm_price:
-                product_details[url] = f"💰 {norm_price:,.1f}원 → {disc_price:,.1f}원 ({rate:.1f}% 할인){date_str}"
+            # 할인 기간 조회
+            orig_url = url_orig_map_for_period.get(url, url)
+            period_res2 = supabase.rpc("get_discount_periods_in_range", {
+                "p_product_url": orig_url,
+                "p_date_from": date_from_str2,
+                "p_date_to": date_to_str2,
+            }).execute()
+            if period_res2.data:
+                periods_str2 = "  /  ".join([
+                    f"📅 {max(p['discount_start_date'], date_from_str2)} ~ {min(p['discount_end_date'], date_to_str2)}"
+                    for p in period_res2.data
+                ])
+                period_detail = f"  |  {periods_str2}"
             else:
-                product_details[url] = f"💰 할인가: {disc_price:,.1f}원 (정상가 미상){date_str}"
+                disc_date = discount_date_map.get(url, "")
+                period_detail = f"  |  📅 {disc_date}" if disc_date else ""
+            if norm_price:
+                product_details[url] = f"💰 {norm_price:,.1f}원 → {disc_price:,.1f}원 ({rate:.1f}%){period_detail}"
+            else:
+                product_details[url] = f"💰 {disc_price:,.1f}원 (정상가 미상){period_detail}"
 
         return {
             "type": "product_list",
@@ -688,10 +715,13 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
         product_details = {}
         for _, row in df.iterrows():
             url = str(row["product_url"]).strip().lower()
-            # 기간 내 할인가 평균 or 최저
             if res_discount.data and url in discount_map:
-                prices = discount_map[url]
-                price = min(prices)
+                disc_price = min(discount_map[url])
+                norm_price = float(row.get("normal_unit_price") or 0)
+                if norm_price <= 0:
+                    norm_price = float(row.get("current_unit_price") or 0)
+                rate_str = f" ({(norm_price - disc_price) / norm_price * 100:.1f}%)" if norm_price > disc_price else ""
+                norm_str = f"{norm_price:,.1f}원 → " if norm_price > 0 else ""
                 # 할인 기간 조회
                 period_res = supabase.rpc(
                     "get_discount_periods_in_range",
@@ -702,16 +732,22 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
                     }
                 ).execute()
                 if period_res.data:
+                    # 조회 기간으로 클리핑
+                    date_from_str = date_from.strftime("%Y-%m-%d") if date_from else None
+                    date_to_str = date_to.strftime("%Y-%m-%d") if date_to else None
                     periods_str = "  /  ".join([
-                        f"📅 {p['discount_start_date']} ~ {p['discount_end_date']}"
+                        f"📅 {max(p['discount_start_date'], date_from_str) if date_from_str else p['discount_start_date']} ~ {min(p['discount_end_date'], date_to_str) if date_to_str else p['discount_end_date']}"
                         for p in period_res.data
                     ])
-                    detail = f"💰 할인가: {price:,.1f}원  |  {periods_str}"
+                    detail = f"💰 {norm_str}{disc_price:,.1f}원{rate_str}  |  {periods_str}"
                 else:
-                    detail = f"💰 할인가: {price:,.1f}원"
+                    detail = f"💰 {norm_str}{disc_price:,.1f}원{rate_str}"
             else:
-                price = float(row["current_unit_price"])
-                detail = f"💰 현재 할인가: {price:,.1f}원"
+                disc_price = float(row["current_unit_price"])
+                norm_price = float(row.get("normal_unit_price") or 0)
+                rate_str = f" ({(norm_price - disc_price) / norm_price * 100:.1f}%)" if norm_price > disc_price else ""
+                norm_str = f"{norm_price:,.1f}원 → " if norm_price > 0 else ""
+                detail = f"💰 {norm_str}{disc_price:,.1f}원{rate_str}"
             results.append({"product_url": url})
             product_details[url] = detail
 
