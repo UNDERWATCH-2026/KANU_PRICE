@@ -228,6 +228,20 @@ def extract_product_name_from_question(q: str) -> list:
             product_keywords.append(word)
     return product_keywords
 
+def extract_top_n(q: str):
+    """질문에서 상위/하위 N개 숫자 추출. 없으면 None."""
+    import re
+    # "상위 5개", "하위 3개", "5개", "top 5" 등
+    m = re.search(r'(상위|하위|최대|최고|최저|top)?\s*(\d+)\s*개', q)
+    if m:
+        n = int(m.group(2))
+        direction = m.group(1) or ""
+        return n, "bottom" if direction == "하위" else "top"
+    m = re.search(r'(\d+)\s*(위|등|번째)', q)
+    if m:
+        return int(m.group(1)), "top"
+    return None, None
+
 def classify_intent(q: str):
     q = q.lower()
 
@@ -251,6 +265,8 @@ def classify_intent(q: str):
 
     if "할인" in q and ("기간" in q or "언제" in q):
         return "DISCOUNT_PERIOD"
+    if "할인" in q and any(w in q for w in ["률", "율", "퍼센트", "%", "높은", "최대", "가장 많이"]):
+        return "DISCOUNT_RATE"
     if "할인" in q or "행사" in q:
         return "DISCOUNT"
     if any(word in q for word in ["신제품", "새롭게", "새로", "신규", "출시", "새로운", "처음", "신상"]):
@@ -329,7 +345,37 @@ def extract_brew_type(q: str, df_all: pd.DataFrame):
             return brew
     return None
 
-def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
+def _apply_top_n(products, product_details, top_n):
+    """top_n = (n, "top"/"bottom") 에 따라 products/product_details 슬라이싱"""
+    if not top_n:
+        return products, product_details
+    n, direction = top_n
+    if direction == "bottom":
+        sliced = products[-n:]
+    else:
+        sliced = products[:n]
+    sliced_set = set(sliced)
+    return sliced, {k: v for k, v in product_details.items() if k in sliced_set}
+
+def execute_rule(intent, question, df_summary, date_from=None, date_to=None, top_n=None):
+    result = _execute_rule_inner(intent, question, df_summary, date_from, date_to)
+    if top_n and isinstance(result, dict) and result.get("type") == "product_list":
+        n, direction = top_n
+        products = result.get("products", [])
+        product_details = result.get("product_details", {})
+        if direction == "bottom":
+            sliced = products[-n:]
+        else:
+            sliced = products[:n]
+        sliced_set = set(sliced)
+        result["products"] = sliced
+        result["product_details"] = {k: v for k, v in product_details.items() if k in sliced_set}
+        # text의 개수도 업데이트
+        import re as _re
+        result["text"] = _re.sub(r'[(][0-9]+개', f'({len(sliced)}개', result["text"])
+    return result
+
+def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=None):
     df_work = df_summary.copy()
 
     question_period = extract_period_from_question(question, base_date=date_to)
@@ -452,6 +498,79 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
             "type": "product_list",
             "text": f"할인 기간 정보 ({len(unique_products)}개)",
             "products": unique_products,
+            "product_details": product_details,
+        }
+
+    if intent == "DISCOUNT_RATE":
+        # 조회 기간 내 할인율 최대 제품 조회
+        res_d = supabase.table("product_all_events").select("product_url, unit_price, date").eq("event_type", "DISCOUNT")
+        res_n = supabase.table("product_all_events").select("product_url, unit_price, date").eq("event_type", "NORMAL")
+        if date_from:
+            res_d = res_d.gte("date", date_from.strftime("%Y-%m-%d"))
+            res_n = res_n.gte("date", date_from.strftime("%Y-%m-%d"))
+        if date_to:
+            res_d = res_d.lte("date", date_to.strftime("%Y-%m-%d"))
+            res_n = res_n.lte("date", date_to.strftime("%Y-%m-%d"))
+        res_d = res_d.execute()
+        res_n = res_n.execute()
+
+        if not res_d.data:
+            return "해당 기간 내 할인 이벤트가 없습니다."
+
+        # 제품별 최저 할인가 + 날짜
+        discount_map = {}   # url -> min_price
+        discount_date_map = {}  # url -> date of min_price
+        for r in res_d.data:
+            key = str(r["product_url"]).strip().lower()
+            p = float(r["unit_price"]) if r["unit_price"] else 0
+            if p > 0:
+                if key not in discount_map or p < discount_map[key]:
+                    discount_map[key] = p
+                    discount_date_map[key] = r["date"]
+
+        # 제품별 정상가 (할인 직전 or 기간 내 NORMAL)
+        normal_map = {}
+        for r in (res_n.data or []):
+            key = str(r["product_url"]).strip().lower()
+            p = float(r["unit_price"]) if r["unit_price"] else 0
+            if p > 0:
+                if key not in normal_map or p > normal_map[key]:
+                    normal_map[key] = p
+
+        # 할인율 계산
+        rate_list = []
+        for url, disc_price in discount_map.items():
+            norm_price = normal_map.get(url)
+            if not norm_price or norm_price <= disc_price:
+                # summary에서 정상가 조회
+                match = df_work[df_work["product_url"].str.strip().str.lower() == url]
+                if not match.empty:
+                    norm_price = float(match.iloc[0].get("normal_unit_price") or 0)
+            if norm_price and norm_price > disc_price:
+                rate = (norm_price - disc_price) / norm_price * 100
+                rate_list.append((url, disc_price, norm_price, rate))
+
+        if not rate_list:
+            return "할인율 계산 가능한 제품이 없습니다."
+
+        rate_list.sort(key=lambda x: -x[3])
+
+        urls = [r[0] for r in rate_list]
+        df = df_work[df_work["product_url"].str.strip().str.lower().isin(urls)].drop_duplicates(subset=["product_url"])
+        df = df_work[df_work["product_url"].str.strip().str.lower().isin(urls)].drop_duplicates(subset=["product_url"])
+
+        results = []
+        product_details = {}
+        for url, disc_price, norm_price, rate in rate_list:
+            results.append({"product_url": url})
+            disc_date = discount_date_map.get(url, "")
+            date_str = f"  |  📅 {disc_date}" if disc_date else ""
+            product_details[url] = f"💰 {norm_price:,.1f}원 → {disc_price:,.1f}원 ({rate:.1f}% 할인){date_str}"
+
+        return {
+            "type": "product_list",
+            "text": f"{period_label} 할인율 높은 제품 ({len(results)}개, 높은 순)",
+            "products": urls,
             "product_details": product_details,
         }
 
@@ -1881,11 +2000,13 @@ with col_tabs:
             filtered_df = df_all.copy()
 
             question_period = extract_period_from_question(question, base_date=date_to)
+            _top_n, _top_dir = extract_top_n(question)
+            _top_n_arg = (_top_n, _top_dir) if _top_n else None
             if question_period:
                 q_date_from, q_date_to, _ = question_period
-                answer = execute_rule(intent, question, filtered_df, q_date_from, q_date_to)
+                answer = execute_rule(intent, question, filtered_df, q_date_from, q_date_to, top_n=_top_n_arg)
             else:
-                answer = execute_rule(intent, question, filtered_df, date_from, date_to)
+                answer = execute_rule(intent, question, filtered_df, date_from, date_to, top_n=_top_n_arg)
 
             filter_info = {
                 "date_from": date_from.strftime("%Y-%m-%d") if hasattr(date_from, 'strftime') else str(date_from),
