@@ -150,14 +150,6 @@ def save_question_log(question: str, q_type: str, used_llm: bool, answer: str = 
             "used_llm": used_llm,
             "created_at": datetime.now().isoformat()
         }
-        if answer:
-            if isinstance(answer, dict):
-                log_data["answer_text"] = answer.get("text", str(answer))
-                log_data["answer_type"] = answer.get("type", "unknown")
-            else:
-                log_data["answer_text"] = str(answer)
-        if filters:
-            log_data["filters"] = filters
         supabase.table("question_logs").insert(log_data).execute()
     except Exception as e:
         print("로그 저장 실패:", e)
