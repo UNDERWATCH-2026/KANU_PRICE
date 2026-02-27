@@ -229,18 +229,25 @@ def extract_product_name_from_question(q: str) -> list:
     return product_keywords
 
 def extract_top_n(q: str):
-    """질문에서 상위/하위 N개 숫자 추출. 없으면 None."""
+    """질문에서 상위/하위 N 추출.
+    반환: (n, direction, mode)
+      direction: "top" | "bottom"
+      mode: "count" (N개) | "rank" (N위 - 동점 모두 포함)
+    """
     import re
-    # "상위 5개", "하위 3개", "5개", "top 5" 등
+    # "상위/하위 N위", "N위"
+    m = re.search(r'(상위|하위)?\s*(\d+)\s*(위|등)', q)
+    if m:
+        n = int(m.group(2))
+        direction = "bottom" if m.group(1) == "하위" else "top"
+        return n, direction, "rank"
+    # "상위/하위 N개", "N개"
     m = re.search(r'(상위|하위|최대|최고|최저|top)?\s*(\d+)\s*개', q)
     if m:
         n = int(m.group(2))
-        direction = m.group(1) or ""
-        return n, "bottom" if direction == "하위" else "top"
-    m = re.search(r'(\d+)\s*(위|등|번째)', q)
-    if m:
-        return int(m.group(1)), "top"
-    return None, None
+        direction = "bottom" if m.group(1) == "하위" else "top"
+        return n, direction, "count"
+    return None, None, None
 
 def classify_intent(q: str):
     q = q.lower()
@@ -360,18 +367,65 @@ def _apply_top_n(products, product_details, top_n):
 def execute_rule(intent, question, df_summary, date_from=None, date_to=None, top_n=None):
     result = _execute_rule_inner(intent, question, df_summary, date_from, date_to)
     if top_n and isinstance(result, dict) and result.get("type") == "product_list":
-        n, direction = top_n
+        import re as _re
+        n, direction, mode = top_n  # mode: "count" | "rank"
         products = result.get("products", [])
         product_details = result.get("product_details", {})
-        if direction == "bottom":
-            sliced = products[-n:]
+
+        # df_summary 기준 메타 정보 (동점 시 가나다순)
+        url_meta = {}
+        for _, row in df_summary.iterrows():
+            url_key = str(row["product_url"]).strip().lower()
+            url_meta[url_key] = (
+                str(row.get("brand") or ""),
+                str(row.get("category1") or ""),
+                str(row.get("category2") or ""),
+                str(row.get("product_name") or ""),
+            )
+
+        # products는 _inner에서 이미 수치 정렬된 순서
+        # 같은 detail 값(동점) 제품끼리만 가나다순 보조 정렬
+        detail_of = lambda url: product_details.get(url, "")
+
+        def sort_key(idx_url):
+            idx, url = idx_url
+            meta = url_meta.get(url, ("", "", "", ""))
+            return (idx, meta[0], meta[1], meta[2], meta[3])
+
+        # 동점 그룹 구분: detail 값이 같으면 같은 순위
+        # detail 값 기준으로 순위 부여
+        detail_vals = [detail_of(u) for u in products]
+        unique_details = []
+        for d in detail_vals:
+            if d not in unique_details:
+                unique_details.append(d)
+        rank_map = {d: i for i, d in enumerate(unique_details)}
+
+        indexed = [(rank_map[detail_of(u)], u) for u in products]
+        indexed_sorted = sorted(indexed, key=sort_key)
+
+        if mode == "rank":
+            # N위까지 - N위와 동일한 순위 제품 모두 포함
+            if direction == "bottom":
+                cutoff_rank = sorted(set(r for r, _ in indexed_sorted))[-(n)]
+            else:
+                sorted_ranks = sorted(set(r for r, _ in indexed_sorted))
+                cutoff_rank = sorted_ranks[min(n - 1, len(sorted_ranks) - 1)]
+            if direction == "bottom":
+                sliced = [u for r, u in indexed_sorted if r >= cutoff_rank]
+            else:
+                sliced = [u for r, u in indexed_sorted if r <= cutoff_rank]
         else:
-            sliced = products[:n]
+            # N개 - 단순 슬라이싱 (동점이어도 N개 고정)
+            sorted_urls = [u for _, u in indexed_sorted]
+            if direction == "bottom":
+                sliced = sorted_urls[-n:]
+            else:
+                sliced = sorted_urls[:n]
+
         sliced_set = set(sliced)
         result["products"] = sliced
         result["product_details"] = {k: v for k, v in product_details.items() if k in sliced_set}
-        # text의 개수도 업데이트
-        import re as _re
         result["text"] = _re.sub(r'[(][0-9]+개', f'({len(sliced)}개', result["text"])
     return result
 
@@ -2000,8 +2054,8 @@ with col_tabs:
             filtered_df = df_all.copy()
 
             question_period = extract_period_from_question(question, base_date=date_to)
-            _top_n, _top_dir = extract_top_n(question)
-            _top_n_arg = (_top_n, _top_dir) if _top_n else None
+            _top_n, _top_dir, _top_mode = extract_top_n(question)
+            _top_n_arg = (_top_n, _top_dir, _top_mode) if _top_n else None
             if question_period:
                 q_date_from, q_date_to, _ = question_period
                 answer = execute_rule(intent, question, filtered_df, q_date_from, q_date_to, top_n=_top_n_arg)
