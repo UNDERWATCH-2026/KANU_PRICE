@@ -467,20 +467,25 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
                 categories.append(row["category2"])
             category_str = f" [{' > '.join(categories)}]" if categories else ""
             product_name = row['product_name']
+            url = str(row["product_url"]).strip().lower()
             results.append({
                 "text": f"• {row['brand']} - {product_name}{category_str}\n  💰 현재가: {float(row['current_unit_price']):,.1f}원",
-                "product_url": str(row["product_url"])
+                "product_url": url
             })
         if not results:
             return None
+        product_details = {}
+        for r in results:
+            url = r["product_url"]
+            match = df_work[df_work["product_url"].str.strip().str.lower() == url]
+            if not match.empty:
+                price = float(match.iloc[0]["current_unit_price"])
+                product_details[url] = f"💰 현재 할인가: {price:,.1f}원"
         return {
             "type": "product_list",
             "text": f"{period_label} 할인 중 제품 ({len(results)}개)",
-            "products": [
-                str(r["product_url"]).strip().lower()
-                for r in results
-                if r.get("product_url")
-            ]
+            "products": [r["product_url"] for r in results],
+            "product_details": product_details,
         }
 
     if intent == "PRICE_MIN":
@@ -514,29 +519,61 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
             if pd.notna(row.get("category2")) and row["category2"]:
                 categories.append(row["category2"])
             category_str = f" [{' > '.join(categories)}]" if categories else ""
+            url = str(row["product_url"]).strip().lower()
             results.append({
                 "text": f"• {row['brand']} - {row['product_name']}{category_str}\n"
                         f"  💰 최저가: {min_price:,.1f}원 (기간: {sd} ~ {ed})",
-                "product_url": str(row["product_url"])
+                "product_url": url,
+                "detail": f"💰 최저가: {min_price:,.1f}원 ({sd} ~ {ed})",
             })
         if not results:
             return "최저가 계산 대상 제품이 없습니다."
+        product_details = {r["product_url"]: r["detail"] for r in results}
         return {
             "type": "product_list",
             "text": f"{period_label} 최저가 제품 ({len(results)}개)",
-            "products": [
-                str(r["product_url"]).strip().lower()
-                for r in results
-                if r.get("product_url")
-            ]
+            "products": [r["product_url"] for r in results],
+            "product_details": product_details,
         }
 
     if intent == "PRICE_MAX":
-        df = df_work[df_work["current_unit_price"] > 0].sort_values("current_unit_price", ascending=False)
-        if df.empty:
+        df_valid = df_work[df_work["current_unit_price"] > 0].drop_duplicates(subset=["product_url"])
+        if df_valid.empty:
             return None
-        top = df.iloc[0]
-        return f"가장 비싼 제품은 '{top['product_name']}'이며 {float(top['current_unit_price']):,.1f}원입니다."
+        max_price = df_valid["current_unit_price"].max()
+        df_max = df_valid[df_valid["current_unit_price"] == max_price]
+        results = []
+        product_details = {}
+        for _, row in df_max.iterrows():
+            url = str(row["product_url"]).strip().lower()
+            res = (
+                supabase.table("product_all_events")
+                .select("date, unit_price")
+                .eq("product_url", row["product_url"])
+                .execute()
+            )
+            if not res.data:
+                continue
+            df_hist = pd.DataFrame(res.data)
+            df_hist["unit_price"] = df_hist["unit_price"].astype(float)
+            df_hist["date"] = pd.to_datetime(df_hist["date"])
+            df_hist = df_hist[df_hist["unit_price"] > 0]
+            df_hi = df_hist[df_hist["unit_price"] == max_price]
+            if df_hi.empty:
+                sd = ed = "-"
+            else:
+                sd = df_hi["date"].min().date()
+                ed = df_hi["date"].max().date()
+            product_details[url] = f"💰 최고가: {max_price:,.1f}원 ({sd} ~ {ed})"
+            results.append({"product_url": url})
+        if not results:
+            return None
+        return {
+            "type": "product_list",
+            "text": f"{period_label} 최고가 제품 ({len(results)}개)",
+            "products": [r["product_url"] for r in results],
+            "product_details": product_details,
+        }
 
     # =========================
     # 🔥 날짜 전용: 품절 날짜
@@ -742,9 +779,9 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         res = res.execute()
         if not res.data:
             return None
-        new_product_data = {r["product_url"]: r["date"] for r in res.data}
+        new_product_data = {str(r["product_url"]).strip().lower(): r["date"] for r in res.data}
         urls = list(new_product_data.keys())
-        df = df_work[df_work["product_url"].isin(urls)]
+        df = df_work[df_work["product_url"].str.strip().str.lower().isin(urls)]
         if df.empty:
             return None
         results = []
@@ -758,23 +795,20 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
                 categories.append(row["category2"])
             category_str = f" [{' > '.join(categories)}]" if categories else ""
             product_name = row['product_name']
-            url = str(row["product_url"])
+            url = str(row["product_url"]).strip().lower()
+            launch_date = new_product_data.get(url)
             results.append({
                 "text": f"• {row['brand']} - {product_name}{category_str}\n  🆕 출시일: {launch_date}",
                 "product_url": url
             })
-            product_details[url] = f"🆕 출시일: {launch_date}"  # 🔥 추가
+            product_details[url] = f"🆕 출시일: {launch_date}"
         if not results:
             return None
         return {
             "type": "product_list",
             "text": f"{period_label} 신제품 ({len(results)}개)",
-            "products": [
-                str(r["product_url"]).strip().lower()
-                for r in results
-                if r.get("product_url")
-            ],
-            "product_details": product_details,  # 🔥 추가
+            "products": [r["product_url"] for r in results],
+            "product_details": product_details,
         }
 
     if intent == "OUT":
@@ -1030,7 +1064,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         if date_to:
             res_new = res_new.lte("date", date_to.strftime("%Y-%m-%d"))
         res_new = res_new.execute()
-        new_data = {r["product_url"]: r["date"] for r in (res_new.data or [])}
+        new_data = {str(r["product_url"]).strip().lower(): r["date"] for r in (res_new.data or [])}
 
         res_out = (
             supabase.table("product_lifecycle_events")
@@ -1042,43 +1076,43 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         if date_to:
             res_out = res_out.lte("date", date_to.strftime("%Y-%m-%d"))
         res_out = res_out.execute()
-        out_data = {r["product_url"]: r["date"] for r in (res_out.data or [])}
+        out_data = {str(r["product_url"]).strip().lower(): r["date"] for r in (res_out.data or [])}
 
         all_urls = set(list(new_data.keys()) + list(out_data.keys()))
-        df = df_work[df_work["product_url"].isin(all_urls)]
+        df = df_work[df_work["product_url"].str.strip().str.lower().isin(all_urls)]
         if df.empty:
             return "해당 기간 신제품 또는 품절 제품이 없습니다."
 
         new_results = []
         product_details = {}  # 🔥 추가
-        for _, row in df[df["product_url"].isin(new_data)].iterrows():
+        for _, row in df[df["product_url"].str.strip().str.lower().isin(new_data)].iterrows():
             categories = []
             if pd.notna(row.get("category1")) and row["category1"]:
                 categories.append(row["category1"])
             if pd.notna(row.get("category2")) and row["category2"]:
                 categories.append(row["category2"])
             category_str = f" [{' > '.join(categories)}]" if categories else ""
-            url = str(row["product_url"])
+            url = str(row["product_url"]).strip().lower()
             new_results.append({
-                "text": f"• {row['brand']} - {row['product_name']}{category_str}\n  🆕 출시일: {new_data[row['product_url']]}",
+                "text": f"• {row['brand']} - {row['product_name']}{category_str}\n  🆕 출시일: {new_data.get(url)}",
                 "product_url": url
             })
-            product_details[url] = f"🆕 출시일: {new_data[row['product_url']]}"  # 🔥 추가
+            product_details[url] = f"🆕 출시일: {new_data.get(url)}"
 
         out_results = []
-        for _, row in df[df["product_url"].isin(out_data)].iterrows():
+        for _, row in df[df["product_url"].str.strip().str.lower().isin(out_data)].iterrows():
             categories = []
             if pd.notna(row.get("category1")) and row["category1"]:
                 categories.append(row["category1"])
             if pd.notna(row.get("category2")) and row["category2"]:
                 categories.append(row["category2"])
             category_str = f" [{' > '.join(categories)}]" if categories else ""
-            url = str(row["product_url"])
+            url = str(row["product_url"]).strip().lower()
             out_results.append({
-                "text": f"• {row['brand']} - {row['product_name']}{category_str}\n  📅 품절일: {out_data[row['product_url']]}",
+                "text": f"• {row['brand']} - {row['product_name']}{category_str}\n  📅 품절일: {out_data.get(url)}",
                 "product_url": url
             })
-            product_details[url] = f"📅 품절일: {out_data[row['product_url']]}"  # 🔥 추가
+            product_details[url] = f"📅 품절일: {out_data.get(url)}"
 
         all_results = new_results + out_results
 
@@ -1122,38 +1156,64 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
         )
         if volatility.empty:
             return None
-        top_url = volatility.index[0]
-        top_value = volatility.iloc[0]
-        row = df_work[df_work["product_url"] == top_url]
-        if row.empty:
+        product_details = {}
+        results = []
+        for url, val in volatility.items():
+            if val == 0:
+                continue
+            norm_url = str(url).strip().lower()
+            row = df_work[df_work["product_url"].str.strip().str.lower() == norm_url]
+            if row.empty:
+                continue
+            lo = df[df["product_url"] == url]["unit_price"].min()
+            hi = df[df["product_url"] == url]["unit_price"].max()
+            product_details[norm_url] = f"💰 최저 {lo:,.1f}원 ~ 최고 {hi:,.1f}원 (변동폭 {val:,.1f}원)"
+            results.append({"product_url": norm_url})
+        if not results:
             return None
-        return (
-            f"최근 기간 가격 변동 폭이 가장 큰 제품은 "
-            f"'{row.iloc[0]['product_name']}'이며 "
-            f"변동폭은 {top_value:,.1f}원입니다."
-        )
+        return {
+            "type": "product_list",
+            "text": f"{period_label} 가격 변동 제품 ({len(results)}개)",
+            "products": [r["product_url"] for r in results],
+            "product_details": product_details,
+        }
 
     if intent == "NORMAL_CHANGE":
         start_date = extract_period(question)
         query = supabase.table("product_normal_price_events").select("*")
         if start_date:
             query = query.gte("date", start_date.strftime("%Y-%m-%d"))
+        elif date_from:
+            query = query.gte("date", date_from.strftime("%Y-%m-%d"))
+        if date_to:
+            query = query.lte("date", date_to.strftime("%Y-%m-%d"))
         res = query.order("date", desc=True).execute()
         if not res.data:
             return "해당 기간 내 정상가 변동이 없습니다."
         df = pd.DataFrame(res.data)
+        product_details = {}
         results = []
         for _, row in df.iterrows():
-            product_row = df_summary[df_summary["product_url"] == row["product_url"]]
+            url = str(row["product_url"]).strip().lower()
+            product_row = df_summary[df_summary["product_url"].str.strip().str.lower() == url]
             if product_row.empty:
                 continue
-            pname = product_row.iloc[0]["product_name"]
-            results.append(
-                f"- {pname} / {float(row['prev_price']):,.0f}원 → "
-                f"{row['date']}에 {float(row['normal_price']):,.0f}원 "
-                f"({float(row['price_diff']):+,.0f}원)"
-            )
-        return "기간 내 정상가 변동 제품 목록:\n" + "\n".join(results) if results else "해당 기간 내 정상가 변동이 없습니다."
+            diff = float(row["price_diff"])
+            arrow = "📈" if diff > 0 else "📉"
+            detail = f"{arrow} 정상가 {float(row['prev_price']):,.0f}원 → {float(row['normal_price']):,.0f}원 ({diff:+,.0f}원) | {row['date']}"
+            if url in product_details:
+                product_details[url] += f"  /  {detail}"
+            else:
+                product_details[url] = detail
+                results.append({"product_url": url})
+        if not results:
+            return "해당 기간 내 정상가 변동이 없습니다."
+        return {
+            "type": "product_list",
+            "text": f"{period_label} 정상가 변동 제품 ({len(results)}개)",
+            "products": [r["product_url"] for r in results],
+            "product_details": product_details,
+        }
 
     # =========================
     # 🔍 UNKNOWN: 키워드 제품 검색
