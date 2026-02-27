@@ -687,35 +687,44 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
         }
 
     if intent == "DISCOUNT" and not start_date:
-        # 조회 기간 내 DISCOUNT 이벤트가 있는 제품을 product_all_events에서 직접 조회
-        res_discount = supabase.table("product_all_events").select("product_url, unit_price, date").eq("event_type", "DISCOUNT")
-        if date_from:
-            res_discount = res_discount.gte("date", date_from.strftime("%Y-%m-%d"))
-        if date_to:
-            res_discount = res_discount.lte("date", date_to.strftime("%Y-%m-%d"))
-        res_discount = res_discount.execute()
+        # df_work의 URL 목록으로 직접 조회 (브랜드/키워드 필터 완전 반영)
+        df_work_dedup = df_work.drop_duplicates(subset=["product_url"])
+        date_from_str = date_from.strftime("%Y-%m-%d") if date_from else (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+        date_to_str = date_to.strftime("%Y-%m-%d") if date_to else datetime.now().strftime("%Y-%m-%d")
 
-        if not res_discount.data:
-            # fallback: 현재 is_discount 기준
-            df = df_work[df_work["is_discount"] == True]
-        else:
-            discount_map = {}
-            for r in res_discount.data:
-                key = str(r["product_url"]).strip().lower()
-                price = float(r["unit_price"]) if r["unit_price"] else 0
-                if price > 0:
-                    discount_map.setdefault(key, []).append(price)
-            df = df_work[df_work["product_url"].str.strip().str.lower().isin(discount_map.keys())]
+        discount_map = {}  # orig_url -> [prices]
+        for _, row in df_work_dedup.iterrows():
+            orig_url = row["product_url"]
+            res_d = (
+                supabase.table("product_all_events")
+                .select("unit_price")
+                .eq("product_url", orig_url)
+                .eq("event_type", "DISCOUNT")
+                .gte("date", date_from_str)
+                .lte("date", date_to_str)
+                .execute()
+            )
+            if res_d.data:
+                prices = [float(r["unit_price"]) for r in res_d.data if r["unit_price"] and float(r["unit_price"]) > 0]
+                if prices:
+                    discount_map[str(orig_url).strip().lower()] = prices
+
+        df = df_work_dedup[df_work_dedup["product_url"].str.strip().str.lower().isin(discount_map.keys())]
 
         if df.empty:
             return None
+
+        # res_discount placeholder (하위 호환용)
+        class _FakeRes:
+            data = list(discount_map.keys())
+        res_discount = _FakeRes()
 
         df = df.drop_duplicates(subset=["product_url"])
         results = []
         product_details = {}
         for _, row in df.iterrows():
             url = str(row["product_url"]).strip().lower()
-            if res_discount.data and url in discount_map:
+            if url in discount_map:
                 disc_price = min(discount_map[url])
                 norm_price = float(row.get("normal_unit_price") or 0)
                 if norm_price <= 0:
