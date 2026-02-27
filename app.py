@@ -52,6 +52,7 @@ def load_product_summary():
         "product_event_status",
         "is_new_product",
         "brew_type_kr",
+        "brew_type",
     ]
     res = supabase.table("product_price_summary_enriched").select(", ".join(cols)).execute()
     df = pd.DataFrame(res.data)
@@ -319,8 +320,12 @@ def extract_period_from_question(q: str):
 def extract_brew_type(q: str, df_all: pd.DataFrame):
     q = q.lower()
     brew_list = df_all["brew_type_kr"].dropna().unique().tolist()
+    # 완전 일치 또는 부분 일치 (예: "에스프레소" → "에스프레소 (LTO)" 포함)
     for brew in brew_list:
         if brew and brew.lower() in q:
+            return brew
+    for brew in brew_list:
+        if brew and q in brew.lower():
             return brew
     return None
 
@@ -345,12 +350,18 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
     if all_keywords:
         for keyword in all_keywords:
             if len(keyword) >= 2:
-                keyword_mask = False
-                keyword_mask |= _norm_series(df_work["product_name"]).str.contains(keyword, case=False)
-                keyword_mask |= _norm_series(df_work["brand"]).str.contains(keyword, case=False)
-                keyword_mask |= _norm_series(df_work["category1"]).str.contains(keyword, case=False)
-                keyword_mask |= _norm_series(df_work["category2"]).str.contains(keyword, case=False)
-                if keyword_mask is not False and keyword_mask.any():
+                # 브랜드 완전/부분 일치가 있으면 브랜드 우선 필터
+                brand_mask = _norm_series(df_work["brand"]).str.contains(keyword, case=False)
+                if brand_mask.any():
+                    df_work = df_work[brand_mask]
+                    continue
+                # 브랜드 매칭 없으면 전체 필드 검색
+                keyword_mask = (
+                    _norm_series(df_work["product_name"]).str.contains(keyword, case=False) |
+                    _norm_series(df_work["category1"]).str.contains(keyword, case=False) |
+                    _norm_series(df_work["category2"]).str.contains(keyword, case=False)
+                )
+                if keyword_mask.any():
                     df_work = df_work[keyword_mask]
 
     if all_keywords and df_work.empty:
@@ -406,22 +417,39 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
                                     f"({discount_rate:.0f}% 할인)")
                     elif discount_price:
                         price_info = f"  💰 할인가: {float(discount_price):,.1f}원"
+                    url = str(row["product_url"]).strip().lower()
+                    detail_parts = [f"📅 {period['discount_start_date']} ~ {period['discount_end_date']}"]
+                    if price_info.strip():
+                        detail_parts.append(price_info.strip())
+                    detail_str = " | ".join(detail_parts)
                     results.append({
                         "text": f"• {row['brand']} - {row['product_name']}\n"
                                 f"  📅 할인 기간: {period['discount_start_date']} ~ {period['discount_end_date']}\n"
                                 f"{price_info}",
-                        "product_url": str(row["product_url"])
+                        "product_url": url,
+                        "detail": detail_str,
                     })
         if not results:
             return "해당 제품의 할인 기간 정보가 없습니다."
+        product_details = {}
+        for r in results:
+            url = r["product_url"]
+            # 같은 제품에 할인 기간 여러 개면 줄바꿈으로 합침
+            if url in product_details:
+                product_details[url] += " → " + r["detail"]
+            else:
+                product_details[url] = r["detail"]
+        seen = set()
+        unique_products = []
+        for r in results:
+            if r["product_url"] not in seen:
+                seen.add(r["product_url"])
+                unique_products.append(r["product_url"])
         return {
             "type": "product_list",
-            "text": "할인 기간 정보:\n\n" + "\n\n".join([r["text"] for r in results]),
-            "products": [
-                str(r["product_url"]).strip().lower()
-                for r in results
-                if r.get("product_url")
-            ]
+            "text": f"할인 기간 정보 ({len(unique_products)}개)",
+            "products": unique_products,
+            "product_details": product_details,
         }
 
     if intent == "DISCOUNT" and not start_date:
@@ -1138,7 +1166,8 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
                 _norm_series(df_search["brand"]).str.contains(keyword, case=False) |
                 _norm_series(df_search["category1"]).str.contains(keyword, case=False) |
                 _norm_series(df_search["category2"]).str.contains(keyword, case=False) |
-                _norm_series(df_search["brew_type_kr"]).str.contains(keyword, case=False)
+                _norm_series(df_search["brew_type_kr"]).str.contains(keyword, case=False) |
+                (_norm_series(df_search["brew_type"]).str.contains(keyword, case=False) if "brew_type" in df_search.columns else pd.Series(False, index=df_search.index))
             )
             df_search = df_search[mask]
             if df_search.empty:
