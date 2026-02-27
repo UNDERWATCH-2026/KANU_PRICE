@@ -1717,6 +1717,32 @@ if "_removed_products" not in st.session_state:
 # =========================
 # 5️⃣ 메인 UI
 # =========================
+# -------------------------
+# 🔐 비밀번호 인증
+# -------------------------
+def check_password():
+    app_password = st.secrets.get("APP_PASSWORD", "")
+    if not app_password:
+        return True  # secrets에 설정 안 된 경우 통과
+    if st.session_state.get("authenticated"):
+        return True
+    st.title("☕ Coffee Capsule Price Intelligence")
+    st.markdown("---")
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.markdown("### 🔒 로그인")
+        pw = st.text_input("비밀번호를 입력하세요", type="password", key="pw_input")
+        if st.button("로그인", use_container_width=True):
+            if pw == app_password:
+                st.session_state["authenticated"] = True
+                st.rerun()
+            else:
+                st.error("비밀번호가 틀렸습니다.")
+    return False
+
+if not check_password():
+    st.stop()
+
 st.title("☕ Coffee Capsule Price Intelligence")
 
 # -------------------------
