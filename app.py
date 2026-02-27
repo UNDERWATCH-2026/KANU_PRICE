@@ -1728,7 +1728,7 @@ def check_password():
         return True
     st.title("☕ Coffee Capsule Price Intelligence")
     st.markdown("---")
-    col1, col2, col3 = st.columns([1, 1, 4])
+    col1, col2, col3 = st.columns([3, 2, 3])
     with col2:
         st.markdown("### 🔒 로그인")
         pw = st.text_input("비밀번호를 입력하세요", type="password", key="pw_input")
