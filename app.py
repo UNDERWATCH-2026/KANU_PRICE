@@ -417,13 +417,16 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
                     elif discount_price:
                         price_info = f"  💰 할인가: {float(discount_price):,.1f}원"
                     url = str(row["product_url"]).strip().lower()
-                    detail_parts = [f"📅 {period['discount_start_date']} ~ {period['discount_end_date']}"]
+                    # 조회 기간으로 날짜 클리핑
+                    disp_start = max(period['discount_start_date'], date_from.strftime("%Y-%m-%d") if date_from else period['discount_start_date'])
+                    disp_end = min(period['discount_end_date'], date_to.strftime("%Y-%m-%d") if date_to else period['discount_end_date'])
+                    detail_parts = [f"📅 {disp_start} ~ {disp_end}"]
                     if price_info.strip():
                         detail_parts.append(price_info.strip())
                     detail_str = " | ".join(detail_parts)
                     results.append({
                         "text": f"• {row['brand']} - {row['product_name']}\n"
-                                f"  📅 할인 기간: {period['discount_start_date']} ~ {period['discount_end_date']}\n"
+                                f"  📅 할인 기간: {disp_start} ~ {disp_end}\n"
                                 f"{price_info}",
                         "product_url": url,
                         "detail": detail_str,
