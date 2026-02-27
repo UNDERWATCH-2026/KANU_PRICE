@@ -389,45 +389,40 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None, top
                 str(row.get("product_name") or ""),
             )
 
-        # products는 _inner에서 이미 수치 정렬된 순서
-        # 같은 detail 값(동점) 제품끼리만 가나다순 보조 정렬
+        # products는 _inner에서 이미 수치 정렬된 순서 → 원래 순서(idx) 유지
+        # 동점(같은 detail 값)끼리만 가나다순 보조 정렬
         detail_of = lambda url: product_details.get(url, "")
 
-        def sort_key(idx_url):
-            idx, url = idx_url
-            meta = url_meta.get(url, ("", "", "", ""))
-            return (idx, meta[0], meta[1], meta[2], meta[3])
-
-        # 동점 그룹 구분: detail 값이 같으면 같은 순위
-        # detail 값 기준으로 순위 부여
+        # 동점 그룹: detail 동일 → 같은 rank, 가나다순 정렬
+        # 다른 detail → 원래 products 순서(idx) 유지
         detail_vals = [detail_of(u) for u in products]
-        unique_details = []
+        unique_details_ordered = []
         for d in detail_vals:
-            if d not in unique_details:
-                unique_details.append(d)
-        rank_map = {d: i for i, d in enumerate(unique_details)}
+            if d not in unique_details_ordered:
+                unique_details_ordered.append(d)
+        rank_map = {d: i for i, d in enumerate(unique_details_ordered)}
 
-        indexed = [(rank_map[detail_of(u)], u) for u in products]
-        indexed_sorted = sorted(indexed, key=sort_key)
+        def sort_key(url):
+            rank = rank_map[detail_of(url)]
+            meta = url_meta.get(url, ("", "", "", ""))
+            return (rank, meta[0], meta[1], meta[2], meta[3])
+
+        sorted_products = sorted(products, key=sort_key)
 
         if mode == "rank":
             # N위까지 - N위와 동일한 순위 제품 모두 포함
+            sorted_ranks = sorted(set(rank_map[detail_of(u)] for u in products))
+            cutoff_rank = sorted_ranks[min(n - 1, len(sorted_ranks) - 1)] if direction != "bottom" else sorted_ranks[-(n)]
             if direction == "bottom":
-                cutoff_rank = sorted(set(r for r, _ in indexed_sorted))[-(n)]
+                sliced = [u for u in sorted_products if rank_map[detail_of(u)] >= cutoff_rank]
             else:
-                sorted_ranks = sorted(set(r for r, _ in indexed_sorted))
-                cutoff_rank = sorted_ranks[min(n - 1, len(sorted_ranks) - 1)]
-            if direction == "bottom":
-                sliced = [u for r, u in indexed_sorted if r >= cutoff_rank]
-            else:
-                sliced = [u for r, u in indexed_sorted if r <= cutoff_rank]
+                sliced = [u for u in sorted_products if rank_map[detail_of(u)] <= cutoff_rank]
         else:
-            # N개 - 단순 슬라이싱 (동점이어도 N개 고정)
-            sorted_urls = [u for _, u in indexed_sorted]
+            # N개 - 단순 슬라이싱
             if direction == "bottom":
-                sliced = sorted_urls[-n:]
+                sliced = sorted_products[-n:]
             else:
-                sliced = sorted_urls[:n]
+                sliced = sorted_products[:n]
 
         sliced_set = set(sliced)
         result["products"] = sliced
@@ -600,20 +595,42 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
         # df_work 기준 URL만 사용 (브랜드/키워드 필터 반영)
         df_work_urls = set(df_work["product_url"].str.strip().str.lower().tolist())
 
+        # summary의 normal_unit_price를 fallback 정상가로 미리 수집
+        summary_normal = {}
+        for _, row in df_work.iterrows():
+            url_key = str(row["product_url"]).strip().lower()
+            v = float(row.get("normal_unit_price") or 0)
+            if v > 0:
+                summary_normal[url_key] = v
+
+        # 기간 내 NORMAL로도 정상가 못 찾은 경우 기간 밖 최근 NORMAL 조회 (bulk)
+        missing_normal_urls = [
+            url for url in discount_map
+            if url in df_work_urls and url not in normal_map and url not in summary_normal
+        ]
+        if missing_normal_urls:
+            # 원본 URL로 변환
+            url_orig_map = {str(r["product_url"]).strip().lower(): r["product_url"] for r in (res_d.data or [])}
+            for url in missing_normal_urls:
+                orig_url = url_orig_map.get(url, url)
+                nr = supabase.table("product_all_events").select("unit_price").eq("product_url", orig_url).eq("event_type", "NORMAL").order("date", desc=True).limit(1).execute()
+                if nr.data:
+                    p = float(nr.data[0]["unit_price"]) if nr.data[0]["unit_price"] else 0
+                    if p > 0:
+                        summary_normal[url] = p
+
         # 할인율 계산
         rate_list = []
         for url, disc_price in discount_map.items():
             if url not in df_work_urls:
                 continue
-            norm_price = normal_map.get(url)
-            if not norm_price or norm_price <= disc_price:
-                # summary에서 정상가 조회
-                match = df_work[df_work["product_url"].str.strip().str.lower() == url]
-                if not match.empty:
-                    norm_price = float(match.iloc[0].get("normal_unit_price") or 0)
+            norm_price = normal_map.get(url) or summary_normal.get(url)
             if norm_price and norm_price > disc_price:
                 rate = (norm_price - disc_price) / norm_price * 100
                 rate_list.append((url, disc_price, norm_price, rate))
+            elif disc_price > 0:
+                # 정상가 불명이면 할인율 0%로 포함 (제품은 보여주되 할인율 미상)
+                rate_list.append((url, disc_price, None, 0.0))
 
         if not rate_list:
             return "할인율 계산 가능한 제품이 없습니다."
@@ -630,7 +647,10 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
             results.append({"product_url": url})
             disc_date = discount_date_map.get(url, "")
             date_str = f"  |  📅 {disc_date}" if disc_date else ""
-            product_details[url] = f"💰 {norm_price:,.1f}원 → {disc_price:,.1f}원 ({rate:.1f}% 할인){date_str}"
+            if norm_price:
+                product_details[url] = f"💰 {norm_price:,.1f}원 → {disc_price:,.1f}원 ({rate:.1f}% 할인){date_str}"
+            else:
+                product_details[url] = f"💰 할인가: {disc_price:,.1f}원 (정상가 미상){date_str}"
 
         return {
             "type": "product_list",
