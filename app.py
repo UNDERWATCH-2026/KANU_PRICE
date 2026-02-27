@@ -2950,6 +2950,8 @@ if selected_products:
                 supabase.table("product_price_change_events")
                 .select("*")
                 .eq("product_url", p["product_url"])
+                .gte("date", filter_date_from.strftime("%Y-%m-%d"))
+                .lte("date", filter_date_to.strftime("%Y-%m-%d"))
                 .order("date", desc=True)
                 .execute()
             )
@@ -3024,6 +3026,8 @@ if selected_products:
                 supabase.table("product_normal_price_events")
                 .select("*")
                 .eq("product_url", p["product_url"])
+                .gte("date", filter_date_from.strftime("%Y-%m-%d"))
+                .lte("date", filter_date_to.strftime("%Y-%m-%d"))
                 .execute()
             )
 
@@ -3066,6 +3070,11 @@ if selected_products:
             if display_rows:
                 df_display = pd.DataFrame(display_rows)
                 df_display["날짜_정렬용"] = pd.to_datetime(df_display["날짜"], errors="coerce")
+                # 조회 기간 필터 적용
+                df_display = df_display[
+                    (df_display["날짜_정렬용"] >= pd.Timestamp(filter_date_from)) &
+                    (df_display["날짜_정렬용"] <= pd.Timestamp(filter_date_to))
+                ]
                 df_display = df_display.sort_values("날짜_정렬용", ascending=False)
                 df_display = df_display.drop(columns=["날짜_정렬용"])
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
