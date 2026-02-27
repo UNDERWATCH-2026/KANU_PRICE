@@ -284,8 +284,9 @@ def extract_period(q: str):
         return today - timedelta(days=365)
     return None
 
-def extract_period_from_question(q: str):
-    today = datetime.today()
+def extract_period_from_question(q: str, base_date=None):
+    # base_date: 조회 기간 종료일 (없으면 오늘)
+    today = base_date if base_date else datetime.today()
     q_lower = q.lower()
 
     if any(w in q_lower for w in ["최근 7일", "최근 일주일", "최근 1주일"]):
@@ -331,7 +332,7 @@ def extract_brew_type(q: str, df_all: pd.DataFrame):
 def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
     df_work = df_summary.copy()
 
-    question_period = extract_period_from_question(question)
+    question_period = extract_period_from_question(question, base_date=date_to)
     if question_period:
         _, _, period_label = question_period
     else:
@@ -487,7 +488,23 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
             if res_discount.data and url in discount_map:
                 prices = discount_map[url]
                 price = min(prices)
-                detail = f"💰 할인가: {price:,.1f}원"
+                # 할인 기간 조회
+                period_res = supabase.rpc(
+                    "get_discount_periods_in_range",
+                    {
+                        "p_product_url": row["product_url"],
+                        "p_date_from": (date_from if date_from else datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d"),
+                        "p_date_to": (date_to if date_to else datetime.now()).strftime("%Y-%m-%d"),
+                    }
+                ).execute()
+                if period_res.data:
+                    periods_str = "  /  ".join([
+                        f"📅 {p['discount_start_date']} ~ {p['discount_end_date']}"
+                        for p in period_res.data
+                    ])
+                    detail = f"💰 할인가: {price:,.1f}원  |  {periods_str}"
+                else:
+                    detail = f"💰 할인가: {price:,.1f}원"
             else:
                 price = float(row["current_unit_price"])
                 detail = f"💰 현재 할인가: {price:,.1f}원"
@@ -1863,7 +1880,7 @@ with col_tabs:
 
             filtered_df = df_all.copy()
 
-            question_period = extract_period_from_question(question)
+            question_period = extract_period_from_question(question, base_date=date_to)
             if question_period:
                 q_date_from, q_date_to, _ = question_period
                 answer = execute_rule(intent, question, filtered_df, q_date_from, q_date_to)
