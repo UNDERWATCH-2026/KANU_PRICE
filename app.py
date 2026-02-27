@@ -219,11 +219,17 @@ def extract_product_name_from_question(q: str) -> list:
         "할인가", "정상가", "변동", "상승", "증가", "하락",
         "비싼", "싼", "저렴", "최근", "알려줘", "보여줘",
         "있어", "없어", "언제부터", "언제까지", "기간은", "얼마야",
-        "날짜",
+        "날짜", "할인률", "할인율", "높은", "낮은", "순위", "순서",
+        "상위", "하위", "개", "위", "등", "번째", "최대", "최소",
+        "많은", "적은", "전체", "모든", "모두", "모아", "알려",
     ]
+    import re as _re
     words = q.split()
     product_keywords = []
     for word in words:
+        # 숫자만 있거나 숫자+단위(개/위/등)면 제외
+        if _re.fullmatch(r"[0-9]+[개위등번]*", word):
+            continue
         if len(word) >= 2 and not any(ex in word for ex in exclude_words):
             product_keywords.append(word)
     return product_keywords
