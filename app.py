@@ -1125,6 +1125,34 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
             )
         return "기간 내 정상가 변동 제품 목록:\n" + "\n".join(results) if results else "해당 기간 내 정상가 변동이 없습니다."
 
+    # =========================
+    # 🔍 UNKNOWN: 키워드 제품 검색
+    # =========================
+    # intent가 분류되지 않았거나, 키워드로 제품을 찾으려는 경우
+    keywords = [w for w in question.split() if len(w) >= 2]
+    if keywords:
+        df_search = df_work.copy()
+        for keyword in keywords:
+            mask = (
+                _norm_series(df_search["product_name"]).str.contains(keyword, case=False) |
+                _norm_series(df_search["brand"]).str.contains(keyword, case=False) |
+                _norm_series(df_search["category1"]).str.contains(keyword, case=False) |
+                _norm_series(df_search["category2"]).str.contains(keyword, case=False) |
+                _norm_series(df_search["brew_type_kr"]).str.contains(keyword, case=False)
+            )
+            df_search = df_search[mask]
+            if df_search.empty:
+                break
+
+        df_search = df_search.drop_duplicates(subset=["product_url"])
+        if not df_search.empty:
+            products = [str(r["product_url"]).strip().lower() for _, r in df_search.iterrows()]
+            return {
+                "type": "product_list",
+                "text": f"'{question}' 검색 결과 ({len(products)}개)",
+                "products": products,
+            }
+
     return None
 
 def llm_fallback(question: str, df_summary: pd.DataFrame):
