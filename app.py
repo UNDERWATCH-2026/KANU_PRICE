@@ -52,7 +52,6 @@ def load_product_summary():
         "product_event_status",
         "is_new_product",
         "brew_type_kr",
-        "brew_type",
     ]
     res = supabase.table("product_price_summary_enriched").select(", ".join(cols)).execute()
     df = pd.DataFrame(res.data)
@@ -1166,8 +1165,7 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None):
                 _norm_series(df_search["brand"]).str.contains(keyword, case=False) |
                 _norm_series(df_search["category1"]).str.contains(keyword, case=False) |
                 _norm_series(df_search["category2"]).str.contains(keyword, case=False) |
-                _norm_series(df_search["brew_type_kr"]).str.contains(keyword, case=False) |
-                (_norm_series(df_search["brew_type"]).str.contains(keyword, case=False) if "brew_type" in df_search.columns else pd.Series(False, index=df_search.index))
+                _norm_series(df_search["brew_type_kr"]).str.contains(keyword, case=False)
             )
             df_search = df_search[mask]
             if df_search.empty:
