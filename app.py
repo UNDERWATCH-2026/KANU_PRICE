@@ -2021,7 +2021,7 @@ with col_tabs:
                 "카누 바리스타"
             ]
             
-            brands = VALID_BRANDS
+            brands = options_from(df_all, "brand")
             sel_brand = st.selectbox(
                 "브랜드",
                 ["(전체)"] + brands,
@@ -2042,7 +2042,7 @@ with col_tabs:
                 "커피"
             ]
 
-            cat1s = VALID_CAT1
+            cat1s = options_from(df1, "category1")
             sel_cat1 = st.selectbox(
                 "카테고리1",
                 ["(전체)"] + cat1s,
@@ -2055,7 +2055,7 @@ with col_tabs:
         with col3:
             VALID_CAT2 = ["버츄오", "오리지널"]
 
-            cat2s = VALID_CAT2
+            cat2s = options_from(df2, "category2")
             sel_cat2 = st.selectbox(
                 "카테고리2",
                 ["(전체)"] + cat2s,
@@ -3487,5 +3487,6 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
