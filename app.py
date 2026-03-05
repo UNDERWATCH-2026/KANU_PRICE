@@ -2014,7 +2014,14 @@ with col_tabs:
         col1, col2, col3 = st.columns(3)
 
         with col1:
-            brands = options_from(df_all, "brand")
+            VALID_BRANDS = [
+                "네스프레소",
+                "네슬레",
+                "일리카페",
+                "카누 바리스타"
+            ]
+            
+            brands = VALID_BRANDS
             sel_brand = st.selectbox(
                 "브랜드",
                 ["(전체)"] + brands,
@@ -2025,7 +2032,17 @@ with col_tabs:
         df1 = df_all if sel_brand == "(전체)" else df_all[df_all["brand"] == sel_brand]
 
         with col2:
-            cat1s = options_from(df1, "category1")
+            VALID_CAT1 = [
+                "돌체구스토 캡슐",
+                "스타벅스by네스프레소",
+                "카누 네스프레소 호환캡슐",
+                "카누 돌체구스토 호환캡슐",
+                "카누 바리스타 전용캡슐",
+                "캡슐",
+                "커피"
+            ]
+
+            cat1s = VALID_CAT1
             sel_cat1 = st.selectbox(
                 "카테고리1",
                 ["(전체)"] + cat1s,
@@ -2036,7 +2053,9 @@ with col_tabs:
         df2 = df1 if sel_cat1 == "(전체)" else df1[df1["category1"] == sel_cat1]
 
         with col3:
-            cat2s = options_from(df2, "category2")
+            VALID_CAT2 = ["버츄오", "오리지널"]
+
+            cat2s = VALID_CAT2
             sel_cat2 = st.selectbox(
                 "카테고리2",
                 ["(전체)"] + cat2s,
@@ -3468,4 +3487,5 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
