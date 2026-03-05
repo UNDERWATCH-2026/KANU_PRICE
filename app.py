@@ -2245,14 +2245,17 @@ with col_tabs:
 
             filtered_df = df_all.copy()
 
-            question_period = extract_period_from_question(question, base_date=date_to)
             _top_n, _top_dir, _top_mode = extract_top_n(question)
             _top_n_arg = (_top_n, _top_dir, _top_mode) if _top_n else None
-            if question_period:
-                q_date_from, q_date_to, _ = question_period
-                answer = execute_rule(intent, question, filtered_df, q_date_from, q_date_to, top_n=_top_n_arg)
-            else:
-                answer = execute_rule(intent, question, filtered_df, date_from, date_to, top_n=_top_n_arg)
+            
+            answer = execute_rule(
+                intent,
+                question,
+                filtered_df,
+                date_from,
+                date_to,
+                top_n=_top_n_arg
+            )
 
             filter_info = {
                 "date_from": date_from.strftime("%Y-%m-%d") if hasattr(date_from, 'strftime') else str(date_from),
@@ -3578,6 +3581,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
