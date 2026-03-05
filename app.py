@@ -1602,9 +1602,18 @@ def _norm_series(s: pd.Series) -> pd.Series:
 def options_from(df: pd.DataFrame, col: str):
     if col not in df.columns:
         return []
-    vals = df[col].dropna().astype(str)
-    vals = [v.strip() for v in vals.tolist() if v.strip()]
-    return sorted(list(dict.fromkeys(vals)))
+
+    vals = (
+        df[col]
+        .dropna()
+        .astype(str)
+        .str.strip()
+    )
+
+    # None / 빈 문자열 제거
+    vals = vals[vals.notin(["", "None", "nan"])]
+
+    return sorted(vals.unique().tolist())
 
 def format_product_label(row):
     brand = row.get("brand")
@@ -1810,6 +1819,10 @@ df_all["category2"] = df_all["category2"].replace({
     "버츄": "버츄오",
     "버추오": "버츄오",
     "오리": "오리지널"
+})
+
+df_all["category2"] = df_all["category2"].replace({
+    "None": None
 })
 
 # -------------------------
@@ -3565,6 +3578,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
