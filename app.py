@@ -3119,8 +3119,8 @@ if selected_products:
             "get_discount_periods_in_range",
             {
                 "p_product_url": p["product_url"],
-                "p_date_from": filter_date_from.strftime("%Y-%m-%d"),
-                "p_date_to": filter_date_to.strftime("%Y-%m-%d"),
+                "p_date_from": "2000-01-01",
+                "p_date_to": "2100-01-01",
             }
         ).execute()
 
@@ -3581,6 +3581,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
