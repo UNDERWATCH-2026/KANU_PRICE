@@ -1737,6 +1737,22 @@ if st.secrets.get("ENV") == "dev":
 
 df_all = load_product_summary()
 
+df_all["brand"] = (
+    df_all["brand"]
+    .astype(str)
+    .str.strip()
+    .str.replace("�", "", regex=False)
+)
+
+df_all["brand"] = df_all["brand"].replace({
+    "네레": "네슬레",          # ← 여기 수정
+    "네스프레": "네스프레소",
+    "네슬레": "네슬레",
+    "일리": "일리카페",
+    "카누": "카누 바리스타",
+    "카누 바스타": "카누 바리스타"
+})
+
 df_all["product_url"] = (
     df_all["product_url"]
     .astype(str)
@@ -3487,6 +3503,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
