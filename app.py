@@ -1610,9 +1610,9 @@ def options_from(df: pd.DataFrame, col: str):
         .str.strip()
     )
 
-    # None / 빈 문자열 제거
-    vals = vals[vals.notin(["", "None", "nan"])]
-
+    # None / 빈값 제거
+    df_all["category2"] = df_all["category2"].replace("None", None)
+    
     return sorted(vals.unique().tolist())
 
 def format_product_label(row):
@@ -3578,6 +3578,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
