@@ -52,6 +52,7 @@ def load_product_summary():
         "product_event_status",
         "is_new_product",
         "brew_type_kr",
+        "capsule_count",        # ✅ 추가
     ]
     res = supabase.table("product_price_summary_enriched").select(", ".join(cols)).execute()
     df = pd.DataFrame(res.data)
@@ -3131,17 +3132,31 @@ if selected_products:
                     bg = "#eaf2ff"
                     border = "#1d4ed8"
                     icon = "📉 정상가 하락"
+
+                # ✅ capsule_count로 나눠서 개당 가격 표시
+                cc = float(p.get("capsule_count") or 0)
+                if cc > 0:
+                    prev_unit = prev_price / cc
+                    curr_unit = current_price / cc
+                    price_text = (
+                        f"{prev_unit:,.1f}원 → {curr_unit:,.1f}원 "
+                        f"({diff_rate:+.1f}%)"
+                    )
+                else:
+                    price_text = (
+                        f"{prev_price:,.0f}원 → {current_price:,.0f}원 "
+                        f"({diff_rate:+.1f}%)"
+                    )
+
                 cards.append(render_card(
                     bg=bg,
                     border=border,
                     title=icon,
                     content=(
                         f"날짜: {latest_change['date']}<br>"
-                        f"{prev_price:,.0f}원 → {current_price:,.0f}원 "
-                        f"({diff_rate:+.1f}%)"
+                        f"{price_text}"
                     )
                 ))
-
         if not cards:
             cards.append(render_card(
                 "#f3f4f6",
@@ -3365,14 +3380,22 @@ if selected_products:
                     else:
                         rate_text = ""
 
+                    # ✅ NORMAL_UP / NORMAL_DOWN은 개당 가격으로 표시
+                    if row["price_change_type"] in ("NORMAL_UP", "NORMAL_DOWN"):
+                        cc = float(p.get("capsule_count") or 0)
+                        if cc > 0:
+                            prev_unit = prev_price / cc
+                            curr_unit = current_price / cc
+                            price_text = f"{prev_unit:,.1f}원 → {curr_unit:,.1f}원 {rate_text}"
+                        else:
+                            price_text = f"{prev_price:,.1f}원 → {current_price:,.1f}원 {rate_text}"
+                    else:
+                        price_text = f"{prev_price:,.1f}원 → {current_price:,.1f}원 {rate_text}"
+
                     display_rows.append({
                         "날짜": row["date"],
                         "이벤트": icon_map.get(row["price_change_type"], ""),
-                        "가격 정보": (
-                            f"{prev_price:,.1f}원 → "
-                            f"{current_price:,.1f}원 "
-                            f"{rate_text}"
-                        )
+                        "가격 정보": price_text
                     })
 
             normal_res = (
@@ -3410,14 +3433,26 @@ if selected_products:
                 diff_rate = (diff / prev_price) * 100 if prev_price != 0 else 0
                 event_label = "📈 정상가 상승" if diff > 0 else "📉 정상가 하락"
 
-                display_rows.append({
-                    "날짜": row["date"],
-                    "이벤트": event_label,
-                    "가격 정보": (
+                # ✅ capsule_count로 나눠서 개당 가격 표시
+                cc = float(p.get("capsule_count") or 0)
+                if cc > 0:
+                    prev_unit = prev_price / cc
+                    curr_unit = current_price / cc
+                    price_text = (
+                        f"{prev_unit:,.1f}원 → {curr_unit:,.1f}원 "
+                        f"({diff_rate:+.1f}%)"
+                    )
+                else:
+                    price_text = (
                         f"{prev_price:,.1f}원 → "
                         f"{current_price:,.1f}원 "
                         f"({diff_rate:+.1f}%)"
                     )
+
+                display_rows.append({
+                    "날짜": row["date"],
+                    "이벤트": event_label,
+                    "가격 정보": price_text
                 })
 
             if display_rows:
@@ -3433,3 +3468,4 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
