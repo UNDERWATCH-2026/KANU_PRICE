@@ -1796,16 +1796,17 @@ with col_main_right:
     st.subheader("📅 조회 기간")
 
 col_tabs, col_controls = st.columns([3, 1])
-
 with col_controls:
+    _min_date = pd.to_datetime(df_all["first_seen_date"].dropna()).min().date()
+    _max_date = pd.to_datetime(df_all["last_seen_date"].dropna()).max().date()
     col_from, col_to = st.columns(2)
     with col_from:
         st.write("시작일")
         date_from = st.date_input(
             "시작일",
-            value=datetime(2025, 10, 1),
-            min_value=datetime(2025, 10, 1),
-            max_value=datetime(2025, 10, 31),
+            value=_min_date,
+            min_value=_min_date,
+            max_value=_max_date,
             key="date_from",
             label_visibility="collapsed"
         )
@@ -1813,9 +1814,9 @@ with col_controls:
         st.write("종료일")
         date_to = st.date_input(
             "종료일",
-            value=datetime(2025, 10, 31),
-            min_value=datetime(2025, 10, 1),
-            max_value=datetime(2025, 10, 31),
+            value=_max_date,
+            min_value=_min_date,
+            max_value=_max_date,
             key="date_to",
             label_visibility="collapsed"
         )
@@ -3446,3 +3447,4 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
