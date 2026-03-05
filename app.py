@@ -1737,6 +1737,10 @@ if st.secrets.get("ENV") == "dev":
 
 df_all = load_product_summary()
 
+
+# -------------------------
+# 브랜드 정규화
+# -------------------------
 df_all["brand"] = (
     df_all["brand"]
     .astype(str)
@@ -1745,14 +1749,72 @@ df_all["brand"] = (
 )
 
 df_all["brand"] = df_all["brand"].replace({
-    "네레": "네슬레",          # ← 여기 수정
+    "네레": "네슬레",
     "네스프레": "네스프레소",
-    "네슬레": "네슬레",
     "일리": "일리카페",
     "카누": "카누 바리스타",
     "카누 바스타": "카누 바리스타"
 })
 
+# -------------------------
+# category1 정규화
+# -------------------------
+df_all["category1"] = (
+    df_all["category1"]
+    .astype(str)
+    .str.strip()
+    .str.replace("�", "", regex=False)
+)
+
+# 카누 전용
+df_all["category1"] = df_all["category1"].str.replace(
+    r"카.*바리스타.*캡슐",
+    "카누 바리스타 전용캡슐",
+    regex=True
+)
+
+# 카누 네스프레소 호환
+df_all["category1"] = df_all["category1"].str.replace(
+    r"카.*네스프레소.*캡슐",
+    "카누 네스프레소 호환캡슐",
+    regex=True
+)
+
+# 카누 돌체구스토 호환
+df_all["category1"] = df_all["category1"].str.replace(
+    r"카.*돌체.*캡슐",
+    "카누 돌체구스토 호환캡슐",
+    regex=True
+)
+
+# 돌체구스토 통합
+df_all["category1"] = df_all["category1"].str.replace(
+    r"돌체.*캡.*",
+    "돌체구스토 캡슐",
+    regex=True
+)
+
+# 스타벅스 오타 수정
+df_all["category1"] = df_all["category1"].replace({
+    "스타벅스by네스프소": "스타벅스by네스프레소"
+})
+
+df_all["category2"] = (
+    df_all["category2"]
+    .astype(str)
+    .str.strip()
+    .str.replace("�", "", regex=False)
+)
+
+df_all["category2"] = df_all["category2"].replace({
+    "버츄": "버츄오",
+    "버추오": "버츄오",
+    "오리": "오리지널"
+})
+
+# -------------------------
+# URL 정리
+# -------------------------
 df_all["product_url"] = (
     df_all["product_url"]
     .astype(str)
@@ -3503,6 +3565,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
