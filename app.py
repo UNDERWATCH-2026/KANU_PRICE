@@ -1864,7 +1864,7 @@ if "selected_products" not in st.session_state:
 if "_removed_products" not in st.session_state:
     st.session_state["_removed_products"] = set()
 
-# =========================
+
 
 # 5️⃣ 메인 UI
 
@@ -1872,11 +1872,15 @@ if "_removed_products" not in st.session_state:
 
 st.title("☕ Coffee Capsule Price Intelligence")
 
+# =====개발용 환경 여기만 다름====================
+
 # 아래 한 줄 추가
 
 if st.secrets.get("ENV") == "dev":
 
     st.warning("🚧 개발용 환경입니다.", icon="⚠️")
+
+# =====개발용 환경 여기만 다름====================
 
 # -------------------------
 
@@ -3770,6 +3774,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
