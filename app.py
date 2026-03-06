@@ -361,7 +361,7 @@ def extract_period_from_question(q: str, base_date=None):
                 year -= 1
             from_dt = datetime(year, month, 1)
             to_dt = (datetime(year, month + 1, 1) - timedelta(days=1)) if month < 12 else datetime(year, 12, 31)
-            return from_dt, to_dt, f"{year}년 {month}월"
+            return from_dt, to_dt, f"{year}년 {month}월 ({from_dt.strftime('%Y-%m-%d')} ~ {to_dt.strftime('%Y-%m-%d')})"
 
     return None
 
@@ -3915,6 +3915,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
