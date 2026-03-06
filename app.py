@@ -170,7 +170,11 @@ def normalize_brand_name(brand_query: str) -> str:
         "카누 돌체구스토": "카누 돌체구스토",
         "네스프레소": "네스프레소",
         "스타벅스": "스타벅스",
-        "일리": "일리",
+        "일리": "일리카페",
+        "일리카페": "일리카페",
+        "일리커피": "일리카페",
+        "일리 카페": "일리카페",
+        "일리 커피": "일리카페",
         "돌체구스토": "돌체구스토",
         "네스카페": "네스카페",
     }
@@ -1124,13 +1128,20 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
             key=lambda x: new_product_data[x],
             reverse=True
         )
-        df = df_work[df_work["product_url"].str.strip().str.lower().isin(urls)]
+        df = df_work[df_work["product_url"].str.strip().str.lower().isin(urls)].copy()
         if df.empty:
             return None
+        
+        df["product_url_key"] = df["product_url"].astype(str).str.strip().str.lower()
+        df["launch_date"] = df["product_url_key"].map(new_product_data)
+        df = df.sort_values("launch_date", ascending=False)
+        
         results = []
-        product_details = {}  # 🔥 추가
+        product_details = {}
+        
         for _, row in df.iterrows():
-            launch_date = new_product_data.get(row["product_url"])
+            url = str(row["product_url"]).strip().lower()
+            launch_date = row["launch_date"]
             categories = []
             if pd.notna(row.get("category1")) and row["category1"]:
                 categories.append(row["category1"])
@@ -3702,6 +3713,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
