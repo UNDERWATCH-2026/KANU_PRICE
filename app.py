@@ -294,18 +294,6 @@ def classify_intent(q: str):
 
     return "UNKNOWN"
 
-def extract_period(q: str):
-    today = datetime.today()
-    if any(word in q for word in ["최근 7일", "최근 일주일", "최근 1주일"]):
-        return today - timedelta(days=7)
-    if any(word in q for word in ["최근 한 달", "최근 30일", "최근 1개월"]):
-        return today - timedelta(days=30)
-    if "최근 3개월" in q:
-        return today - timedelta(days=90)
-    if "최근 1년" in q:
-        return today - timedelta(days=365)
-    return None
-
 def extract_period_from_question(q: str, base_date=None):
     # base_date: 조회 기간 종료일 (없으면 오늘)
     today = base_date if base_date else datetime.today()
@@ -434,9 +422,12 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None, top
 def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=None):
     df_work = df_summary.copy()
 
-    question_period = extract_period_from_question(question, base_date=date_to)
+    question_period = extract_period_from_question(question)
+
     if question_period:
-        _, _, period_label = question_period
+        q_from, q_to, period_label = question_period
+        date_from = q_from
+        date_to = q_to
     else:
         if date_from and date_to:
             period_label = f"{date_from.strftime('%Y-%m-%d')} ~ {date_to.strftime('%Y-%m-%d')}"
@@ -447,30 +438,7 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
     if brew_condition:
         df_work = df_work[df_work["brew_type_kr"] == brew_condition]
 
-    all_keywords = extract_product_name_from_question(question)
-
-    if all_keywords:
-        combined_mask = False
     
-        for keyword in all_keywords:
-            if len(keyword) >= 2:
-    
-                keyword_norm = keyword.replace(" ", "").lower()
-    
-                brand_mask = _norm_series(df_work["brand"]).str.contains(keyword_norm, regex=False)
-    
-                keyword_mask = (
-                    df_work["product_name_search"].fillna("").str.contains(keyword_norm, regex=False)
-                    | df_work["brew_type_search"].fillna("").str.contains(keyword_norm, regex=False)
-                    | df_work["category1_search"].fillna("").str.contains(keyword_norm, regex=False)
-                    | df_work["category2_search"].fillna("").str.contains(keyword_norm, regex=False)
-                    | brand_mask
-                )
-    
-                combined_mask = combined_mask | keyword_mask
-    
-        if combined_mask is not False:
-            df_work = df_work[combined_mask]
 
     if all_keywords and df_work.empty:
         keywords_str = ", ".join(all_keywords)
@@ -1548,18 +1516,21 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
         }
 
     if intent == "NORMAL_CHANGE":
-        start_date = extract_period(question)
-        query = supabase.table("product_normal_price_events").select("*")
-        if start_date:
-            query = query.gte("date", start_date.strftime("%Y-%m-%d"))
-        elif date_from:
-            query = query.gte("date", date_from.strftime("%Y-%m-%d"))
-        if date_to:
-            query = query.lte("date", date_to.strftime("%Y-%m-%d"))
+
+        query = (
+            supabase.table("product_normal_price_events")
+            .select("product_url,date,prev_price,normal_price,price_diff")
+            .gte("date", date_from.strftime("%Y-%m-%d"))
+            .lte("date", date_to.strftime("%Y-%m-%d"))
+        )
+    
         res = query.order("date", desc=True).execute()
+    
         if not res.data:
             return "해당 기간 내 정상가 변동이 없습니다."
+    
         df = pd.DataFrame(res.data)
+    
         product_details = {}
         results = []
         for _, row in df.iterrows():
@@ -3718,17 +3689,5 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
-
-
-
-
-
-
-
-
-
-
-
-
 
 
