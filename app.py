@@ -190,8 +190,15 @@ def extract_brand_from_question(q: str, df_all: pd.DataFrame) -> list:
     q_lower = q.lower()
     brands = df_all["brand"].dropna().unique().tolist()
     matched_brands = []
+    normalized = normalize_brand_name(q_lower)
+
     for brand in brands:
-        if brand and brand.lower() in q_lower:
+        brand_lower = brand.lower()
+    
+        if brand_lower in q_lower:
+            matched_brands.append(brand)
+    
+        elif brand_lower == normalized.lower():
             matched_brands.append(brand)
     if matched_brands:
         return matched_brands
@@ -432,7 +439,9 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
     brands = extract_brand_from_question(question, df_summary)
 
     if brands:
-        df_work = df_work[df_work["brand"].isin(brands)]
+        df_work = df_work[
+            df_work["brand"].astype(str).str.strip().isin(brands)
+        ]
     # 🔧 추가
     all_keywords = extract_product_name_from_question(question)
 
@@ -3731,6 +3740,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
