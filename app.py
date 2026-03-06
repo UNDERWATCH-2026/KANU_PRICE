@@ -802,6 +802,7 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
             .gte("date", date_from.strftime("%Y-%m-%d"))
             .lte("date", date_to.strftime("%Y-%m-%d"))
             .execute()
+        )
     
         if not res.data:
             return "가격 데이터가 없습니다."
@@ -878,6 +879,7 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
             .gte("date", date_from.strftime("%Y-%m-%d"))
             .lte("date", date_to.strftime("%Y-%m-%d"))
             .execute()
+        )
     
         if not res.data:
             return "가격 데이터가 없습니다."
@@ -3714,6 +3716,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
