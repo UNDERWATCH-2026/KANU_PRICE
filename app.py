@@ -420,7 +420,11 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None, top
     return result
 
 def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=None):
+
     df_work = df_summary.copy()
+
+    # 🔧 추가
+    all_keywords = extract_product_name_from_question(question)
 
     question_period = extract_period_from_question(question)
 
@@ -435,12 +439,15 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
             period_label = "조회 기간 내"
 
     brew_condition = extract_brew_type(question, df_summary)
+
     if brew_condition:
-        df_work = df_work[df_work["brew_type_kr"] == brew_condition]
+        filtered = df_work[
+            df_work["brew_type_kr"].str.contains(brew_condition, na=False)
+        ]
+        if not filtered.empty:
+            df_work = filtered
 
-    
-
-    if all_keywords and df_work.empty:
+        if all_keywords and df_work.empty:
         keywords_str = ", ".join(all_keywords)
         return f"'{keywords_str}'에 해당하는 제품이 없습니다."
 
@@ -3689,5 +3696,6 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
