@@ -745,6 +745,11 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
         }
 
     if intent == "DISCOUNT" and not date_from:
+
+    if intent == "DISCOUNT":
+    st.write("DEBUG brands:", brands)
+    st.write("DEBUG df_work 행수:", len(df_work))
+    st.write("DEBUG df_work brand 목록:", df_work["brand"].unique().tolist())
         # df_work의 URL 목록으로 직접 조회 (브랜드/키워드 필터 완전 반영)
         df_work_dedup = df_work.drop_duplicates(subset=["product_url"])
         date_from_str = date_from.strftime("%Y-%m-%d") if date_from else (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
@@ -3901,6 +3906,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
