@@ -1166,6 +1166,7 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
             "text": f"{period_label} 신제품 ({len(results)}개)",
             "products": [r["product_url"] for r in results],
             "product_details": product_details,
+            "launch_dates": new_product_data
         }
 
     if intent == "OUT":
@@ -2463,11 +2464,22 @@ with col_tabs:
                                     # product_urls는 strip().lower() 정규화된 값 → df_all도 동일하게 비교
                                     product_urls_set = set(str(u).strip().lower() for u in product_urls)
                                     sorted_df = (
-                                        df_all[df_all["product_url"].str.strip().str.lower().isin(product_urls_set)]
+                                        df_all[df_all["product_url"].astype(str).isin(answer_data["products"])]
+                                    )
                                         .fillna("")
                                         .drop_duplicates(subset=["product_url"])
-                                        .sort_values(by=["brand", "category1", "category2", "product_name"])
                                     )
+                                    
+                                    # 🔥 질문에 '순서/최신/최근' 있으면 날짜순 유지
+                                    if any(k in history["question"] for k in ["순서","최신","최근"]):
+                                        sorted_df["product_url_key"] = sorted_df["product_url"].astype(str).str.strip().str.lower()
+                                        sorted_df["launch_date"] = sorted_df["product_url_key"].map(answer_data.get("launch_dates", {}))
+                                        sorted_df = sorted_df.sort_values("launch_date", ascending=False)
+                                    else:
+                                        sorted_df = sorted_df.sort_values(
+                                            by=["brand","category1","category2","product_name"]
+                                        )
+                                                                        
                                     if sorted_df.empty:
                                         st.caption("⚠️ 매칭되는 제품이 없습니다.")
                                         return
@@ -3716,6 +3728,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
