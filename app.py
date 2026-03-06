@@ -2711,7 +2711,11 @@ if selected_products:
         ].copy()
         if not df_price.empty:
             tmp = df_price.copy()
-            display_name = f"{row['brand']} - {pname}"
+            if row['brand'] == '네스프레소':
+                cat2 = str(row.get('category2') or '').strip()
+                display_name = f"{row['brand']} - {cat2} - {pname}" if cat2 else f"{row['brand']} - {pname}"
+            else:
+                display_name = f"{row['brand']} - {pname}"
             tmp["product_name"] = display_name
             tmp["event_date"] = pd.to_datetime(tmp["date"])
 
@@ -2834,7 +2838,11 @@ if selected_products:
                 df_life = df_life.dropna(subset=["date"])
 
                 lc_tmp = df_life.copy()
-                display_name = f"{row['brand']} - {pname}"
+                if row['brand'] == '네스프레소':
+                    cat2 = str(row.get('category2') or '').strip()
+                    display_name = f"{row['brand']} - {cat2} - {pname}" if cat2 else f"{row['brand']} - {pname}"
+                else:
+                    display_name = f"{row['brand']} - {pname}"
                 lc_tmp["product_name"] = display_name
                 lc_tmp["event_date"] = pd.to_datetime(lc_tmp["date"])
 
@@ -3839,6 +3847,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
