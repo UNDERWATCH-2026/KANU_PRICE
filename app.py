@@ -744,8 +744,6 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
             "product_details": product_details,
         }
 
-    if intent == "DISCOUNT" and not date_from:
-
     if intent == "DISCOUNT":
     st.write("DEBUG brands:", brands)
     st.write("DEBUG df_work 행수:", len(df_work))
@@ -3906,6 +3904,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
