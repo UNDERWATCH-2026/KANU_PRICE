@@ -1134,7 +1134,10 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
         
         df["product_url_key"] = df["product_url"].astype(str).str.strip().str.lower()
         df["launch_date"] = df["product_url_key"].map(new_product_data)
-        df = df.sort_values("launch_date", ascending=False)
+        if any(k in question for k in ["순서","최신","최근"]):
+            df = df.sort_values("launch_date", ascending=False)
+        else:
+            df = df.sort_values(["brand","category1","category2","product_name"])
         
         results = []
         product_details = {}
@@ -3713,6 +3716,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
