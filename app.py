@@ -168,15 +168,18 @@ def normalize_brand_name(brand_query: str) -> str:
         "카누 바리스타": "카누 바리스타",
         "카누돌체구스토": "카누 돌체구스토",
         "카누 돌체구스토": "카누 돌체구스토",
+    
         "네스프레소": "네스프레소",
-        "스타벅스": "스타벅스",
+        "네슬레": "네슬레",
+    
+        # 🔥 추가
         "일리": "일리카페",
         "일리카페": "일리카페",
-        "일리커피": "일리카페",
-        "일리 카페": "일리카페",
-        "일리 커피": "일리카페",
+    
         "돌체구스토": "돌체구스토",
-        "네스카페": "네스카페",
+        "돌체": "돌체구스토",
+    
+        "스타벅스": "스타벅스",
     }
     for key, value in brand_mapping.items():
         if key.replace(" ", "") == brand_query.replace(" ", ""):
@@ -3728,6 +3731,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
