@@ -422,7 +422,10 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None, top
 def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=None):
 
     df_work = df_summary.copy()
+    brands = extract_brand_from_question(question, df_summary)
 
+    if brands:
+        df_work = df_work[df_work["brand"].isin(brands)]
     # 🔧 추가
     all_keywords = extract_product_name_from_question(question)
 
@@ -1115,7 +1118,12 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
         if not res.data:
             return None
         new_product_data = {str(r["product_url"]).strip().lower(): r["date"] for r in res.data}
-        urls = list(new_product_data.keys())
+
+        urls = sorted(
+            new_product_data.keys(),
+            key=lambda x: new_product_data[x],
+            reverse=True
+        )
         df = df_work[df_work["product_url"].str.strip().str.lower().isin(urls)]
         if df.empty:
             return None
@@ -3694,6 +3702,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
