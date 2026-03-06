@@ -448,10 +448,8 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
             df_work = filtered
 
         if all_keywords and df_work.empty:
-        keywords_str = ", ".join(all_keywords)
-        return f"'{keywords_str}'에 해당하는 제품이 없습니다."
-
-    start_date = extract_period(question)
+            keywords_str = ", ".join(all_keywords)
+            return f"'{keywords_str}'에 해당하는 제품이 없습니다."
 
     # =========================
     # 🔥 할인 기간 조회
@@ -3696,6 +3694,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
