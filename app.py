@@ -1703,11 +1703,6 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
         
         # 3) 두 결과 합치기 (중복 제거)
         df_search = pd.concat([df_full, df_and]).drop_duplicates(subset=["product_url"])
-
-                if df_search.empty:
-                break
-
-        df_search = df_search.drop_duplicates(subset=["product_url"])
         if not df_search.empty:
             products = [str(r["product_url"]).strip().lower() for _, r in df_search.iterrows()]
             return {
@@ -3899,6 +3894,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
