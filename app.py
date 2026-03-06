@@ -3395,7 +3395,7 @@ if selected_products:
         if not discount_rows:
             fallback_res = (
                 supabase.table("product_all_events")
-                .select("date")
+                .select("date, unit_price")
                 .eq("product_url", p["product_url"])
                 .eq("event_type", "DISCOUNT")
                 .gte("date", filter_date_from.strftime("%Y-%m-%d"))
@@ -3405,14 +3405,31 @@ if selected_products:
             )
             if fallback_res.data:
                 dates = [r["date"] for r in fallback_res.data]
-                discount_rows = [{"discount_start_date": dates[0], "discount_end_date": dates[-1]}]
+                last_price = float(fallback_res.data[-1]["unit_price"]) if fallback_res.data[-1].get("unit_price") else None
+                discount_rows = [{"discount_start_date": dates[0], "discount_end_date": dates[-1], "_last_price": last_price}]
 
         if discount_rows:
+            last = discount_rows[-1]
+            last_price = last.get("_last_price")
+            if last_price is None:
+                last_price_res = (
+                    supabase.table("product_all_events")
+                    .select("unit_price")
+                    .eq("product_url", p["product_url"])
+                    .eq("event_type", "DISCOUNT")
+                    .lte("date", last["discount_end_date"])
+                    .order("date", desc=True)
+                    .limit(1)
+                    .execute()
+                )
+                if last_price_res.data:
+                    last_price = float(last_price_res.data[0]["unit_price"])
+            price_str = f"<br>마지막 할인가: {last_price:,.1f}원" if last_price else ""
             cards.append(render_card(
                 "#e9f3ec",
                 "#2f7d32",
                 "💸 할인",
-                f"총 {len(discount_rows)}회 | 최근: {discount_rows[-1]['discount_start_date']} ~ {discount_rows[-1]['discount_end_date']}"
+                f"총 {len(discount_rows)}회 | 최근: {last['discount_start_date']} ~ {last['discount_end_date']}{price_str}"
             ))
         if not df_life.empty:
             new_events = df_life[df_life["lifecycle_event"] == "NEW_PRODUCT"]
@@ -3846,6 +3863,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
