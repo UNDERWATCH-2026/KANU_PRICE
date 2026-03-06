@@ -3393,15 +3393,12 @@ if selected_products:
         discount_rows = discount_res.data if discount_res.data else []
 
         if discount_rows:
-            latest_discount = discount_rows[-1]
             cards.append(render_card(
                 "#e9f3ec",
                 "#2f7d32",
-                "💸 할인 진행",
-                f"시작: {latest_discount['discount_start_date']}<br>"
-                f"종료: {latest_discount['discount_end_date']}"
+                "💸 할인",
+                f"총 {len(discount_rows)}회 | 최근: {discount_rows[-1]['discount_start_date']} ~ {discount_rows[-1]['discount_end_date']}"
             ))
-
         if not df_life.empty:
             new_events = df_life[df_life["lifecycle_event"] == "NEW_PRODUCT"]
             if not new_events.empty:
@@ -3834,6 +3831,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
