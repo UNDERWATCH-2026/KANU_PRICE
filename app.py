@@ -3395,17 +3395,17 @@ if selected_products:
         if not discount_rows:
             fallback_res = (
                 supabase.table("product_all_events")
-                .select("date, unit_price")
+                .select("date")
                 .eq("product_url", p["product_url"])
                 .eq("event_type", "DISCOUNT")
                 .gte("date", filter_date_from.strftime("%Y-%m-%d"))
                 .lte("date", filter_date_to.strftime("%Y-%m-%d"))
                 .order("date", desc=False)
-                .limit(1)
                 .execute()
             )
             if fallback_res.data:
-                discount_rows = [{"discount_start_date": fallback_res.data[0]["date"], "discount_end_date": "?"}]
+                dates = [r["date"] for r in fallback_res.data]
+                discount_rows = [{"discount_start_date": dates[0], "discount_end_date": dates[-1]}]
 
         if discount_rows:
             cards.append(render_card(
@@ -3846,6 +3846,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
