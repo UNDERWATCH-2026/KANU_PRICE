@@ -1123,17 +1123,17 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
             return None
         new_product_data = {str(r["product_url"]).strip().lower(): r["date"] for r in res.data}
 
-        urls = sorted(
-            new_product_data.keys(),
-            key=lambda x: new_product_data[x],
-            reverse=True
-        )
-        df = df_work[df_work["product_url"].str.strip().str.lower().isin(urls)].copy()
+        
+        df = df_work[
+            df_work["product_url"].str.strip().str.lower().isin(new_product_data.keys())
+        ].copy()
+        
         if df.empty:
             return None
         
         df["product_url_key"] = df["product_url"].astype(str).str.strip().str.lower()
-        df["launch_date"] = df["product_url_key"].map(new_product_data)
+        df["launch_date"] = pd.to_datetime(df["product_url_key"].map(new_product_data))
+        
         if any(k in question for k in ["순서","최신","최근"]):
             df = df.sort_values("launch_date", ascending=False)
         else:
@@ -3716,6 +3716,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
