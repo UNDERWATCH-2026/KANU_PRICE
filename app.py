@@ -350,23 +350,22 @@ def extract_period_from_question(q: str, base_date=None):
     return None
 
 def extract_brew_type(q: str, df_all: pd.DataFrame):
-    q_lower = q.lower()
+    q_lower = q.lower().replace(" ", "")  # 🔥 공백 제거
     brew_list = df_all["brew_type_kr"].dropna().unique().tolist()
-    # 브랜드명은 brew_type으로 잘못 매칭되지 않도록 제외
     brand_list = [str(b).lower() for b in df_all["brand"].dropna().unique().tolist()]
-    # 1단계: brew가 질문에 포함 (예: "에스프레소 질문" → "에스프레소")
+
     for brew in brew_list:
-        if brew and brew.lower() in q_lower:
-            # brew 값이 브랜드명과 동일하면 스킵
+        if brew and brew.lower().replace(" ", "") in q_lower:  # 🔥 공백 제거 후 비교
             if brew.lower() in brand_list:
                 continue
             return brew
-    # 2단계: 질문이 brew에 포함 (예: "에스프레소" → "에스프레소 (LTO)")
+
     for brew in brew_list:
-        if brew and q_lower in brew.lower():
+        if brew and q_lower in brew.lower().replace(" ", ""):  # 🔥 공백 제거 후 비교
             if brew.lower() in brand_list or q_lower in brand_list:
                 continue
             return brew
+
     return None
 
 def _apply_top_n(products, product_details, top_n):
@@ -3894,6 +3893,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
