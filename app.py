@@ -3389,8 +3389,23 @@ if selected_products:
                 "p_date_to": filter_date_to.strftime("%Y-%m-%d"),
             }
         ).execute()
-
         discount_rows = discount_res.data if discount_res.data else []
+
+        # RPC 결과 없으면 product_all_events에서 직접 확인
+        if not discount_rows:
+            fallback_res = (
+                supabase.table("product_all_events")
+                .select("date, unit_price")
+                .eq("product_url", p["product_url"])
+                .eq("event_type", "DISCOUNT")
+                .gte("date", filter_date_from.strftime("%Y-%m-%d"))
+                .lte("date", filter_date_to.strftime("%Y-%m-%d"))
+                .order("date", desc=False)
+                .limit(1)
+                .execute()
+            )
+            if fallback_res.data:
+                discount_rows = [{"discount_start_date": fallback_res.data[0]["date"], "discount_end_date": "?"}]
 
         if discount_rows:
             cards.append(render_card(
@@ -3831,6 +3846,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
