@@ -745,37 +745,32 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
         }
 
     if intent == "DISCOUNT":
-        st.write("DEBUG brands:", brands)
-        st.write("DEBUG df_work 행수:", len(df_work))
-        st.write("DEBUG df_work brand 목록:", df_work["brand"].unique().tolist())
-            # df_work의 URL 목록으로 직접 조회 (브랜드/키워드 필터 완전 반영)
-            df_work_dedup = df_work.drop_duplicates(subset=["product_url"])
-            date_from_str = date_from.strftime("%Y-%m-%d") if date_from else (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
-            date_to_str = date_to.strftime("%Y-%m-%d") if date_to else datetime.now().strftime("%Y-%m-%d")
-    
-            discount_map = {}  # orig_url -> [prices]
-            for _, row in df_work_dedup.iterrows():
-                orig_url = row["product_url"]
-                res_d = (
-                    supabase.table("product_all_events")
-                    .select("unit_price")
-                    .eq("product_url", orig_url)
-                    .eq("event_type", "DISCOUNT")
-                    .gte("date", date_from_str)
-                    .lte("date", date_to_str)
-                    .execute()
-                )
-                if res_d.data:
-                    prices = [float(r["unit_price"]) for r in res_d.data if r["unit_price"] and float(r["unit_price"]) > 0]
-                    if prices:
-                        discount_map[str(orig_url).strip().lower()] = prices
+        # df_work의 URL 목록으로 직접 조회 (브랜드/키워드 필터 완전 반영)
+        df_work_dedup = df_work.drop_duplicates(subset=["product_url"])
+        date_from_str = date_from.strftime("%Y-%m-%d") if date_from else (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+        date_to_str = date_to.strftime("%Y-%m-%d") if date_to else datetime.now().strftime("%Y-%m-%d")
+
+        discount_map = {}  # orig_url -> [prices]
+        for _, row in df_work_dedup.iterrows():
+            orig_url = row["product_url"]
+            res_d = (
+                supabase.table("product_all_events")
+                .select("unit_price")
+                .eq("product_url", orig_url)
+                .eq("event_type", "DISCOUNT")
+                .gte("date", date_from_str)
+                .lte("date", date_to_str)
+                .execute()
+            )
+            if res_d.data:
+                prices = [float(r["unit_price"]) for r in res_d.data if r["unit_price"] and float(r["unit_price"]) > 0]
+                if prices:
+                    discount_map[str(orig_url).strip().lower()] = prices
 
         df = df_work_dedup[df_work_dedup["product_url"].str.strip().str.lower().isin(discount_map.keys())]
-
         if df.empty:
             return None
 
-        # res_discount placeholder (하위 호환용)
         class _FakeRes:
             data = list(discount_map.keys())
         res_discount = _FakeRes()
@@ -3904,6 +3899,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
