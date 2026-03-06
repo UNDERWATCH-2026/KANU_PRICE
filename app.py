@@ -52,6 +52,7 @@ def load_product_summary():
         "product_event_status",
         "is_new_product",
         "brew_type_kr",
+        "capsule_count",        # ✅ 추가
     ]
     res = supabase.table("product_price_summary_enriched").select(", ".join(cols)).execute()
     df = pd.DataFrame(res.data)
@@ -167,11 +168,18 @@ def normalize_brand_name(brand_query: str) -> str:
         "카누 바리스타": "카누 바리스타",
         "카누돌체구스토": "카누 돌체구스토",
         "카누 돌체구스토": "카누 돌체구스토",
+    
         "네스프레소": "네스프레소",
-        "스타벅스": "스타벅스",
-        "일리": "일리",
+        "네슬레": "네슬레",
+    
+        # 🔥 추가
+        "일리": "일리카페",
+        "일리카페": "일리카페",
+    
         "돌체구스토": "돌체구스토",
-        "네스카페": "네스카페",
+        "돌체": "돌체구스토",
+    
+        "스타벅스": "스타벅스",
     }
     for key, value in brand_mapping.items():
         if key.replace(" ", "") == brand_query.replace(" ", ""):
@@ -182,11 +190,24 @@ def extract_brand_from_question(q: str, df_all: pd.DataFrame) -> list:
     q_lower = q.lower()
     brands = df_all["brand"].dropna().unique().tolist()
     matched_brands = []
+
+    normalized = None
+    for key in ["카누","네스프레소","네슬레","일리","일리카페","돌체","돌체구스토","스타벅스"]:
+        if key in q_lower:
+            normalized = normalize_brand_name(key)
+            break
+
     for brand in brands:
-        if brand and brand.lower() in q_lower:
+        brand_lower = brand.lower()
+
+        if brand_lower in q_lower:
             matched_brands.append(brand)
-    if matched_brands:
-        return matched_brands
+
+        elif normalized and brand_lower == normalized.lower():
+            matched_brands.append(brand)
+
+    return matched_brands if matched_brands else None
+    
     for brand in brands:
         normalized = normalize_brand_name(q_lower)
         if brand.lower() == normalized.lower():
@@ -292,18 +313,6 @@ def classify_intent(q: str):
         return "NORMAL_CHANGE"
 
     return "UNKNOWN"
-
-def extract_period(q: str):
-    today = datetime.today()
-    if any(word in q for word in ["최근 7일", "최근 일주일", "최근 1주일"]):
-        return today - timedelta(days=7)
-    if any(word in q for word in ["최근 한 달", "최근 30일", "최근 1개월"]):
-        return today - timedelta(days=30)
-    if "최근 3개월" in q:
-        return today - timedelta(days=90)
-    if "최근 1년" in q:
-        return today - timedelta(days=365)
-    return None
 
 def extract_period_from_question(q: str, base_date=None):
     # base_date: 조회 기간 종료일 (없으면 오늘)
@@ -431,11 +440,23 @@ def execute_rule(intent, question, df_summary, date_from=None, date_to=None, top
     return result
 
 def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=None):
-    df_work = df_summary.copy()
 
-    question_period = extract_period_from_question(question, base_date=date_to)
+    df_work = df_summary.copy()
+    brands = extract_brand_from_question(question, df_summary)
+
+    if brands:
+        df_work = df_work[
+            df_work["brand"].astype(str).str.strip().isin(brands)
+        ]
+    # 🔧 추가
+    all_keywords = extract_product_name_from_question(question)
+
+    question_period = extract_period_from_question(question)
+
     if question_period:
-        _, _, period_label = question_period
+        q_from, q_to, period_label = question_period
+        date_from = q_from
+        date_to = q_to
     else:
         if date_from and date_to:
             period_label = f"{date_from.strftime('%Y-%m-%d')} ~ {date_to.strftime('%Y-%m-%d')}"
@@ -443,33 +464,17 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
             period_label = "조회 기간 내"
 
     brew_condition = extract_brew_type(question, df_summary)
+
     if brew_condition:
-        df_work = df_work[df_work["brew_type_kr"] == brew_condition]
+        filtered = df_work[
+            df_work["brew_type_kr"].str.contains(brew_condition, na=False)
+        ]
+        if not filtered.empty:
+            df_work = filtered
 
-    all_keywords = extract_product_name_from_question(question)
-
-    if all_keywords:
-        for keyword in all_keywords:
-            if len(keyword) >= 2:
-                # 브랜드 완전/부분 일치가 있으면 브랜드 우선 필터
-                brand_mask = _norm_series(df_work["brand"]).str.contains(keyword, case=False)
-                if brand_mask.any():
-                    df_work = df_work[brand_mask]
-                    continue
-                # 브랜드 매칭 없으면 전체 필드 검색
-                keyword_mask = (
-                    _norm_series(df_work["product_name"]).str.contains(keyword, case=False) |
-                    _norm_series(df_work["category1"]).str.contains(keyword, case=False) |
-                    _norm_series(df_work["category2"]).str.contains(keyword, case=False)
-                )
-                if keyword_mask.any():
-                    df_work = df_work[keyword_mask]
-
-    if all_keywords and df_work.empty:
-        keywords_str = ", ".join(all_keywords)
-        return f"'{keywords_str}'에 해당하는 제품이 없습니다."
-
-    start_date = extract_period(question)
+        if all_keywords and df_work.empty:
+            keywords_str = ", ".join(all_keywords)
+            return f"'{keywords_str}'에 해당하는 제품이 없습니다."
 
     # =========================
     # 🔥 할인 기간 조회
@@ -569,15 +574,39 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
         res_d = res_d.execute()
         res_n = res_n.execute()
 
-        if not res_d.data:
+        df_discount = pd.DataFrame(res_d.data) if res_d.data else pd.DataFrame()
+        df_normal = pd.DataFrame(res_n.data) if res_n.data else pd.DataFrame()
+        
+        if not df_discount.empty:
+            df_discount["date"] = pd.to_datetime(df_discount["date"])
+        
+            # 조회기간 필터
+            df_discount = df_discount[
+                (df_discount["date"] >= pd.Timestamp(date_from)) &
+                (df_discount["date"] <= pd.Timestamp(date_to))
+            ]
+        
+        if not df_normal.empty:
+            df_normal["date"] = pd.to_datetime(df_normal["date"])
+        
+            # 조회기간 필터
+            df_normal = df_normal[
+                (df_normal["date"] >= pd.Timestamp(date_from)) &
+                (df_normal["date"] <= pd.Timestamp(date_to))
+            ]
+        
+        # 🔥 이 위치로 이동
+        if df_discount.empty:
             return "해당 기간 내 할인 이벤트가 없습니다."
-
+        
         # 제품별 최저 할인가 + 날짜
-        discount_map = {}   # url -> min_price
-        discount_date_map = {}  # url -> date of min_price
-        for r in res_d.data:
+        discount_map = {}
+        discount_date_map = {}
+        
+        for _, r in df_discount.iterrows():
             key = str(r["product_url"]).strip().lower()
             p = float(r["unit_price"]) if r["unit_price"] else 0
+        
             if p > 0:
                 if key not in discount_map or p < discount_map[key]:
                     discount_map[key] = p
@@ -585,7 +614,7 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
 
         # 제품별 정상가 (할인 직전 or 기간 내 NORMAL)
         normal_map = {}
-        for r in (res_n.data or []):
+        for _, r in df_normal.iterrows():
             key = str(r["product_url"]).strip().lower()
             p = float(r["unit_price"]) if r["unit_price"] else 0
             if p > 0:
@@ -638,7 +667,6 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
         rate_list.sort(key=lambda x: -x[3])
 
         urls = [r[0] for r in rate_list]
-        df = df_work[df_work["product_url"].str.strip().str.lower().isin(urls)].drop_duplicates(subset=["product_url"])
         df = df_work[df_work["product_url"].str.strip().str.lower().isin(urls)].drop_duplicates(subset=["product_url"])
 
         results = []
@@ -761,86 +789,166 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
             "product_details": product_details,
         }
 
+    # =========================
+    # 🔥 PRICE_MIN
+    # =========================
     if intent == "PRICE_MIN":
-        df_valid = df_work[df_work["current_unit_price"] > 0]
-        if df_valid.empty:
-            return "현재 판매 중인 제품이 없습니다."
-        min_price = df_valid["current_unit_price"].min()
-        df_min = df_valid[df_valid["current_unit_price"] == min_price]
+    
+        res = (
+            supabase.table("product_all_events")
+            .select("product_url, date, unit_price")
+            .in_("product_url", df_work["product_url"].tolist())
+            .gte("date", date_from.strftime("%Y-%m-%d"))
+            .lte("date", date_to.strftime("%Y-%m-%d"))
+            .execute()
+        )
+    
+        if not res.data:
+            return "가격 데이터가 없습니다."
+    
+        df_hist = pd.DataFrame(res.data)
+
+        
+        # 🔥 브랜드 필터 유지
+        df_hist = df_hist[
+            df_hist["product_url"].astype(str).str.strip().str.lower()
+            .isin(df_work["product_url"].astype(str).str.strip().str.lower())
+        ]
+        
+
+        df_hist["date"] = pd.to_datetime(df_hist["date"])
+        df_hist["unit_price"] = df_hist["unit_price"].astype(float)
+    
+        # 조회기간 필터
+        df_hist = df_hist[
+            (df_hist["date"] >= pd.Timestamp(date_from)) &
+            (df_hist["date"] <= pd.Timestamp(date_to))
+        ]
+    
+        df_hist = df_hist[df_hist["unit_price"] > 0]
+    
+        if df_hist.empty:
+            return "조회 기간 내 가격 데이터가 없습니다."
+    
+        # 🔥 기간 내 최저가 계산
+        min_price = df_hist["unit_price"].min()
+    
+        df_low = df_hist[df_hist["unit_price"] == min_price]
+
+        # 🔥 브랜드 강제 유지
+        df_low = df_low[
+            df_low["product_url"].astype(str).str.strip().str.lower()
+            .isin(df_work["product_url"].astype(str).str.strip().str.lower())
+        ]
+            
         results = []
-        for _, row in df_min.iterrows():
-            res = (
-                supabase.table("product_all_events")
-                .select("date, unit_price")
-                .eq("product_url", row["product_url"])
-                .execute()
-            )
-            if not res.data:
+        product_details = {}
+    
+        for url in df_low["product_url"].unique():
+    
+            row = df_work[df_work["product_url"] == url]
+            if row.empty:
                 continue
-            df_hist = pd.DataFrame(res.data)
-            df_hist["date"] = pd.to_datetime(df_hist["date"])
-            df_hist["unit_price"] = df_hist["unit_price"].astype(float)
-            df_hist = df_hist[df_hist["unit_price"] > 0]
-            df_low = df_hist[df_hist["unit_price"] == min_price]
-            if df_low.empty:
-                continue
-            sd = df_low["date"].min().date()
-            ed = df_low["date"].max().date()
+    
+            row = row.iloc[0]
+    
+            df_prod = df_low[df_low["product_url"] == url]
+    
+            sd = df_prod["date"].min().date()
+            ed = df_prod["date"].max().date()
+    
             categories = []
             if pd.notna(row.get("category1")) and row["category1"]:
                 categories.append(row["category1"])
             if pd.notna(row.get("category2")) and row["category2"]:
                 categories.append(row["category2"])
+    
             category_str = f" [{' > '.join(categories)}]" if categories else ""
-            url = str(row["product_url"]).strip().lower()
-            results.append({
-                "text": f"• {row['brand']} - {row['product_name']}{category_str}\n"
-                        f"  💰 최저가: {min_price:,.1f}원 (기간: {sd} ~ {ed})",
-                "product_url": url,
-                "detail": f"💰 최저가: {min_price:,.1f}원 ({sd} ~ {ed})",
-            })
-        if not results:
-            return "최저가 계산 대상 제품이 없습니다."
-        product_details = {r["product_url"]: r["detail"] for r in results}
+    
+            url_key = str(url).strip().lower()
+    
+            results.append({"product_url": url_key})
+    
+            product_details[url_key] = (
+                f"💰 최저가: {min_price:,.1f}원 ({sd} ~ {ed})"
+            )
+    
         return {
             "type": "product_list",
             "text": f"{period_label} 최저가 제품 ({len(results)}개)",
             "products": [r["product_url"] for r in results],
             "product_details": product_details,
         }
-
+    
+    
+    # =========================
+    # 🔥 PRICE_MAX
+    # =========================
     if intent == "PRICE_MAX":
-        df_valid = df_work[df_work["current_unit_price"] > 0].drop_duplicates(subset=["product_url"])
-        if df_valid.empty:
-            return None
-        max_price = df_valid["current_unit_price"].max()
-        df_max = df_valid[df_valid["current_unit_price"] == max_price]
+    
+        res = (
+            supabase.table("product_all_events")
+            .select("product_url, date, unit_price")
+            .in_("product_url", df_work["product_url"].tolist())
+            .gte("date", date_from.strftime("%Y-%m-%d"))
+            .lte("date", date_to.strftime("%Y-%m-%d"))
+            .execute()
+        )
+    
+        if not res.data:
+            return "가격 데이터가 없습니다."
+    
+        df_hist = pd.DataFrame(res.data)
+        # 🔥 브랜드 필터 유지
+        df_hist = df_hist[
+            df_hist["product_url"].astype(str).str.strip().str.lower()
+            .isin(df_work["product_url"].astype(str).str.strip().str.lower())
+        ]
+        
+
+        df_hist["date"] = pd.to_datetime(df_hist["date"])
+        df_hist["unit_price"] = df_hist["unit_price"].astype(float)
+    
+        # 조회기간 필터
+        df_hist = df_hist[
+            (df_hist["date"] >= pd.Timestamp(date_from)) &
+            (df_hist["date"] <= pd.Timestamp(date_to))
+        ]
+    
+        df_hist = df_hist[df_hist["unit_price"] > 0]
+    
+        if df_hist.empty:
+            return "조회 기간 내 가격 데이터가 없습니다."
+    
+        # 🔥 기간 내 최고가
+        max_price = df_hist["unit_price"].max()
+    
+        df_hi = df_hist[df_hist["unit_price"] == max_price]
+    
         results = []
         product_details = {}
-        for _, row in df_max.iterrows():
-            url = str(row["product_url"]).strip().lower()
-            res = (
-                supabase.table("product_all_events")
-                .select("date, unit_price")
-                .eq("product_url", row["product_url"])
-                .execute()
-            )
-            if not res.data:
+    
+        for url in df_hi["product_url"].unique():
+    
+            row = df_work[df_work["product_url"] == url]
+            if row.empty:
                 continue
-            df_hist = pd.DataFrame(res.data)
-            df_hist["unit_price"] = df_hist["unit_price"].astype(float)
-            df_hist["date"] = pd.to_datetime(df_hist["date"])
-            df_hist = df_hist[df_hist["unit_price"] > 0]
-            df_hi = df_hist[df_hist["unit_price"] == max_price]
-            if df_hi.empty:
-                sd = ed = "-"
-            else:
-                sd = df_hi["date"].min().date()
-                ed = df_hi["date"].max().date()
-            product_details[url] = f"💰 최고가: {max_price:,.1f}원 ({sd} ~ {ed})"
-            results.append({"product_url": url})
-        if not results:
-            return None
+    
+            row = row.iloc[0]
+    
+            df_prod = df_hi[df_hi["product_url"] == url]
+    
+            sd = df_prod["date"].min().date()
+            ed = df_prod["date"].max().date()
+    
+            url_key = str(url).strip().lower()
+    
+            results.append({"product_url": url_key})
+    
+            product_details[url_key] = (
+                f"💰 최고가: {max_price:,.1f}원 ({sd} ~ {ed})"
+            )
+    
         return {
             "type": "product_list",
             "text": f"{period_label} 최고가 제품 ({len(results)}개)",
@@ -1053,14 +1161,29 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
         if not res.data:
             return None
         new_product_data = {str(r["product_url"]).strip().lower(): r["date"] for r in res.data}
-        urls = list(new_product_data.keys())
-        df = df_work[df_work["product_url"].str.strip().str.lower().isin(urls)]
+
+        
+        df = df_work[
+            df_work["product_url"].str.strip().str.lower().isin(new_product_data.keys())
+        ].copy()
+        
         if df.empty:
             return None
+        
+        df["product_url_key"] = df["product_url"].astype(str).str.strip().str.lower()
+        df["launch_date"] = pd.to_datetime(df["product_url_key"].map(new_product_data))
+        
+        if any(k in question for k in ["순서","최신","최근"]):
+            df = df.sort_values("launch_date", ascending=False)
+        else:
+            df = df.sort_values(["brand","category1","category2","product_name"])
+        
         results = []
-        product_details = {}  # 🔥 추가
+        product_details = {}
+        
         for _, row in df.iterrows():
-            launch_date = new_product_data.get(row["product_url"])
+            url = str(row["product_url"]).strip().lower()
+            launch_date = row["launch_date"]
             categories = []
             if pd.notna(row.get("category1")) and row["category1"]:
                 categories.append(row["category1"])
@@ -1082,6 +1205,7 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
             "text": f"{period_label} 신제품 ({len(results)}개)",
             "products": [r["product_url"] for r in results],
             "product_details": product_details,
+            "launch_dates": new_product_data
         }
 
     if intent == "OUT":
@@ -1411,17 +1535,27 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
             "product_details": product_details,  # 🔥 추가
         }
 
-    if intent == "VOLATILITY" and start_date:
+    if intent == "VOLATILITY":
+
         res = (
             supabase.table("product_all_events")
             .select("product_url, unit_price, date")
-            .gte("date", start_date.strftime("%Y-%m-%d"))
+            .in_("product_url", df_work["product_url"].tolist())   # 🔥 브랜드 필터 유지
+            .gte("date", date_from.strftime("%Y-%m-%d"))
+            .lte("date", date_to.strftime("%Y-%m-%d"))
             .execute()
         )
         if not res.data:
             return None
         df = pd.DataFrame(res.data)
         df["unit_price"] = df["unit_price"].astype(float)
+        df["date"] = pd.to_datetime(df["date"])
+        
+        # 🔥 조회기간 필터
+        df = df[
+            (df["date"] >= pd.Timestamp(date_from)) &
+            (df["date"] <= pd.Timestamp(date_to))
+        ]
         volatility = (
             df.groupby("product_url")["unit_price"]
             .agg(lambda x: x.max() - x.min())
@@ -1452,18 +1586,21 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
         }
 
     if intent == "NORMAL_CHANGE":
-        start_date = extract_period(question)
-        query = supabase.table("product_normal_price_events").select("*")
-        if start_date:
-            query = query.gte("date", start_date.strftime("%Y-%m-%d"))
-        elif date_from:
-            query = query.gte("date", date_from.strftime("%Y-%m-%d"))
-        if date_to:
-            query = query.lte("date", date_to.strftime("%Y-%m-%d"))
+
+        query = (
+            supabase.table("product_normal_price_events")
+            .select("product_url,date,prev_price,normal_price,price_diff")
+            .gte("date", date_from.strftime("%Y-%m-%d"))
+            .lte("date", date_to.strftime("%Y-%m-%d"))
+        )
+    
         res = query.order("date", desc=True).execute()
+    
         if not res.data:
             return "해당 기간 내 정상가 변동이 없습니다."
+    
         df = pd.DataFrame(res.data)
+    
         product_details = {}
         results = []
         for _, row in df.iterrows():
@@ -1595,15 +1732,28 @@ def detect_encoding_issues(df: pd.DataFrame):
 
 
 def _norm_series(s: pd.Series) -> pd.Series:
-    return s.fillna("").astype(str)
+    return (
+        s.fillna("")
+        .astype(str)
+        .str.lower()
+        .str.replace(" ", "", regex=False)
+    )
 
 
 def options_from(df: pd.DataFrame, col: str):
     if col not in df.columns:
         return []
-    vals = df[col].dropna().astype(str)
-    vals = [v.strip() for v in vals.tolist() if v.strip()]
-    return sorted(list(dict.fromkeys(vals)))
+
+    vals = (
+        df[col]
+        .dropna()
+        .astype(str)
+        .str.strip()
+    )
+
+    vals = vals[~vals.isin(["None", "nan", ""])]
+
+    return sorted(vals.unique().tolist())
 
 def format_product_label(row):
     brand = row.get("brand")
@@ -1717,6 +1867,8 @@ if "_removed_products" not in st.session_state:
 # =========================
 # 5️⃣ 메인 UI
 # =========================
+
+# =====개발용 환경 여기만 다름====================
 # -------------------------
 # 🔐 비밀번호 인증
 # -------------------------
@@ -1743,13 +1895,133 @@ def check_password():
 if not check_password():
     st.stop()
 
+# =====개발용 환경 여기만 다름====================
+
 st.title("☕ Coffee Capsule Price Intelligence")
 
+
 # -------------------------
+
 # 데이터 로딩 (탭 이전에 로드)
+
 # -------------------------
+
 df_all = load_product_summary()
 
+
+# -------------------------
+# 브랜드 정규화
+# -------------------------
+df_all["brand"] = (
+    df_all["brand"]
+    .astype(str)
+    .str.strip()
+    .str.replace("�", "", regex=False)
+)
+
+df_all["brand"] = df_all["brand"].replace({
+    "네레": "네슬레",
+    "네스프레": "네스프레소",
+    "일리": "일리카페",
+    "카누": "카누 바리스타",
+    "카누 바스타": "카누 바리스타"
+})
+
+# -------------------------
+# category1 정규화
+# -------------------------
+df_all["category1"] = (
+    df_all["category1"]
+    .astype(str)
+    .str.strip()
+    .str.replace("�", "", regex=False)
+)
+
+# 카누 전용
+df_all["category1"] = df_all["category1"].str.replace(
+    r"카.*바리스타.*캡슐",
+    "카누 바리스타 전용캡슐",
+    regex=True
+)
+
+# 카누 네스프레소 호환
+df_all["category1"] = df_all["category1"].str.replace(
+    r"카.*네스프레소.*캡슐",
+    "카누 네스프레소 호환캡슐",
+    regex=True
+)
+
+# 카누 돌체구스토 호환
+df_all["category1"] = df_all["category1"].str.replace(
+    r"카.*돌체.*캡슐",
+    "카누 돌체구스토 호환캡슐",
+    regex=True
+)
+
+# 돌체구스토 통합
+df_all["category1"] = df_all["category1"].str.replace(
+    r"돌체.*캡.*",
+    "돌체구스토 캡슐",
+    regex=True
+)
+
+# 스타벅스 오타 수정
+df_all["category1"] = df_all["category1"].replace({
+    "스타벅스by네스프소": "스타벅스by네스프레소"
+})
+
+df_all["category2"] = (
+    df_all["category2"]
+    .astype(str)
+    .str.strip()
+    .str.replace("�", "", regex=False)
+)
+
+df_all["category2"] = df_all["category2"].replace({
+    "버츄": "버츄오",
+    "버추오": "버츄오",
+    "오리": "오리지널"
+})
+
+df_all["category2"] = df_all["category2"].replace({
+    "None": None
+})
+
+# -------------------------
+# 🔎 검색용 컬럼 생성 (공백 무시 검색)
+# -------------------------
+
+df_all["product_name_search"] = (
+    df_all["product_name"]
+    .astype(str)
+    .str.lower()
+    .str.replace(" ", "", regex=False)
+)
+
+df_all["brew_type_search"] = (
+    df_all["brew_type_kr"]
+    .astype(str)
+    .str.lower()
+    .str.replace(" ", "", regex=False)
+)
+
+df_all["category1_search"] = (
+    df_all["category1"]
+    .astype(str)
+    .str.lower()
+    .str.replace(" ", "", regex=False)
+)
+
+df_all["category2_search"] = (
+    df_all["category2"]
+    .astype(str)
+    .str.lower()
+    .str.replace(" ", "", regex=False)
+)
+
+# -------------------------
+# URL 정리
+# -------------------------
 df_all["product_url"] = (
     df_all["product_url"]
     .astype(str)
@@ -1761,11 +2033,17 @@ if df_all is None or df_all.empty:
     st.warning("아직 집계된 제품 데이터가 없습니다.")
     st.stop()
 
-# -------------------------
 # 제품명 정제
-# -------------------------
 df_all["product_name_raw"] = df_all["product_name"]
 df_all["product_name"] = df_all["product_name"].apply(clean_product_name)
+
+# 🔎 검색용 컬럼 생성
+df_all["product_name_search"] = (
+    df_all["product_name"]
+    .astype(str)
+    .str.lower()
+    .str.replace(" ", "", regex=False)
+)
 
 # -------------------------
 # 깨진 문자열 감지 (운영 로그 전용)
@@ -2027,6 +2305,13 @@ with col_tabs:
         col1, col2, col3 = st.columns(3)
 
         with col1:
+            VALID_BRANDS = [
+                "네스프레소",
+                "네슬레",
+                "일리카페",
+                "카누 바리스타"
+            ]
+            
             brands = options_from(df_all, "brand")
             sel_brand = st.selectbox(
                 "브랜드",
@@ -2038,6 +2323,16 @@ with col_tabs:
         df1 = df_all if sel_brand == "(전체)" else df_all[df_all["brand"] == sel_brand]
 
         with col2:
+            VALID_CAT1 = [
+                "돌체구스토 캡슐",
+                "스타벅스by네스프레소",
+                "카누 네스프레소 호환캡슐",
+                "카누 돌체구스토 호환캡슐",
+                "카누 바리스타 전용캡슐",
+                "캡슐",
+                "커피"
+            ]
+
             cat1s = options_from(df1, "category1")
             sel_cat1 = st.selectbox(
                 "카테고리1",
@@ -2049,6 +2344,8 @@ with col_tabs:
         df2 = df1 if sel_cat1 == "(전체)" else df1[df1["category1"] == sel_cat1]
 
         with col3:
+            VALID_CAT2 = ["버츄오", "오리지널"]
+
             cat2s = options_from(df2, "category2")
             sel_cat2 = st.selectbox(
                 "카테고리2",
@@ -2148,14 +2445,17 @@ with col_tabs:
 
             filtered_df = df_all.copy()
 
-            question_period = extract_period_from_question(question, base_date=date_to)
             _top_n, _top_dir, _top_mode = extract_top_n(question)
             _top_n_arg = (_top_n, _top_dir, _top_mode) if _top_n else None
-            if question_period:
-                q_date_from, q_date_to, _ = question_period
-                answer = execute_rule(intent, question, filtered_df, q_date_from, q_date_to, top_n=_top_n_arg)
-            else:
-                answer = execute_rule(intent, question, filtered_df, date_from, date_to, top_n=_top_n_arg)
+            
+            answer = execute_rule(
+                intent,
+                question,
+                filtered_df,
+                date_from,
+                date_to,
+                top_n=_top_n_arg
+            )
 
             filter_info = {
                 "date_from": date_from.strftime("%Y-%m-%d") if hasattr(date_from, 'strftime') else str(date_from),
@@ -2225,14 +2525,25 @@ with col_tabs:
 
                                 # 🔥 체크박스 렌더링 헬퍼 - product_details 파라미터 추가
                                 def render_product_checkboxes(product_urls, scope_prefix, product_details=None):
-                                    # product_urls는 strip().lower() 정규화된 값 → df_all도 동일하게 비교
+
                                     product_urls_set = set(str(u).strip().lower() for u in product_urls)
+                                
                                     sorted_df = (
-                                        df_all[df_all["product_url"].str.strip().str.lower().isin(product_urls_set)]
+                                        df_all[df_all["product_url"].astype(str).str.strip().str.lower().isin(product_urls_set)]
                                         .fillna("")
                                         .drop_duplicates(subset=["product_url"])
-                                        .sort_values(by=["brand", "category1", "category2", "product_name"])
                                     )
+                                
+                                    # 🔥 질문에 '순서/최신/최근' 있으면 날짜순
+                                    if any(k in history["question"] for k in ["순서","최신","최근"]):
+                                        if "launch_dates" in answer_data:
+                                            sorted_df["product_url_key"] = sorted_df["product_url"].astype(str).str.strip().str.lower()
+                                            sorted_df["launch_date"] = sorted_df["product_url_key"].map(answer_data["launch_dates"])
+                                            sorted_df = sorted_df.sort_values("launch_date", ascending=False)
+                                    else:
+                                        sorted_df = sorted_df.sort_values(
+                                            by=["brand","category1","category2","product_name"]
+                                        )                            
                                     if sorted_df.empty:
                                         st.caption("⚠️ 매칭되는 제품이 없습니다.")
                                         return
@@ -3019,8 +3330,8 @@ if selected_products:
             "get_discount_periods_in_range",
             {
                 "p_product_url": p["product_url"],
-                "p_date_from": filter_date_from.strftime("%Y-%m-%d"),
-                "p_date_to": filter_date_to.strftime("%Y-%m-%d"),
+                "p_date_from": "2000-01-01",
+                "p_date_to": "2100-01-01",
             }
         ).execute()
 
@@ -3145,17 +3456,31 @@ if selected_products:
                     bg = "#eaf2ff"
                     border = "#1d4ed8"
                     icon = "📉 정상가 하락"
+
+                # ✅ capsule_count로 나눠서 개당 가격 표시
+                cc = float(p.get("capsule_count") or 0)
+                if cc > 0:
+                    prev_unit = prev_price / cc
+                    curr_unit = current_price / cc
+                    price_text = (
+                        f"{prev_unit:,.1f}원 → {curr_unit:,.1f}원 "
+                        f"({diff_rate:+.1f}%)"
+                    )
+                else:
+                    price_text = (
+                        f"{prev_price:,.0f}원 → {current_price:,.0f}원 "
+                        f"({diff_rate:+.1f}%)"
+                    )
+
                 cards.append(render_card(
                     bg=bg,
                     border=border,
                     title=icon,
                     content=(
                         f"날짜: {latest_change['date']}<br>"
-                        f"{prev_price:,.0f}원 → {current_price:,.0f}원 "
-                        f"({diff_rate:+.1f}%)"
+                        f"{price_text}"
                     )
                 ))
-
         if not cards:
             cards.append(render_card(
                 "#f3f4f6",
@@ -3379,14 +3704,22 @@ if selected_products:
                     else:
                         rate_text = ""
 
+                    # ✅ NORMAL_UP / NORMAL_DOWN은 개당 가격으로 표시
+                    if row["price_change_type"] in ("NORMAL_UP", "NORMAL_DOWN"):
+                        cc = float(p.get("capsule_count") or 0)
+                        if cc > 0:
+                            prev_unit = prev_price / cc
+                            curr_unit = current_price / cc
+                            price_text = f"{prev_unit:,.1f}원 → {curr_unit:,.1f}원 {rate_text}"
+                        else:
+                            price_text = f"{prev_price:,.1f}원 → {current_price:,.1f}원 {rate_text}"
+                    else:
+                        price_text = f"{prev_price:,.1f}원 → {current_price:,.1f}원 {rate_text}"
+
                     display_rows.append({
                         "날짜": row["date"],
                         "이벤트": icon_map.get(row["price_change_type"], ""),
-                        "가격 정보": (
-                            f"{prev_price:,.1f}원 → "
-                            f"{current_price:,.1f}원 "
-                            f"{rate_text}"
-                        )
+                        "가격 정보": price_text
                     })
 
             normal_res = (
@@ -3424,14 +3757,26 @@ if selected_products:
                 diff_rate = (diff / prev_price) * 100 if prev_price != 0 else 0
                 event_label = "📈 정상가 상승" if diff > 0 else "📉 정상가 하락"
 
-                display_rows.append({
-                    "날짜": row["date"],
-                    "이벤트": event_label,
-                    "가격 정보": (
+                # ✅ capsule_count로 나눠서 개당 가격 표시
+                cc = float(p.get("capsule_count") or 0)
+                if cc > 0:
+                    prev_unit = prev_price / cc
+                    curr_unit = current_price / cc
+                    price_text = (
+                        f"{prev_unit:,.1f}원 → {curr_unit:,.1f}원 "
+                        f"({diff_rate:+.1f}%)"
+                    )
+                else:
+                    price_text = (
                         f"{prev_price:,.1f}원 → "
                         f"{current_price:,.1f}원 "
                         f"({diff_rate:+.1f}%)"
                     )
+
+                display_rows.append({
+                    "날짜": row["date"],
+                    "이벤트": event_label,
+                    "가격 정보": price_text
                 })
 
             if display_rows:
@@ -3447,4 +3792,3 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
-
