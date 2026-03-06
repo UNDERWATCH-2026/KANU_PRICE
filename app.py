@@ -458,11 +458,15 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
                     df_work = df_work[brand_mask]
                     continue
                 # 브랜드 매칭 없으면 전체 필드 검색
+                keyword_norm = keyword.replace(" ", "").lower()
+                
                 keyword_mask = (
-                    _norm_series(df_work["product_name"]).str.contains(keyword, case=False) |
-                    _norm_series(df_work["category1"]).str.contains(keyword, case=False) |
-                    _norm_series(df_work["category2"]).str.contains(keyword, case=False)
+                    df_work["product_name_search"].fillna("").str.contains(keyword_norm, regex=False)
+                    | df_work["brew_type_search"].fillna("").str.contains(keyword_norm, regex=False)
+                    | df_work["category1_search"].fillna("").str.contains(keyword_norm, regex=False)
+                    | df_work["category2_search"].fillna("").str.contains(keyword_norm, regex=False)
                 )
+                
                 if keyword_mask.any():
                     df_work = df_work[keyword_mask]
 
@@ -795,8 +799,9 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
             supabase.table("product_all_events")
             .select("product_url, date, unit_price")
             .in_("product_url", df_work["product_url"].tolist())
+            .gte("date", date_from.strftime("%Y-%m-%d"))
+            .lte("date", date_to.strftime("%Y-%m-%d"))
             .execute()
-        )
     
         if not res.data:
             return "가격 데이터가 없습니다."
@@ -870,8 +875,9 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
             supabase.table("product_all_events")
             .select("product_url, date, unit_price")
             .in_("product_url", df_work["product_url"].tolist())
+            .gte("date", date_from.strftime("%Y-%m-%d"))
+            .lte("date", date_to.strftime("%Y-%m-%d"))
             .execute()
-        )
     
         if not res.data:
             return "가격 데이터가 없습니다."
@@ -1681,7 +1687,12 @@ def detect_encoding_issues(df: pd.DataFrame):
 
 
 def _norm_series(s: pd.Series) -> pd.Series:
-    return s.fillna("").astype(str)
+    return (
+        s.fillna("")
+        .astype(str)
+        .str.lower()
+        .str.replace(" ", "", regex=False)
+    )
 
 
 def options_from(df: pd.DataFrame, col: str):
@@ -1695,7 +1706,7 @@ def options_from(df: pd.DataFrame, col: str):
         .str.strip()
     )
 
-    vals = vals[vals != "None"]
+    vals = vals[~vals.isin(["None", "nan", ""])]
 
     return sorted(vals.unique().tolist())
 
@@ -1910,6 +1921,38 @@ df_all["category2"] = df_all["category2"].replace({
 })
 
 # -------------------------
+# 🔎 검색용 컬럼 생성 (공백 무시 검색)
+# -------------------------
+
+df_all["product_name_search"] = (
+    df_all["product_name"]
+    .astype(str)
+    .str.lower()
+    .str.replace(" ", "", regex=False)
+)
+
+df_all["brew_type_search"] = (
+    df_all["brew_type_kr"]
+    .astype(str)
+    .str.lower()
+    .str.replace(" ", "", regex=False)
+)
+
+df_all["category1_search"] = (
+    df_all["category1"]
+    .astype(str)
+    .str.lower()
+    .str.replace(" ", "", regex=False)
+)
+
+df_all["category2_search"] = (
+    df_all["category2"]
+    .astype(str)
+    .str.lower()
+    .str.replace(" ", "", regex=False)
+)
+
+# -------------------------
 # URL 정리
 # -------------------------
 df_all["product_url"] = (
@@ -1923,11 +1966,17 @@ if df_all is None or df_all.empty:
     st.warning("아직 집계된 제품 데이터가 없습니다.")
     st.stop()
 
-# -------------------------
 # 제품명 정제
-# -------------------------
 df_all["product_name_raw"] = df_all["product_name"]
 df_all["product_name"] = df_all["product_name"].apply(clean_product_name)
+
+# 🔎 검색용 컬럼 생성
+df_all["product_name_search"] = (
+    df_all["product_name"]
+    .astype(str)
+    .str.lower()
+    .str.replace(" ", "", regex=False)
+)
 
 # -------------------------
 # 깨진 문자열 감지 (운영 로그 전용)
@@ -3665,6 +3714,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
