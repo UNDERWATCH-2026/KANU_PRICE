@@ -190,18 +190,24 @@ def extract_brand_from_question(q: str, df_all: pd.DataFrame) -> list:
     q_lower = q.lower()
     brands = df_all["brand"].dropna().unique().tolist()
     matched_brands = []
-    normalized = normalize_brand_name(q_lower)
+
+    normalized = None
+    for key in ["카누","네스프레소","네슬레","일리","일리카페","돌체","돌체구스토","스타벅스"]:
+        if key in q_lower:
+            normalized = normalize_brand_name(key)
+            break
 
     for brand in brands:
         brand_lower = brand.lower()
-    
+
         if brand_lower in q_lower:
             matched_brands.append(brand)
-    
-        elif brand_lower == normalized.lower():
+
+        elif normalized and brand_lower == normalized.lower():
             matched_brands.append(brand)
-    if matched_brands:
-        return matched_brands
+
+    return matched_brands if matched_brands else None
+    
     for brand in brands:
         normalized = normalize_brand_name(q_lower)
         if brand.lower() == normalized.lower():
@@ -3764,6 +3770,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
