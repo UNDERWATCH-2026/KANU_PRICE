@@ -2461,25 +2461,25 @@ with col_tabs:
 
                                 # 🔥 체크박스 렌더링 헬퍼 - product_details 파라미터 추가
                                 def render_product_checkboxes(product_urls, scope_prefix, product_details=None):
-                                    # product_urls는 strip().lower() 정규화된 값 → df_all도 동일하게 비교
+
                                     product_urls_set = set(str(u).strip().lower() for u in product_urls)
+                                
                                     sorted_df = (
-                                        df_all[df_all["product_url"].astype(str).isin(answer_data["products"])]
-                                    )
+                                        df_all[df_all["product_url"].astype(str).str.strip().str.lower().isin(product_urls_set)]
                                         .fillna("")
                                         .drop_duplicates(subset=["product_url"])
                                     )
-                                    
-                                    # 🔥 질문에 '순서/최신/최근' 있으면 날짜순 유지
+                                
+                                    # 🔥 질문에 '순서/최신/최근' 있으면 날짜순
                                     if any(k in history["question"] for k in ["순서","최신","최근"]):
-                                        sorted_df["product_url_key"] = sorted_df["product_url"].astype(str).str.strip().str.lower()
-                                        sorted_df["launch_date"] = sorted_df["product_url_key"].map(answer_data.get("launch_dates", {}))
-                                        sorted_df = sorted_df.sort_values("launch_date", ascending=False)
+                                        if "launch_dates" in answer_data:
+                                            sorted_df["product_url_key"] = sorted_df["product_url"].astype(str).str.strip().str.lower()
+                                            sorted_df["launch_date"] = sorted_df["product_url_key"].map(answer_data["launch_dates"])
+                                            sorted_df = sorted_df.sort_values("launch_date", ascending=False)
                                     else:
                                         sorted_df = sorted_df.sort_values(
                                             by=["brand","category1","category2","product_name"]
-                                        )
-                                                                        
+                                        )                            
                                     if sorted_df.empty:
                                         st.caption("⚠️ 매칭되는 제품이 없습니다.")
                                         return
@@ -3728,6 +3728,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
