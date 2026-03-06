@@ -3810,25 +3810,17 @@ if selected_products:
                 if cc > 0:
                     prev_unit = prev_price / cc
                     curr_unit = current_price / cc
-                    price_text = (
-                        f"{prev_unit:,.1f}원 → {curr_unit:,.1f}원 "
-                        f"({diff_rate:+.1f}%)"
-                    )
+                    price_text = f"{prev_unit:,.1f}원 → {curr_unit:,.1f}원 ({diff_rate:+.1f}%)"
                 else:
-                    price_text = (
-                        f"{prev_price:,.1f}원 → "
-                        f"{current_price:,.1f}원 "
-                        f"({diff_rate:+.1f}%)"
-                    )
-                _event = icon_map.get(row["price_change_type"], "")
-                if any(r["날짜"] == row["date"] and r["이벤트"] == _event for r in display_rows):
+                    price_text = f"{prev_price:,.1f}원 → {current_price:,.1f}원 ({diff_rate:+.1f}%)"
+
+                if any(r["날짜"] == row["date"] and r["이벤트"] == event_label for r in display_rows):
                     continue
                 display_rows.append({
                     "날짜": row["date"],
-                    "이벤트": _event,
+                    "이벤트": event_label,
                     "가격 정보": price_text
                 })
-
             if display_rows:
                 df_display = pd.DataFrame(display_rows)
                 df_display["날짜_정렬용"] = pd.to_datetime(df_display["날짜"], errors="coerce")
@@ -3842,6 +3834,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
