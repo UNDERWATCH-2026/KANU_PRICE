@@ -3761,14 +3761,14 @@ if selected_products:
 
                     # ✅ NORMAL_UP / NORMAL_DOWN은 개당 가격으로 표시
                     if row["price_change_type"] in ("NORMAL_UP", "NORMAL_DOWN"):
+                        # ❌ 기존 - capsule_count로 또 나눔
                         cc = float(p.get("capsule_count") or 0)
                         if cc > 0:
                             prev_unit = prev_price / cc
                             curr_unit = current_price / cc
                             price_text = f"{prev_unit:,.1f}원 → {curr_unit:,.1f}원 {rate_text}"
-                        else:
-                            price_text = f"{prev_price:,.1f}원 → {current_price:,.1f}원 {rate_text}"
-                    else:
+                        
+                        # ✅ 수정 - prev_price/current_price가 이미 unit_price이므로 그대로 사용
                         price_text = f"{prev_price:,.1f}원 → {current_price:,.1f}원 {rate_text}"
 
                     display_rows.append({
@@ -3847,6 +3847,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
