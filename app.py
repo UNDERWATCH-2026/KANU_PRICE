@@ -301,6 +301,8 @@ def classify_intent(q: str):
         return "PRICE_MIN"
     if any(word in q for word in ["가장 비싼", "제일 비싼", "최고가"]):
         return "PRICE_MAX"
+    if "정상가" in q and ("변동" in q or "상승" in q or "인상" in q or "올랐" in q or "인하" in q or "내렸" in q):
+        return "NORMAL_CHANGE"
     if any(word in q for word in ["상승", "증가"]) and "않" not in q:
         return "PRICE_UP"
     if "변동" in q or "많이 바뀐" in q:
@@ -309,8 +311,7 @@ def classify_intent(q: str):
         return "RESTORE"
     if "품절" in q:
         return "OUT"
-    if "정상가" in q and ("변동" in q or "상승" in q or "인상" in q or "올랐" in q or "인하" in q or "내렸" in q):
-        return "NORMAL_CHANGE"
+
 
     return "UNKNOWN"
 
@@ -1573,6 +1574,47 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
             "product_details": product_details,  # 🔥 추가
         }
 
+    if intent == "NORMAL_CHANGE":
+
+        query = (
+            supabase.table("product_normal_price_events")
+            .select("product_url,date,prev_price,normal_price,price_diff")
+            .gte("date", date_from.strftime("%Y-%m-%d"))
+            .lte("date", date_to.strftime("%Y-%m-%d"))
+        )
+    
+        res = query.order("date", desc=True).execute()
+    
+        if not res.data:
+            return "해당 기간 내 정상가 변동이 없습니다."
+    
+        df = pd.DataFrame(res.data)
+    
+        product_details = {}
+        results = []
+        for _, row in df.iterrows():
+            url = str(row["product_url"]).strip().lower()
+            # ✅ df_summary 대신 df_work 사용 (브랜드 필터 반영)
+            product_row = df_work[df_work["product_url"].str.strip().str.lower() == url]
+            if product_row.empty:
+                continue
+            diff = float(row["price_diff"])
+            arrow = "📈" if diff > 0 else "📉"
+            detail = f"{arrow} 정상가 {float(row['prev_price']):,.0f}원 → {float(row['normal_price']):,.0f}원 ({diff:+,.0f}원) | {row['date']}"
+            if url in product_details:
+                product_details[url] += f"  /  {detail}"
+            else:
+                product_details[url] = detail
+                results.append({"product_url": url})
+        if not results:
+            return "해당 기간 내 정상가 변동이 없습니다."
+        return {
+            "type": "product_list",
+            "text": f"{period_label} 정상가 변동 제품 ({len(results)}개)",
+            "products": [r["product_url"] for r in results],
+            "product_details": product_details,
+        }
+    
     if intent == "VOLATILITY":
 
         res = (
@@ -1623,46 +1665,7 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
             "product_details": product_details,
         }
 
-    if intent == "NORMAL_CHANGE":
 
-        query = (
-            supabase.table("product_normal_price_events")
-            .select("product_url,date,prev_price,normal_price,price_diff")
-            .gte("date", date_from.strftime("%Y-%m-%d"))
-            .lte("date", date_to.strftime("%Y-%m-%d"))
-        )
-    
-        res = query.order("date", desc=True).execute()
-    
-        if not res.data:
-            return "해당 기간 내 정상가 변동이 없습니다."
-    
-        df = pd.DataFrame(res.data)
-    
-        product_details = {}
-        results = []
-        for _, row in df.iterrows():
-            url = str(row["product_url"]).strip().lower()
-            # ✅ df_summary 대신 df_work 사용 (브랜드 필터 반영)
-            product_row = df_work[df_work["product_url"].str.strip().str.lower() == url]
-            if product_row.empty:
-                continue
-            diff = float(row["price_diff"])
-            arrow = "📈" if diff > 0 else "📉"
-            detail = f"{arrow} 정상가 {float(row['prev_price']):,.0f}원 → {float(row['normal_price']):,.0f}원 ({diff:+,.0f}원) | {row['date']}"
-            if url in product_details:
-                product_details[url] += f"  /  {detail}"
-            else:
-                product_details[url] = detail
-                results.append({"product_url": url})
-        if not results:
-            return "해당 기간 내 정상가 변동이 없습니다."
-        return {
-            "type": "product_list",
-            "text": f"{period_label} 정상가 변동 제품 ({len(results)}개)",
-            "products": [r["product_url"] for r in results],
-            "product_details": product_details,
-        }
     # =========================
     # 🔍 UNKNOWN: 키워드 제품 검색
     # =========================
@@ -3836,5 +3839,6 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
