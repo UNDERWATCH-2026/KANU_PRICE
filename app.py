@@ -309,7 +309,7 @@ def classify_intent(q: str):
         return "RESTORE"
     if "품절" in q:
         return "OUT"
-    if "정상가" in q and ("변동" in q or "상승" in q):
+    if "정상가" in q and ("변동" in q or "상승" in q or "인상" in q or "올랐" in q or "인하" in q or "내렸" in q):
         return "NORMAL_CHANGE"
 
     return "UNKNOWN"
@@ -1643,7 +1643,8 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
         results = []
         for _, row in df.iterrows():
             url = str(row["product_url"]).strip().lower()
-            product_row = df_summary[df_summary["product_url"].str.strip().str.lower() == url]
+            # ✅ df_summary 대신 df_work 사용 (브랜드 필터 반영)
+            product_row = df_work[df_work["product_url"].str.strip().str.lower() == url]
             if product_row.empty:
                 continue
             diff = float(row["price_diff"])
@@ -1662,7 +1663,6 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
             "products": [r["product_url"] for r in results],
             "product_details": product_details,
         }
-
     # =========================
     # 🔍 UNKNOWN: 키워드 제품 검색
     # =========================
@@ -3836,4 +3836,5 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
