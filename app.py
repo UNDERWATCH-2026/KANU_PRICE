@@ -465,8 +465,9 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
                     | df_work["brew_type_search"].fillna("").str.contains(keyword_norm, regex=False)
                     | df_work["category1_search"].fillna("").str.contains(keyword_norm, regex=False)
                     | df_work["category2_search"].fillna("").str.contains(keyword_norm, regex=False)
+                    | _norm_series(df_work["brand"]).str.contains(keyword_norm, regex=False)
                 )
-                
+                                
                 if keyword_mask.any():
                     df_work = df_work[keyword_mask]
 
@@ -3716,6 +3717,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
