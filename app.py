@@ -832,19 +832,14 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
     # =========================
     if intent == "PRICE_MIN":
     
-        res = (
-            supabase.table("product_all_events")
-            .select("product_url, date, unit_price")
-            .in_("product_url", df_work["product_url"].tolist())
-            .gte("date", date_from.strftime("%Y-%m-%d"))
-            .lte("date", date_to.strftime("%Y-%m-%d"))
-            .execute()
-        )
-    
-        if not res.data:
+        urls = df_work["product_url"].tolist()
+        if not urls:
+            return "조건에 맞는 제품이 없습니다."
+        
+        df_hist = query_events_bulk(supabase, urls, date_from, date_to)
+        
+        if df_hist.empty:
             return "가격 데이터가 없습니다."
-    
-        df_hist = pd.DataFrame(res.data)
 
         
         # 🔥 브랜드 필터 유지
@@ -924,19 +919,14 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
     # =========================
     if intent == "PRICE_MAX":
     
-        res = (
-            supabase.table("product_all_events")
-            .select("product_url, date, unit_price")
-            .in_("product_url", df_work["product_url"].tolist())
-            .gte("date", date_from.strftime("%Y-%m-%d"))
-            .lte("date", date_to.strftime("%Y-%m-%d"))
-            .execute()
-        )
-    
-        if not res.data:
+        urls = df_work["product_url"].tolist()
+        if not urls:
+            return "조건에 맞는 제품이 없습니다."
+        
+        df_hist = query_events_bulk(supabase, urls, date_from, date_to)
+        
+        if df_hist.empty:
             return "가격 데이터가 없습니다."
-    
-        df_hist = pd.DataFrame(res.data)
         # 🔥 브랜드 필터 유지
         df_hist = df_hist[
             df_hist["product_url"].astype(str).str.strip().str.lower()
@@ -1616,17 +1606,15 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
     
     if intent == "VOLATILITY":
 
-        res = (
-            supabase.table("product_all_events")
-            .select("product_url, unit_price, date")
-            .in_("product_url", df_work["product_url"].tolist())   # 🔥 브랜드 필터 유지
-            .gte("date", date_from.strftime("%Y-%m-%d"))
-            .lte("date", date_to.strftime("%Y-%m-%d"))
-            .execute()
-        )
-        if not res.data:
+        # 교체 후
+        urls = df_work["product_url"].tolist()
+        if not urls:
             return None
-        df = pd.DataFrame(res.data)
+        
+        df = query_events_bulk(supabase, urls, date_from, date_to)
+        
+        if df.empty:
+            return None
         df["unit_price"] = df["unit_price"].astype(float)
         df["date"] = pd.to_datetime(df["date"])
         
@@ -1750,6 +1738,26 @@ def llm_fallback(question: str, df_summary: pd.DataFrame):
 import re
 
 
+def query_events_bulk(supabase, product_urls, date_from, date_to, chunk_size=200):
+    if not product_urls:
+        return pd.DataFrame(columns=["product_url", "date", "unit_price"])
+    all_data = []
+    for i in range(0, len(product_urls), chunk_size):
+        chunk = product_urls[i:i+chunk_size]
+        res = (
+            supabase.table("product_all_events")
+            .select("product_url, date, unit_price")
+            .in_("product_url", chunk)
+            .gte("date", date_from.strftime("%Y-%m-%d"))
+            .lte("date", date_to.strftime("%Y-%m-%d"))
+            .execute()
+        )
+        if res.data:
+            all_data.extend(res.data)
+    return pd.DataFrame(all_data) if all_data else pd.DataFrame(
+        columns=["product_url", "date", "unit_price"]
+    )
+    
 def clean_product_name(s: str) -> str:
     if s is None:
         return ""
@@ -3893,6 +3901,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
