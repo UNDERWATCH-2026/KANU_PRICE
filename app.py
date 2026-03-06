@@ -1670,20 +1670,41 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
     # 🔍 UNKNOWN: 키워드 제품 검색
     # =========================
     # intent가 분류되지 않았거나, 키워드로 제품을 찾으려는 경우
+    # 수정: 전체 쿼리를 붙여쓰기로도 검색
     keywords = [w for w in question.split() if len(w) >= 2]
     if keywords:
         df_search = df_work.copy()
+        
+        # 1) 전체 질문을 공백 제거한 통합 키워드로 먼저 시도
+        full_nkw = _norm_kw(question)
+        full_mask = (
+            _norm_series(df_search["product_name"]).str.contains(full_nkw, case=False) |
+            _norm_series(df_search["brand"]).str.contains(full_nkw, case=False) |
+            _norm_series(df_search["category1"]).str.contains(full_nkw, case=False) |
+            _norm_series(df_search["category2"]).str.contains(full_nkw, case=False) |
+            _norm_series(df_search["brew_type_kr"]).str.contains(full_nkw, case=False)
+        )
+        df_full = df_search[full_mask]
+        
+        # 2) 개별 키워드 AND 검색
+        df_and = df_search.copy()
         for keyword in keywords:
             nkw = _norm_kw(keyword)
             mask = (
-                _norm_series(df_search["product_name"]).str.contains(nkw, case=False) |
-                _norm_series(df_search["brand"]).str.contains(nkw, case=False) |
-                _norm_series(df_search["category1"]).str.contains(nkw, case=False) |
-                _norm_series(df_search["category2"]).str.contains(nkw, case=False) |
-                _norm_series(df_search["brew_type_kr"]).str.contains(nkw, case=False)
+                _norm_series(df_and["product_name"]).str.contains(nkw, case=False) |
+                _norm_series(df_and["brand"]).str.contains(nkw, case=False) |
+                _norm_series(df_and["category1"]).str.contains(nkw, case=False) |
+                _norm_series(df_and["category2"]).str.contains(nkw, case=False) |
+                _norm_series(df_and["brew_type_kr"]).str.contains(nkw, case=False)
             )
-            df_search = df_search[mask]
-            if df_search.empty:
+            df_and = df_and[mask]
+            if df_and.empty:
+                break
+        
+        # 3) 두 결과 합치기 (중복 제거)
+        df_search = pd.concat([df_full, df_and]).drop_duplicates(subset=["product_url"])
+
+                if df_search.empty:
                 break
 
         df_search = df_search.drop_duplicates(subset=["product_url"])
@@ -2210,6 +2231,18 @@ with col_tabs:
                     mask |= _norm_series(df_all["brew_type_kr"]).str.contains(nkw, case=False)
                 candidates_df = df_all[mask].copy()
             else:
+                # 1) 전체 붙여쓰기 통합 검색
+                full_nkw = _norm_kw(search_keyword)
+                full_mask = (
+                    _norm_series(df_all["product_name"]).str.contains(full_nkw, case=False) |
+                    _norm_series(df_all["brand"]).str.contains(full_nkw, case=False) |
+                    _norm_series(df_all["category1"]).str.contains(full_nkw, case=False) |
+                    _norm_series(df_all["category2"]).str.contains(full_nkw, case=False) |
+                    _norm_series(df_all["brew_type_kr"]).str.contains(full_nkw, case=False)
+                )
+                df_full = df_all[full_mask].copy()
+            
+                # 2) 기존 AND 검색
                 keywords = search_keyword.split()
                 candidates_df = df_all.copy()
                 for kw in keywords:
@@ -2225,6 +2258,9 @@ with col_tabs:
                         candidates_df = candidates_df[keyword_mask]
                         if candidates_df.empty:
                             break
+            
+                # 3) 두 결과 합치기 (중복 제거)
+                candidates_df = pd.concat([df_full, candidates_df]).drop_duplicates(subset=["product_url"])
 
             try:
                 supabase.table("search_logs").insert({
@@ -3863,6 +3899,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
