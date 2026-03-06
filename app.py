@@ -450,26 +450,27 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
     all_keywords = extract_product_name_from_question(question)
 
     if all_keywords:
+        combined_mask = False
+    
         for keyword in all_keywords:
             if len(keyword) >= 2:
-                # 브랜드 완전/부분 일치가 있으면 브랜드 우선 필터
-                brand_mask = _norm_series(df_work["brand"]).str.contains(keyword, case=False)
-                if brand_mask.any():
-                    df_work = df_work[brand_mask]
-                    continue
-                # 브랜드 매칭 없으면 전체 필드 검색
+    
                 keyword_norm = keyword.replace(" ", "").lower()
-                
+    
+                brand_mask = _norm_series(df_work["brand"]).str.contains(keyword_norm, regex=False)
+    
                 keyword_mask = (
                     df_work["product_name_search"].fillna("").str.contains(keyword_norm, regex=False)
                     | df_work["brew_type_search"].fillna("").str.contains(keyword_norm, regex=False)
                     | df_work["category1_search"].fillna("").str.contains(keyword_norm, regex=False)
                     | df_work["category2_search"].fillna("").str.contains(keyword_norm, regex=False)
-                    | _norm_series(df_work["brand"]).str.contains(keyword_norm, regex=False)
+                    | brand_mask
                 )
-                                
-                if keyword_mask.any():
-                    df_work = df_work[keyword_mask]
+    
+                combined_mask = combined_mask | keyword_mask
+    
+        if combined_mask is not False:
+            df_work = df_work[combined_mask]
 
     if all_keywords and df_work.empty:
         keywords_str = ", ".join(all_keywords)
@@ -3717,6 +3718,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
