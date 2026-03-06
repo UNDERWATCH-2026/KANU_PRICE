@@ -662,7 +662,6 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
 
         urls = [r[0] for r in rate_list]
         df = df_work[df_work["product_url"].str.strip().str.lower().isin(urls)].drop_duplicates(subset=["product_url"])
-        df = df_work[df_work["product_url"].str.strip().str.lower().isin(urls)].drop_duplicates(subset=["product_url"])
 
         results = []
         product_details = {}
@@ -802,6 +801,15 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
             return "가격 데이터가 없습니다."
     
         df_hist = pd.DataFrame(res.data)
+
+        
+        # 🔥 브랜드 필터 유지
+        df_hist = df_hist[
+            df_hist["product_url"].astype(str).str.strip().str.lower()
+            .isin(df_work["product_url"].astype(str).str.strip().str.lower())
+        ]
+        
+
         df_hist["date"] = pd.to_datetime(df_hist["date"])
         df_hist["unit_price"] = df_hist["unit_price"].astype(float)
     
@@ -820,7 +828,13 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
         min_price = df_hist["unit_price"].min()
     
         df_low = df_hist[df_hist["unit_price"] == min_price]
-    
+
+        # 🔥 브랜드 강제 유지
+        df_low = df_low[
+            df_low["product_url"].astype(str).str.strip().str.lower()
+            .isin(df_work["product_url"].astype(str).str.strip().str.lower())
+        ]
+            
         results = []
         product_details = {}
     
@@ -879,6 +893,13 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
             return "가격 데이터가 없습니다."
     
         df_hist = pd.DataFrame(res.data)
+        # 🔥 브랜드 필터 유지
+        df_hist = df_hist[
+            df_hist["product_url"].astype(str).str.strip().str.lower()
+            .isin(df_work["product_url"].astype(str).str.strip().str.lower())
+        ]
+        
+
         df_hist["date"] = pd.to_datetime(df_hist["date"])
         df_hist["unit_price"] = df_hist["unit_price"].astype(float)
     
@@ -1508,11 +1529,14 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
             "product_details": product_details,  # 🔥 추가
         }
 
-    if intent == "VOLATILITY" and start_date:
+    if intent == "VOLATILITY":
+
         res = (
             supabase.table("product_all_events")
             .select("product_url, unit_price, date")
-            .gte("date", start_date.strftime("%Y-%m-%d"))
+            .in_("product_url", df_work["product_url"].tolist())   # 🔥 브랜드 필터 유지
+            .gte("date", date_from.strftime("%Y-%m-%d"))
+            .lte("date", date_to.strftime("%Y-%m-%d"))
             .execute()
         )
         if not res.data:
@@ -3740,6 +3764,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
