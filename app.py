@@ -3769,11 +3769,13 @@ if selected_products:
                             price_text = f"{prev_unit:,.1f}원 → {curr_unit:,.1f}원 {rate_text}"
                         
                         # ✅ 수정 - prev_price/current_price가 이미 unit_price이므로 그대로 사용
-                        price_text = f"{prev_price:,.1f}원 → {current_price:,.1f}원 {rate_text}"
-
+                         price_text = f"{prev_price:,.1f}원 → {current_price:,.1f}원 {rate_text}"
+                    _event = icon_map.get(row["price_change_type"], "")
+                    if any(r["날짜"] == row["date"] and r["이벤트"] == _event for r in display_rows):
+                        continue
                     display_rows.append({
                         "날짜": row["date"],
-                        "이벤트": icon_map.get(row["price_change_type"], ""),
+                        "이벤트": _event,
                         "가격 정보": price_text
                     })
 
@@ -3827,10 +3829,12 @@ if selected_products:
                         f"{current_price:,.1f}원 "
                         f"({diff_rate:+.1f}%)"
                     )
-
+                _event = icon_map.get(row["price_change_type"], "")
+                if any(r["날짜"] == row["date"] and r["이벤트"] == _event for r in display_rows):
+                    continue
                 display_rows.append({
                     "날짜": row["date"],
-                    "이벤트": event_label,
+                    "이벤트": _event,
                     "가격 정보": price_text
                 })
 
@@ -3847,6 +3851,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
