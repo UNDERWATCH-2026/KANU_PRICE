@@ -347,6 +347,21 @@ def extract_period_from_question(q: str, base_date=None):
         year = int(year_match.group(1))
         return datetime(year, 1, 1), datetime(year, 12, 31), f"{year}년"
 
+    # 기존 year_match 아래에 추가
+    # ✅ "N월" 단독 처리 (연도 없으면 올해 또는 작년으로 추정)
+    month_only_match = re.search(r"(?<!\d)(\d{1,2})월(?!\s*\d)", q)
+    if month_only_match:
+        month = int(month_only_match.group(1))
+        if 1 <= month <= 12:
+            today = base_date if base_date else datetime.today()
+            year = today.year
+            # 현재 월보다 미래면 작년으로
+            if month > today.month:
+                year -= 1
+            from_dt = datetime(year, month, 1)
+            to_dt = (datetime(year, month + 1, 1) - timedelta(days=1)) if month < 12 else datetime(year, 12, 31)
+            return from_dt, to_dt, f"{year}년 {month}월"
+
     return None
 
 def extract_brew_type(q: str, df_all: pd.DataFrame):
@@ -3899,6 +3914,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
