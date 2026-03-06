@@ -334,13 +334,14 @@ def extract_period_from_question(q: str, base_date=None):
         label = "최근 1년 내" if n == 12 else f"최근 {n}개월 내"
         return today - timedelta(days=n * 30), today, label
 
+    # 수정
     month_match = re.search(r"(\d{4})년\s*(\d{1,2})월", q)
     if month_match:
         year = int(month_match.group(1))
         month = int(month_match.group(2))
         from_dt = datetime(year, month, 1)
         to_dt = (datetime(year, month + 1, 1) - timedelta(days=1)) if month < 12 else datetime(year, 12, 31)
-        return from_dt, to_dt, f"{year}년 {month}월"
+        return from_dt, to_dt, f"{year}년 {month}월 ({from_dt.strftime('%Y-%m-%d')} ~ {to_dt.strftime('%Y-%m-%d')})"
 
     year_match = re.search(r"(\d{4})년", q)
     if year_match:
@@ -3914,6 +3915,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
