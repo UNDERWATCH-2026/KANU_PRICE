@@ -3902,16 +3902,35 @@ if selected_products:
                     if row["price_change_type"] == "NORMAL_UP" and str(row["date"]) in restore_dates_in_display:
                         continue
 
-                    if prev_price > 0:
-                        diff = current_price - prev_price
-                        diff_rate = (diff / prev_price) * 100
-                        rate_text = f"({diff_rate:+.1f}%)"
-                    else:
-                        rate_text = ""
-
-                    # ✅ NORMAL_UP / NORMAL_DOWN은 개당 가격으로 표시
-                    price_text = f"{prev_price:,.1f}원 → {current_price:,.1f}원 {rate_text}"
                     _event = icon_map.get(row["price_change_type"], "")
+
+                    # 할인가 이벤트: 정상가/할인가/할인율 표시
+                    if row["price_change_type"] in ("DISCOUNT_DOWN", "DISCOUNT_UP"):
+                        # 정상가 조회 (product_all_events에서 해당 날짜 NORMAL)
+                        norm_res = (
+                            supabase.table("product_all_events")
+                            .select("unit_price")
+                            .eq("product_url", p["product_url"])
+                            .eq("event_type", "NORMAL")
+                            .lte("date", row["date"])
+                            .order("date", desc=True)
+                            .limit(1)
+                            .execute()
+                        )
+                        norm_price = float(norm_res.data[0]["unit_price"]) if norm_res.data else None
+                        if norm_price and norm_price > 0 and current_price > 0:
+                            disc_rate = (norm_price - current_price) / norm_price * 100
+                            price_text = f"정상가: {norm_price:,.1f}원 | 할인가: {current_price:,.1f}원 | 할인율: {disc_rate:.1f}%"
+                        else:
+                            price_text = f"할인가: {current_price:,.1f}원"
+                    else:
+                        if prev_price > 0:
+                            diff = current_price - prev_price
+                            diff_rate = (diff / prev_price) * 100
+                            rate_text = f"({diff_rate:+.1f}%)"
+                        else:
+                            rate_text = ""
+                        price_text = f"{prev_price:,.1f}원 → {current_price:,.1f}원 {rate_text}"
                     if any(r["날짜"] == row["date"] and r["이벤트"] == _event for r in display_rows):
                         continue
                     display_rows.append({
@@ -3984,6 +4003,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
