@@ -3306,7 +3306,7 @@ if selected_products:
             ]].copy()
 
             excel_data["brand"] = excel_data["product_name"].str.split(" - ").str[0]
-            excel_data["product_name_only"] = excel_data["product_name"].str.split(" - ").str[1]
+            excel_data["product_name_only"] = excel_data["product_name"].str.split(" - ").str[1:].str.join(" - ")
 
             excel_data["event_date_str"] = pd.to_datetime(
                 excel_data["event_date"]
@@ -3955,6 +3955,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
