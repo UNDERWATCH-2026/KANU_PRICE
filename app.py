@@ -293,9 +293,9 @@ def classify_intent(q: str):
         return "DISCOUNT_PERIOD"
     if "할인" in q and any(w in q for w in ["률", "율", "퍼센트", "%", "높은", "최대", "가장 많이"]):
         return "DISCOUNT_RATE"
-    if "할인가" in q and any(w in q for w in ["인상", "상승", "올랐", "올라"]):
+    if any(kw in q for kw in ["할인가", "판매가"]) and any(w in q for w in ["인상", "상승", "올랐", "올라"]):
         return "DISCOUNT_PRICE_UP"
-    if "할인가" in q and any(w in q for w in ["인하", "하락", "내렸", "내려"]):
+    if any(kw in q for kw in ["할인가", "판매가"]) and any(w in q for w in ["인하", "하락", "내렸", "내려"]):
         return "DISCOUNT_PRICE_DOWN"
     if "할인" in q or "행사" in q:
         return "DISCOUNT"
@@ -1665,10 +1665,46 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
             product_details[url] = " / ".join(parts)
             results.append({"product_url": url})
 
-        arrow = "💸📈" if intent == "DISCOUNT_PRICE_UP" else "💸📉"
+        # 판매가 인상/인하 질문이면 정상가 변동도 합치기
+        if "판매가" in question:
+            normal_chg_res = (
+                supabase.table("product_normal_price_events")
+                .select("product_url, date, prev_price, normal_price")
+                .in_("product_url", df_work["product_url"].tolist())
+                .gte("date", date_from.strftime("%Y-%m-%d"))
+                .lte("date", date_to.strftime("%Y-%m-%d"))
+                .execute()
+            )
+            for row in (normal_chg_res.data or []):
+                url = str(row["product_url"]).strip().lower()
+                product_row = df_work[df_work["product_url"].str.strip().str.lower() == url]
+                if product_row.empty:
+                    continue
+                prev_p = float(row["prev_price"])
+                curr_p = float(row["normal_price"])
+                if prev_p == 0 or curr_p == 0:
+                    continue
+                diff = curr_p - prev_p
+                # 인상이면 diff>0, 인하면 diff<0만 포함
+                if intent == "DISCOUNT_PRICE_UP" and diff <= 0:
+                    continue
+                if intent == "DISCOUNT_PRICE_DOWN" and diff >= 0:
+                    continue
+                cc = float(product_row.iloc[0].get("capsule_count") or 1)
+                prev_unit = prev_p / cc
+                curr_unit = curr_p / cc
+                diff_pct = (curr_unit - prev_unit) / prev_unit * 100 if prev_unit > 0 else 0
+                arrow_label = "📈 정상가" if diff > 0 else "📉 정상가"
+                entry = f"📅 {row['date']} | {prev_unit:,.1f}원 → {curr_unit:,.1f}원 ({diff_pct:+.1f}%) [{arrow_label}]"
+                if url in product_details:
+                    product_details[url] += f" / {entry}"
+                else:
+                    product_details[url] = entry
+                    results.append({"product_url": url})
+
         return {
             "type": "product_list",
-            "text": f"{period_label} 할인가 {direction} 제품 ({len(results)}개)",
+            "text": f"{period_label} 판매가 {direction} 제품 ({len(results)}개)" if "판매가" in question else f"{period_label} 할인가 {direction} 제품 ({len(results)}개)",
             "products": [r["product_url"] for r in results],
             "product_details": product_details,
         }
@@ -4227,6 +4263,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
