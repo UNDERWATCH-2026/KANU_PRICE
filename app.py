@@ -3902,6 +3902,18 @@ if selected_products:
                     if row["price_change_type"] == "NORMAL_UP" and str(row["date"]) in restore_dates_in_display:
                         continue
 
+                    # 실제 정상가 변동 여부 확인: normal_price_events에 없으면 스킵
+                    if row["price_change_type"] in ("NORMAL_UP", "NORMAL_DOWN"):
+                        verify_res = (
+                            supabase.table("product_normal_price_events")
+                            .select("date")
+                            .eq("product_url", p["product_url"])
+                            .eq("date", row["date"])
+                            .execute()
+                        )
+                        if not verify_res.data:
+                            continue
+
                     _event = icon_map.get(row["price_change_type"], "")
 
                     # 할인가 이벤트: 정상가/할인가/할인율 표시
@@ -4003,6 +4015,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
