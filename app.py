@@ -3325,128 +3325,230 @@ if selected_products:
             from io import BytesIO
             import openpyxl
             from openpyxl.styles import Font, Alignment, PatternFill
+            from openpyxl.utils import get_column_letter
 
-            excel_data = df_chart[[
-                "product_url",
-                "product_name",
-                "event_date",
-                "unit_price",
-                "price_status"
-            ]].copy()
-
-            excel_data["brand"] = excel_data["product_name"].str.split(" - ").str[0]
-            excel_data["product_name_only"] = excel_data["product_name"].str.split(" - ").str[1:].str.join(" - ")
-
-            excel_data["event_date_str"] = pd.to_datetime(
-                excel_data["event_date"]
-            ).dt.strftime("%Y-%m-%d")
-
+            # raw_daily_prices_unit 전체 조회 (정상가 + 할인가)
             raw_res = (
                 supabase.table("raw_daily_prices_unit")
-                .select("product_url, date, unit_normal_price")
+                .select("product_url, date, unit_normal_price, unit_sale_price")
                 .in_("product_url", selected_products)
                 .gte("date", filter_date_from.strftime("%Y-%m-%d"))
                 .lte("date", filter_date_to.strftime("%Y-%m-%d"))
                 .execute()
             )
-
             raw_df = pd.DataFrame(raw_res.data) if raw_res.data else pd.DataFrame()
-
             if not raw_df.empty:
                 raw_df["date"] = pd.to_datetime(raw_df["date"]).dt.strftime("%Y-%m-%d")
-                excel_data = excel_data.merge(
-                    raw_df,
-                    left_on=["product_url", "event_date_str"],
-                    right_on=["product_url", "date"],
-                    how="left"
+                raw_df["unit_normal_price"] = pd.to_numeric(raw_df["unit_normal_price"], errors="coerce")
+                raw_df["unit_sale_price"] = pd.to_numeric(raw_df["unit_sale_price"], errors="coerce")
+
+            def get_price_cols(product_url, date_str):
+                """raw_daily_prices_unit에서 정상가/할인가/할인율 반환"""
+                if raw_df.empty:
+                    return None, None, None
+                row = raw_df[
+                    (raw_df["product_url"] == product_url) &
+                    (raw_df["date"] == date_str)
+                ]
+                if row.empty:
+                    return None, None, None
+                norm = row.iloc[0]["unit_normal_price"]
+                disc = row.iloc[0]["unit_sale_price"]
+                norm = float(norm) if pd.notna(norm) else None
+                disc = float(disc) if pd.notna(disc) else None
+                if norm and disc and norm > 0 and disc > 0 and norm >= disc:
+                    rate = round((norm - disc) / norm * 100, 1)
+                    return round(norm, 1), round(disc, 1), rate
+                elif norm and norm > 0:
+                    return round(norm, 1), None, None
+                return None, None, None
+
+            excel_rows = []
+
+            for product_url in selected_products:
+                product_row = df_all[df_all["product_url"] == product_url]
+                if product_row.empty:
+                    continue
+                p_row = product_row.iloc[0]
+                brand = str(p_row["brand"]).strip()
+                pname = str(p_row["product_name"]).strip()
+                if p_row["brand"] == "네스프레소":
+                    cat2 = str(p_row.get("category2") or "").strip()
+                    product_name_full = f"{cat2} - {pname}" if cat2 else pname
+                else:
+                    product_name_full = pname
+
+                # 이벤트 히스토리와 동일한 로직으로 이벤트 수집
+                ev_rows = []
+
+                # 1) 할인 시작/종료
+                disc_res = supabase.rpc(
+                    "get_discount_periods_in_range",
+                    {
+                        "p_product_url": product_url,
+                        "p_date_from": filter_date_from.strftime("%Y-%m-%d"),
+                        "p_date_to": filter_date_to.strftime("%Y-%m-%d"),
+                    }
+                ).execute()
+                disc_periods = disc_res.data if disc_res.data else []
+
+                for period in disc_periods:
+                    # 할인 시작
+                    n, d, r = get_price_cols(product_url, period["discount_start_date"])
+                    ev_rows.append({
+                        "날짜": period["discount_start_date"],
+                        "이벤트": "💸 할인 시작",
+                        "정상가": n, "할인가": d, "할인율": f"{r:.1f}%" if r else None
+                    })
+                    # 할인 종료
+                    n, d, r = get_price_cols(product_url, period["discount_end_date"])
+                    ev_rows.append({
+                        "날짜": period["discount_end_date"],
+                        "이벤트": "💸 할인 종료",
+                        "정상가": n, "할인가": d, "할인율": f"{r:.1f}%" if r else None
+                    })
+
+                # 2) 라이프사이클 이벤트 (신제품, 품절, 복원)
+                lc_res = (
+                    supabase.table("product_lifecycle_events")
+                    .select("date, lifecycle_event")
+                    .eq("product_url", product_url)
+                    .gte("date", filter_date_from.strftime("%Y-%m-%d"))
+                    .lte("date", filter_date_to.strftime("%Y-%m-%d"))
+                    .execute()
                 )
-                excel_data.rename(columns={"unit_normal_price": "normal_price"}, inplace=True)
+                lc_map = {
+                    "NEW_PRODUCT": "🆕 신제품",
+                    "OUT_OF_STOCK": "❌ 품절",
+                    "RESTOCK": "🔄 복원",
+                }
+                for lc in (lc_res.data or []):
+                    ev_type = lc["lifecycle_event"]
+                    ev_label = lc_map.get(ev_type, "")
+                    if not ev_label:
+                        continue
+                    if ev_type == "OUT_OF_STOCK":
+                        prev_date = (pd.Timestamp(lc["date"]) - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+                        n, d, r = get_price_cols(product_url, prev_date)
+                        ev_rows.append({
+                            "날짜": lc["date"], "이벤트": ev_label,
+                            "정상가": n, "할인가": d, "할인율": f"{r:.1f}%" if r else None
+                        })
+                    elif ev_type in ("RESTOCK", "NEW_PRODUCT"):
+                        n, d, r = get_price_cols(product_url, lc["date"])
+                        ev_rows.append({
+                            "날짜": lc["date"], "이벤트": ev_label,
+                            "정상가": n, "할인가": d, "할인율": f"{r:.1f}%" if r else None
+                        })
+
+                # 3) 정상가 변동
+                normal_res = (
+                    supabase.table("product_normal_price_events")
+                    .select("date, prev_price, normal_price, price_diff")
+                    .eq("product_url", product_url)
+                    .gte("date", filter_date_from.strftime("%Y-%m-%d"))
+                    .lte("date", filter_date_to.strftime("%Y-%m-%d"))
+                    .execute()
+                )
+                cc = float(p_row.get("capsule_count") or 0)
+                for nr in (normal_res.data or []):
+                    prev_p = float(nr["prev_price"])
+                    curr_p = float(nr["normal_price"])
+                    if curr_p == 0 or prev_p == 0:
+                        continue
+                    diff = curr_p - prev_p
+                    ev_label = "📈 정상가 상승" if diff > 0 else "📉 정상가 하락"
+                    n, d, r = get_price_cols(product_url, nr["date"])
+                    ev_rows.append({
+                        "날짜": nr["date"], "이벤트": ev_label,
+                        "정상가": n, "할인가": d, "할인율": f"{r:.1f}%" if r else None
+                    })
+
+                # 4) 할인가 변동
+                chg_res = (
+                    supabase.table("product_price_change_events")
+                    .select("date, price_change_type, unit_price, prev_price")
+                    .eq("product_url", product_url)
+                    .in_("price_change_type", ["DISCOUNT_DOWN", "DISCOUNT_UP"])
+                    .gte("date", filter_date_from.strftime("%Y-%m-%d"))
+                    .lte("date", filter_date_to.strftime("%Y-%m-%d"))
+                    .execute()
+                )
+                chg_label_map = {
+                    "DISCOUNT_DOWN": "💸 할인가 하락",
+                    "DISCOUNT_UP": "💸 할인가 상승",
+                }
+                for chg in (chg_res.data or []):
+                    n, d, r = get_price_cols(product_url, chg["date"])
+                    ev_rows.append({
+                        "날짜": chg["date"],
+                        "이벤트": chg_label_map.get(chg["price_change_type"], ""),
+                        "정상가": n, "할인가": d, "할인율": f"{r:.1f}%" if r else None
+                    })
+
+                # 중복 제거 후 날짜순 정렬
+                seen = set()
+                deduped = []
+                for ev in sorted(ev_rows, key=lambda x: x["날짜"]):
+                    key = (ev["날짜"], ev["이벤트"])
+                    if key not in seen:
+                        seen.add(key)
+                        deduped.append(ev)
+
+                for ev in deduped:
+                    excel_rows.append({
+                        "브랜드": brand,
+                        "제품명": product_name_full,
+                        "날짜": ev["날짜"],
+                        "이벤트": ev["이벤트"],
+                        "정상가": ev["정상가"],
+                        "할인가": ev["할인가"],
+                        "할인율": ev["할인율"],
+                    })
+
+            if not excel_rows:
+                st.info("다운로드할 이벤트 데이터가 없습니다.")
             else:
-                excel_data["normal_price"] = None
+                excel_data = pd.DataFrame(excel_rows)
+                excel_data = excel_data.sort_values(["브랜드", "제품명", "날짜"], ascending=[True, True, False])
 
-            excel_data["discount_price"] = None
-            excel_data["discount_rate"] = None
+                output = BytesIO()
+                with pd.ExcelWriter(output, engine="openpyxl") as writer:
+                    excel_data.to_excel(writer, sheet_name="이벤트 히스토리", index=False)
+                    ws = writer.sheets["이벤트 히스토리"]
 
-            mask_discount = excel_data["price_status"] == "💸 할인"
-            excel_data.loc[mask_discount, "discount_price"] = excel_data.loc[mask_discount, "unit_price"]
+                    header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+                    header_font = Font(bold=True, color="FFFFFF")
+                    for cell in ws[1]:
+                        cell.fill = header_fill
+                        cell.font = header_font
+                        cell.alignment = Alignment(horizontal="center")
 
-            excel_data["normal_price"] = pd.to_numeric(excel_data["normal_price"], errors="coerce")
-            excel_data["discount_price"] = pd.to_numeric(excel_data["discount_price"], errors="coerce")
+                    # 정상가/할인가 숫자 포맷
+                    col_idx_map = {cell.value: cell.column for cell in ws[1]}
+                    for col_name in ["정상가", "할인가"]:
+                        col_idx = col_idx_map.get(col_name)
+                        if col_idx:
+                            for row in ws.iter_rows(min_row=2, min_col=col_idx, max_col=col_idx):
+                                for cell in row:
+                                    if cell.value is not None:
+                                        cell.number_format = '#,##0.0'
 
-            mask_valid = (
-                mask_discount &
-                excel_data["normal_price"].notna() &
-                (excel_data["normal_price"] > 0)
-            )
+                    for i, col_name in enumerate(excel_data.columns, start=1):
+                        series_as_str = excel_data[col_name].astype(str).fillna("")
+                        max_len = max([len(str(col_name))] + series_as_str.map(len).tolist())
+                        width = min(max(max_len + 2, 10), 60)
+                        ws.column_dimensions[get_column_letter(i)].width = width
 
-            discount_rate_series = (
-                (excel_data.loc[mask_valid, "normal_price"]
-                 - excel_data.loc[mask_valid, "discount_price"])
-                / excel_data.loc[mask_valid, "normal_price"]
-            ) * 100
+                output.seek(0)
 
-            excel_data.loc[mask_valid, "discount_rate"] = (
-                discount_rate_series.round(1).map(lambda x: f"{x:.1f}%")
-            )
-
-            mask_normal = excel_data["price_status"] != "💸 할인"
-            excel_data.loc[mask_normal, "normal_price"] = excel_data.loc[mask_normal, "unit_price"]
-
-            excel_data = excel_data[[
-                "brand",
-                "product_name_only",
-                "event_date_str",
-                "price_status",
-                "normal_price",
-                "discount_price",
-                "discount_rate"
-            ]]
-
-            excel_data.columns = [
-                "브랜드", "제품명", "날짜", "이벤트", "정상가", "할인가", "할인율"
-            ]
-
-            excel_data["정상가"] = pd.to_numeric(excel_data["정상가"], errors="coerce").round(1)
-            excel_data["할인가"] = pd.to_numeric(excel_data["할인가"], errors="coerce").round(1)
-
-            output = BytesIO()
-
-            from openpyxl.utils import get_column_letter
-
-            with pd.ExcelWriter(output, engine="openpyxl") as writer:
-                excel_data.to_excel(writer, sheet_name="가격 데이터", index=False)
-
-                ws = writer.sheets["가격 데이터"]
-
-                header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
-                header_font = Font(bold=True, color="FFFFFF")
-                for cell in ws[1]:
-                    cell.fill = header_fill
-                    cell.font = header_font
-                    cell.alignment = Alignment(horizontal="center")
-
-                col_normal = excel_data.columns.get_loc("정상가") + 1
-                col_discount = excel_data.columns.get_loc("할인가") + 1
-                for row in ws.iter_rows(min_row=2, min_col=col_normal, max_col=col_discount):
-                    for cell in row:
-                        if cell.value is not None:
-                            cell.number_format = '#,##0.0'
-
-                for i, col_name in enumerate(excel_data.columns, start=1):
-                    series_as_str = excel_data[col_name].astype(str).fillna("")
-                    max_len = max([len(str(col_name))] + series_as_str.map(len).tolist())
-                    width = min(max(max_len + 2, 10), 60)
-                    ws.column_dimensions[get_column_letter(i)].width = width
-
-            output.seek(0)
-
-            st.download_button(
-                label="📥 엑셀 다운로드",
-                data=output.getvalue(),
-                file_name=f"Coffee Capsule Price Intelligence_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
-            )
+                st.download_button(
+                    label="📥 엑셀 다운로드",
+                    data=output.getvalue(),
+                    file_name=f"Coffee Capsule Price Intelligence_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
 
     else:
         st.info("다운로드할 데이터가 없습니다.")
@@ -4023,6 +4125,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
