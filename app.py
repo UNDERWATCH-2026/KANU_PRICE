@@ -2362,6 +2362,20 @@ with col_tabs:
                                     f"목록 펼치기 / 접기 ({len(sorted_df)}개)",
                                     expanded=st.session_state.get("_auto_expand", False)
                                 ):
+                                    # 전체 선택 체크박스
+                                    tab1_urls = sorted_df["product_url"].tolist()
+                                    all_selected_tab1 = all(u in st.session_state.selected_products for u in tab1_urls)
+                                    select_all_key = f"select_all_tab1_{history_idx}"
+                                    select_all = st.checkbox("전체 선택", value=all_selected_tab1, key=select_all_key)
+                                    if select_all:
+                                        for u in tab1_urls:
+                                            st.session_state.selected_products.add(u)
+                                    else:
+                                        # 전체 선택 해제는 이 그룹 것만 해제
+                                        if all_selected_tab1:
+                                            for u in tab1_urls:
+                                                st.session_state.selected_products.discard(u)
+                                    st.divider()
                                     for _, row in sorted_df.iterrows():
                                         product_url = row["product_url"]
                                         label = format_product_label(row)
@@ -2485,6 +2499,18 @@ with col_tabs:
         )
 
         with st.expander(f"목록 펼치기 / 접기 ({len(unique_df)}개)", expanded=False):
+            # 전체 선택 체크박스
+            tab2_urls = unique_df["product_url"].tolist()
+            all_selected_tab2 = all(u in st.session_state.selected_products for u in tab2_urls)
+            select_all_tab2 = st.checkbox("전체 선택", value=all_selected_tab2, key="select_all_tab2")
+            if select_all_tab2:
+                for u in tab2_urls:
+                    st.session_state.selected_products.add(u)
+            else:
+                if all_selected_tab2:
+                    for u in tab2_urls:
+                        st.session_state.selected_products.discard(u)
+            st.divider()
             for _, row in unique_df.iterrows():
                 product_url = row["product_url"]
                 label = format_product_label(row)
@@ -2632,6 +2658,23 @@ with col_tabs:
                                         .fillna("")
                                         .drop_duplicates(subset=["product_url"])
                                     )
+                                    if sorted_df.empty:
+                                        st.caption("⚠️ 매칭되는 제품이 없습니다.")
+                                        return
+
+                                    # 전체 선택 체크박스
+                                    all_urls_in_group = sorted_df["product_url"].tolist()
+                                    all_sel = all(u in st.session_state.selected_products for u in all_urls_in_group)
+                                    sel_all_key = f"select_all_tab3_{idx}_{scope_prefix}"
+                                    sel_all = st.checkbox("전체 선택", value=all_sel, key=sel_all_key)
+                                    if sel_all:
+                                        for u in all_urls_in_group:
+                                            st.session_state.selected_products.add(u)
+                                    else:
+                                        if all_sel:
+                                            for u in all_urls_in_group:
+                                                st.session_state.selected_products.discard(u)
+                                    st.divider()
                                 
                                     # 🔥 질문에 '순서/최신/최근' 있으면 날짜순
                                     if any(k in history["question"] for k in ["순서","최신","최근"]):
@@ -2643,9 +2686,6 @@ with col_tabs:
                                         sorted_df = sorted_df.sort_values(
                                             by=["brand","category1","category2","product_name"]
                                         )                            
-                                    if sorted_df.empty:
-                                        st.caption("⚠️ 매칭되는 제품이 없습니다.")
-                                        return
                                     for _, row in sorted_df.iterrows():
                                         product_url = row["product_url"]
                                         product_url_key = str(product_url).strip().lower()  # 🔥 product_details 키 조회용
@@ -3915,6 +3955,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
