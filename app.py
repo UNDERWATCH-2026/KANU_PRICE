@@ -3812,21 +3812,28 @@ if selected_products:
                         etype = price_res.data[0]["event_type"]
                         price_label = "할인가" if etype == "DISCOUNT" else "정상가"
                         price_info = f"{price_label} {prev:,.1f}원 → 품절"
-                elif event_type == "RESTOCK":
-                    price_res = (
-                        supabase.table("product_all_events")
-                        .select("unit_price, event_type")
+                elif event_type in ("RESTOCK", "NEW_PRODUCT"):
+                    raw_lc_res = (
+                        supabase.table("raw_daily_prices_unit")
+                        .select("unit_normal_price, unit_sale_price")
                         .eq("product_url", p["product_url"])
-                        .gte("date", event_date.strftime("%Y-%m-%d"))
-                        .order("date", desc=False)
+                        .eq("date", event_date.strftime("%Y-%m-%d"))
                         .limit(1)
                         .execute()
                     )
-                    if price_res.data:
-                        after = float(price_res.data[0]["unit_price"])
-                        etype = price_res.data[0]["event_type"]
-                        price_label = "할인가" if etype == "DISCOUNT" else "정상가"
-                        price_info = f"품절 → {price_label} {after:,.1f}원"
+                    if raw_lc_res.data:
+                        r_lc = raw_lc_res.data[0]
+                        norm = float(r_lc["unit_normal_price"]) if r_lc.get("unit_normal_price") else None
+                        disc = float(r_lc["unit_sale_price"]) if r_lc.get("unit_sale_price") else None
+                        if norm and disc and norm > 0 and disc > 0 and norm >= disc:
+                            disc_rate = (norm - disc) / norm * 100
+                            price_info = f"정상가: {norm:,.1f}원 | 할인가: {disc:,.1f}원 | 할인율: {disc_rate:.1f}%"
+                        elif norm and norm > 0:
+                            price_info = f"정상가: {norm:,.1f}원"
+                        else:
+                            price_info = ""
+                    else:
+                        price_info = ""
 
                 display_rows.append({
                     "날짜": event_date.strftime("%Y-%m-%d"),
@@ -3916,23 +3923,27 @@ if selected_products:
 
                     _event = icon_map.get(row["price_change_type"], "")
 
-                    # 할인가 이벤트: 정상가/할인가/할인율 표시
+                    # 할인가 이벤트: raw_daily_prices_unit에서 해당 날짜 정상가/할인가 직접 조회
                     if row["price_change_type"] in ("DISCOUNT_DOWN", "DISCOUNT_UP"):
-                        # 정상가 조회 (product_all_events에서 해당 날짜 NORMAL)
-                        norm_res = (
-                            supabase.table("product_all_events")
-                            .select("unit_price")
+                        raw_res2 = (
+                            supabase.table("raw_daily_prices_unit")
+                            .select("unit_normal_price, unit_sale_price")
                             .eq("product_url", p["product_url"])
-                            .eq("event_type", "NORMAL")
-                            .lte("date", row["date"])
-                            .order("date", desc=True)
+                            .eq("date", row["date"])
                             .limit(1)
                             .execute()
                         )
-                        norm_price = float(norm_res.data[0]["unit_price"]) if norm_res.data else None
-                        if norm_price and norm_price > 0 and current_price > 0:
-                            disc_rate = (norm_price - current_price) / norm_price * 100
-                            price_text = f"정상가: {norm_price:,.1f}원 | 할인가: {current_price:,.1f}원 | 할인율: {disc_rate:.1f}%"
+                        if raw_res2.data:
+                            r2 = raw_res2.data[0]
+                            norm_price = float(r2["unit_normal_price"]) if r2.get("unit_normal_price") else None
+                            disc_price = float(r2["unit_sale_price"]) if r2.get("unit_sale_price") else None
+                            if norm_price and disc_price and norm_price > 0 and disc_price > 0 and norm_price >= disc_price:
+                                disc_rate = (norm_price - disc_price) / norm_price * 100
+                                price_text = f"정상가: {norm_price:,.1f}원 | 할인가: {disc_price:,.1f}원 | 할인율: {disc_rate:.1f}%"
+                            elif norm_price and norm_price > 0:
+                                price_text = f"정상가: {norm_price:,.1f}원 | 할인가: {current_price:,.1f}원"
+                            else:
+                                price_text = f"할인가: {current_price:,.1f}원"
                         else:
                             price_text = f"할인가: {current_price:,.1f}원"
                     else:
@@ -4015,6 +4026,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
