@@ -3797,43 +3797,40 @@ if selected_products:
                 event_date = row["date"]
                 event_type = row["lifecycle_event"]
                 price_info = ""
-                if event_type == "OUT_OF_STOCK":
-                    price_res = (
-                        supabase.table("product_all_events")
-                        .select("unit_price, event_type")
-                        .eq("product_url", p["product_url"])
-                        .lt("date", event_date.strftime("%Y-%m-%d"))
-                        .order("date", desc=True)
-                        .limit(1)
-                        .execute()
-                    )
-                    if price_res.data:
-                        prev = float(price_res.data[0]["unit_price"])
-                        etype = price_res.data[0]["event_type"]
-                        price_label = "할인가" if etype == "DISCOUNT" else "정상가"
-                        price_info = f"{price_label} {prev:,.1f}원 → 품절"
-                elif event_type in ("RESTOCK", "NEW_PRODUCT"):
-                    raw_lc_res = (
+                def get_raw_price_str(product_url, date_str):
+                    """raw_daily_prices_unit에서 해당 날짜 가격 문자열 반환"""
+                    res = (
                         supabase.table("raw_daily_prices_unit")
                         .select("unit_normal_price, unit_sale_price")
-                        .eq("product_url", p["product_url"])
-                        .eq("date", event_date.strftime("%Y-%m-%d"))
+                        .eq("product_url", product_url)
+                        .eq("date", date_str)
                         .limit(1)
                         .execute()
                     )
-                    if raw_lc_res.data:
-                        r_lc = raw_lc_res.data[0]
-                        norm = float(r_lc["unit_normal_price"]) if r_lc.get("unit_normal_price") else None
-                        disc = float(r_lc["unit_sale_price"]) if r_lc.get("unit_sale_price") else None
-                        if norm and disc and norm > 0 and disc > 0 and norm >= disc:
-                            disc_rate = (norm - disc) / norm * 100
-                            price_info = f"정상가: {norm:,.1f}원 | 할인가: {disc:,.1f}원 | 할인율: {disc_rate:.1f}%"
-                        elif norm and norm > 0:
-                            price_info = f"정상가: {norm:,.1f}원"
-                        else:
-                            price_info = ""
+                    if not res.data:
+                        return ""
+                    r = res.data[0]
+                    norm = float(r["unit_normal_price"]) if r.get("unit_normal_price") else None
+                    disc = float(r["unit_sale_price"]) if r.get("unit_sale_price") else None
+                    if norm and disc and norm > 0 and disc > 0 and norm >= disc:
+                        disc_rate = (norm - disc) / norm * 100
+                        return f"정상가: {norm:,.1f}원 | 할인가: {disc:,.1f}원 | 할인율: {disc_rate:.1f}%"
+                    elif norm and norm > 0:
+                        return f"정상가: {norm:,.1f}원"
+                    return ""
+
+                if event_type == "OUT_OF_STOCK":
+                    # 품절 직전 날짜 raw 가격 조회
+                    prev_date = (event_date - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+                    price_str = get_raw_price_str(p["product_url"], prev_date)
+                    price_info = f"{price_str} → 품절" if price_str else "품절"
+
+                elif event_type in ("RESTOCK", "NEW_PRODUCT"):
+                    price_str = get_raw_price_str(p["product_url"], event_date.strftime("%Y-%m-%d"))
+                    if event_type == "RESTOCK":
+                        price_info = f"품절 → {price_str}" if price_str else "품절 → 복원"
                     else:
-                        price_info = ""
+                        price_info = price_str
 
                 display_rows.append({
                     "날짜": event_date.strftime("%Y-%m-%d"),
@@ -4026,6 +4023,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
