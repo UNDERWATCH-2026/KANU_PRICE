@@ -2870,20 +2870,42 @@ if selected_products:
                 / tmp.loc[mask, "normal_price"]
             ) * 100
 
+            # 조회 기간 내 통계 사전 계산
+            _discount_prices = tmp.loc[tmp["is_discount"] & tmp["unit_price"].notna(), "unit_price"]
+            _normal_prices   = tmp.loc[~tmp["is_discount"] & tmp["unit_price"].notna(), "unit_price"]
+
+            if not _discount_prices.empty:
+                _stat_avg = _discount_prices.mean()
+                _stat_min = _discount_prices.min()
+                _stat_max = _discount_prices.max()
+                _stat_label = "할인가"
+            elif not _normal_prices.empty:
+                _stat_avg = _normal_prices.mean()
+                _stat_min = _normal_prices.min()
+                _stat_max = _normal_prices.max()
+                _stat_label = "정상가"
+            else:
+                _stat_avg = _stat_min = _stat_max = None
+                _stat_label = ""
+
+            _stat_str = (
+                f"평균 {_stat_avg:,.1f}원 | 최저 {_stat_min:,.1f}원 | 최고 {_stat_max:,.1f}원"
+                if _stat_avg is not None else ""
+            )
+
             for idx2, price_row in tmp.iterrows():
                 if pd.isna(price_row["unit_price"]):
                     tmp.at[idx2, "price_detail"] = "품절"
                 elif price_row["is_discount"]:
-                    if pd.notna(price_row["normal_price"]):
-                        tmp.at[idx2, "price_detail"] = (
-                            f"정상가: {price_row['normal_price']:,.1f}원 → "
-                            f"할인가: {price_row['unit_price']:,.1f}원 "
-                            f"({price_row['discount_rate']:.0f}% 할인)"
-                        )
-                    else:
-                        tmp.at[idx2, "price_detail"] = f"할인가: {price_row['unit_price']:,.1f}원"
+                    base = (
+                        f"정상가: {price_row['normal_price']:,.1f}원 → 할인가: {price_row['unit_price']:,.1f}원"
+                        if pd.notna(price_row["normal_price"])
+                        else f"할인가: {price_row['unit_price']:,.1f}원"
+                    )
+                    tmp.at[idx2, "price_detail"] = f"{base} | {_stat_str}" if _stat_str else base
                 else:
-                    tmp.at[idx2, "price_detail"] = f"정상가: {price_row['unit_price']:,.1f}원"
+                    base = f"정상가: {price_row['unit_price']:,.1f}원"
+                    tmp.at[idx2, "price_detail"] = f"{base} | {_stat_str}" if _stat_str else base
 
             df_life = df_lifecycle_all[
                 df_lifecycle_all["product_url"] == product_url
@@ -2913,8 +2935,15 @@ if selected_products:
                         tmp.at[r2.Index, "unit_price"] = None
 
             tmp.loc[tmp["unit_price"].isna(), "price_detail"] = "품절"
-            tmp["price_status"] = tmp["is_discount"].map({True: "💸 할인 중", False: "정상가"})
-            tmp.loc[tmp["unit_price"].isna(), "price_status"] = "품절"
+            def make_price_status(row):
+                if pd.isna(row["unit_price"]):
+                    return "품절"
+                if row["is_discount"]:
+                    if pd.notna(row["discount_rate"]) and row["discount_rate"] > 0:
+                        return f"💸 할인 ({row['discount_rate']:.0f}% 할인)"
+                    return "💸 할인"
+                return "정상가"
+            tmp["price_status"] = tmp.apply(make_price_status, axis=1)
 
             tmp["product_url"] = row["product_url"]
 
@@ -3338,7 +3367,7 @@ if selected_products:
             excel_data["discount_price"] = None
             excel_data["discount_rate"] = None
 
-            mask_discount = excel_data["price_status"] == "💸 할인 중"
+            mask_discount = excel_data["price_status"] == "💸 할인"
             excel_data.loc[mask_discount, "discount_price"] = excel_data.loc[mask_discount, "unit_price"]
 
             excel_data["normal_price"] = pd.to_numeric(excel_data["normal_price"], errors="coerce")
@@ -3360,7 +3389,7 @@ if selected_products:
                 discount_rate_series.round(1).map(lambda x: f"{x:.1f}%")
             )
 
-            mask_normal = excel_data["price_status"] != "💸 할인 중"
+            mask_normal = excel_data["price_status"] != "💸 할인"
             excel_data.loc[mask_normal, "normal_price"] = excel_data.loc[mask_normal, "unit_price"]
 
             excel_data = excel_data[[
@@ -3955,6 +3984,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
