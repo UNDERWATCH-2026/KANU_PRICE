@@ -1603,7 +1603,12 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
                 continue
             diff = float(row["price_diff"])
             arrow = "📈" if diff > 0 else "📉"
-            detail = f"{arrow} 정상가 {float(row['prev_price']):,.0f}원 → {float(row['normal_price']):,.0f}원 ({diff:+,.0f}원) | {row['date']}"
+            cc = float(product_row.iloc[0].get("capsule_count") or 1)
+            prev_unit = float(row["prev_price"]) / cc
+            curr_unit = float(row["normal_price"]) / cc
+            diff_unit = curr_unit - prev_unit
+            diff_pct = (diff_unit / prev_unit * 100) if prev_unit > 0 else 0
+            detail = f"{arrow} 정상가 {prev_unit:,.1f}원 → {curr_unit:,.1f}원 ({diff_unit:+,.1f}원, {diff_pct:+.1f}%) | {row['date']}"
             if url in product_details:
                 product_details[url] += f"  /  {detail}"
             else:
@@ -4125,6 +4130,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
