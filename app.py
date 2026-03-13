@@ -521,27 +521,39 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
             break
 
     # category1 키워드 필터 (전용캡슐, 네스프레소 호환, 돌체구스토 호환 등)
-    _cat1_map = [
-        (["전용", "전용캡슐"], "전용캡슐"),
-        (["네스프레소호환", "네스프레소 호환"], "네스프레소 호환캡슐"),
-        (["돌체구스토호환", "돌체구스토 호환", "돌체호환"], "돌체구스토 호환캡슐"),
-        (["호환캡슐", "호환 캡슐"], None),  # 네스프레소+돌체 모두
-    ]
     _q_nospace = question.replace(" ", "")
-    for _triggers, _cat1_kw in _cat1_map:
-        if any(t.replace(" ", "") in _q_nospace for t in _triggers):
-            if _cat1_kw:
-                _filtered = df_work[
-                    _norm_series(df_work["category1"]).str.contains(_norm_kw(_cat1_kw), case=False)
-                ]
-            else:
-                # 호환캡슐 = 네스프레소 호환 + 돌체구스토 호환 모두
-                _filtered = df_work[
-                    _norm_series(df_work["category1"]).str.contains("호환", case=False)
-                ]
-            if not _filtered.empty:
-                df_work = _filtered
-            break
+
+    # "돌체" 단독도 "돌체구스토"로 인식
+    _has_dolce = any(t in _q_nospace for t in ["돌체구스토", "돌체"])
+    _has_nes_compat = any(t in _q_nospace for t in ["네스프레소호환", "네스프레소 호환".replace(" ", "")])
+    _has_exclusive = any(t in _q_nospace for t in ["전용캡슐", "전용 캡슐".replace(" ", ""), "전용슐"])
+    _has_compat = any(t in _q_nospace for t in ["호환캡슐", "호환 캡슐".replace(" ", "")])
+
+    if _has_dolce and not _has_nes_compat:
+        # 돌체 or 돌체구스토 → 돌체구스토 호환캡슐만
+        _filtered = df_work[
+            _norm_series(df_work["category1"]).str.contains("돌체", case=False)
+        ]
+        if not _filtered.empty:
+            df_work = _filtered
+    elif _has_nes_compat:
+        _filtered = df_work[
+            _norm_series(df_work["category1"]).str.contains("네스프레소호환", case=False)
+        ]
+        if not _filtered.empty:
+            df_work = _filtered
+    elif _has_exclusive:
+        _filtered = df_work[
+            _norm_series(df_work["category1"]).str.contains("전용캡슐", case=False)
+        ]
+        if not _filtered.empty:
+            df_work = _filtered
+    elif _has_compat:
+        _filtered = df_work[
+            _norm_series(df_work["category1"]).str.contains("호환", case=False)
+        ]
+        if not _filtered.empty:
+            df_work = _filtered
     # =========================
     # 🔥 할인 기간 조회
     # =========================
@@ -969,13 +981,64 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
                             period_details.append(f"📅 {p_start} ~ {p_end}")
                     detail = "  /  ".join(period_details)
                 else:
-                    detail = f"💰 {norm_str}{disc_price:,.1f}원{rate_str}"
+                    # fallback: 기간 전체 통계
+                    stat_res = (
+                        supabase.table("raw_daily_prices_unit")
+                        .select("unit_sale_price, unit_normal_price")
+                        .eq("product_url", row["product_url"])
+                        .gte("date", date_from_str)
+                        .lte("date", date_to_str)
+                        .execute()
+                    )
+                    if stat_res.data:
+                        sale_prices = [float(r["unit_sale_price"]) for r in stat_res.data if r.get("unit_sale_price") and float(r["unit_sale_price"]) > 0]
+                        norm_prices = [float(r["unit_normal_price"]) for r in stat_res.data if r.get("unit_normal_price") and float(r["unit_normal_price"]) > 0]
+                        if sale_prices and norm_prices:
+                            avg_p = sum(sale_prices) / len(sale_prices)
+                            min_p = min(sale_prices)
+                            max_p = max(sale_prices)
+                            norm_p = norm_prices[0]
+                            detail = (
+                                f"정상가: {norm_p:,.1f}원 | "
+                                f"할인가 평균: {avg_p:,.1f}원 / 최저: {min_p:,.1f}원 / 최고: {max_p:,.1f}원"
+                            )
+                        else:
+                            detail = f"💰 {norm_str}{disc_price:,.1f}원{rate_str}"
+                    else:
+                        detail = f"💰 {norm_str}{disc_price:,.1f}원{rate_str}"
             else:
+                else:
                 disc_price = float(row["current_unit_price"])
                 norm_price = float(row.get("normal_unit_price") or 0)
-                rate_str = f" ({(norm_price - disc_price) / norm_price * 100:.1f}%)" if norm_price > disc_price else ""
-                norm_str = f"{norm_price:,.1f}원 → " if norm_price > 0 else ""
-                detail = f"💰 {norm_str}{disc_price:,.1f}원{rate_str}"
+                # 통계 조회
+                stat_res2 = (
+                    supabase.table("raw_daily_prices_unit")
+                    .select("unit_sale_price, unit_normal_price")
+                    .eq("product_url", row["product_url"])
+                    .gte("date", date_from_str)
+                    .lte("date", date_to_str)
+                    .execute()
+                )
+                if stat_res2.data:
+                    sale_prices2 = [float(r["unit_sale_price"]) for r in stat_res2.data if r.get("unit_sale_price") and float(r["unit_sale_price"]) > 0]
+                    norm_prices2 = [float(r["unit_normal_price"]) for r in stat_res2.data if r.get("unit_normal_price") and float(r["unit_normal_price"]) > 0]
+                    if sale_prices2 and norm_prices2:
+                        avg_p2 = sum(sale_prices2) / len(sale_prices2)
+                        min_p2 = min(sale_prices2)
+                        max_p2 = max(sale_prices2)
+                        norm_p2 = norm_prices2[0]
+                        detail = (
+                            f"정상가: {norm_p2:,.1f}원 | "
+                            f"할인가 평균: {avg_p2:,.1f}원 / 최저: {min_p2:,.1f}원 / 최고: {max_p2:,.1f}원"
+                        )
+                    else:
+                        rate_str = f" ({(norm_price - disc_price) / norm_price * 100:.1f}%)" if norm_price > disc_price else ""
+                        norm_str = f"{norm_price:,.1f}원 → " if norm_price > 0 else ""
+                        detail = f"💰 {norm_str}{disc_price:,.1f}원{rate_str}"
+                else:
+                    rate_str = f" ({(norm_price - disc_price) / norm_price * 100:.1f}%)" if norm_price > disc_price else ""
+                    norm_str = f"{norm_price:,.1f}원 → " if norm_price > 0 else ""
+                    detail = f"💰 {norm_str}{disc_price:,.1f}원{rate_str}"
             results.append({"product_url": url})
             product_details[url] = detail
 
@@ -4396,6 +4459,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
