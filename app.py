@@ -4271,61 +4271,68 @@ if selected_products:
             latest_change = normal_change_rows[0]
             prev_price = float(latest_change["prev_price"])
             current_price = float(latest_change["normal_price"])
+            change_date = latest_change["date"]
 
-            if current_price == 0:
-                already_has_out = any("품절" in c for c in cards)
-                if not already_has_out:
-                    cards.append(render_card(
-                        bg="#e8f0f8",
-                        border="#2c5aa0",
-                        title="❌ 품절",
-                        content=f"날짜: {latest_change['date']}<br>정상가 {prev_price:,.0f}원 → 품절"
-                    ))
-            elif prev_price == 0 and current_price > 0:
-                already_has_restore = any("복원" in c for c in cards)
-                if not already_has_restore:
-                    cards.append(render_card(
-                        bg="#fff8e1",
-                        border="#f59e0b",
-                        title="🔄 복원",
-                        content=f"날짜: {latest_change['date']}<br>품절 → 정상가 {current_price:,.0f}원"
-                    ))
-            else:
-                diff = current_price - prev_price
-                diff_rate = (diff / prev_price) * 100 if prev_price != 0 else 0
-                if diff > 0:
-                    bg = "#fdecea"
-                    border = "#b91c1c"
-                    icon = "📈 정상가 상승"
+            # ✅ 할인 시작일이면 정상가 카드 무시
+            is_discount_start = any(
+                r.get("discount_start_date") == change_date
+                for r in discount_rows
+            )
+
+            if not is_discount_start:
+                if current_price == 0:
+                    already_has_out = any("품절" in c for c in cards)
+                    if not already_has_out:
+                        cards.append(render_card(
+                            bg="#e8f0f8",
+                            border="#2c5aa0",
+                            title="❌ 품절",
+                            content=f"날짜: {latest_change['date']}<br>정상가 {prev_price:,.0f}원 → 품절"
+                        ))
+                elif prev_price == 0 and current_price > 0:
+                    already_has_restore = any("복원" in c for c in cards)
+                    if not already_has_restore:
+                        cards.append(render_card(
+                            bg="#fff8e1",
+                            border="#f59e0b",
+                            title="🔄 복원",
+                            content=f"날짜: {latest_change['date']}<br>품절 → 정상가 {current_price:,.0f}원"
+                        ))
                 else:
-                    bg = "#eaf2ff"
-                    border = "#1d4ed8"
-                    icon = "📉 정상가 하락"
+                    diff = current_price - prev_price
+                    diff_rate = (diff / prev_price) * 100 if prev_price != 0 else 0
+                    if diff > 0:
+                        bg = "#fdecea"
+                        border = "#b91c1c"
+                        icon = "📈 정상가 상승"
+                    else:
+                        bg = "#eaf2ff"
+                        border = "#1d4ed8"
+                        icon = "📉 정상가 하락"
 
-                # ✅ capsule_count로 나눠서 개당 가격 표시
-                cc = float(p.get("capsule_count") or 0)
-                if cc > 0:
-                    prev_unit = prev_price / cc
-                    curr_unit = current_price / cc
-                    price_text = (
-                        f"{prev_unit:,.1f}원 → {curr_unit:,.1f}원 "
-                        f"({diff_rate:+.1f}%)"
-                    )
-                else:
-                    price_text = (
-                        f"{prev_price:,.0f}원 → {current_price:,.0f}원 "
-                        f"({diff_rate:+.1f}%)"
-                    )
+                    cc = float(p.get("capsule_count") or 0)
+                    if cc > 0:
+                        prev_unit = prev_price / cc
+                        curr_unit = current_price / cc
+                        price_text = (
+                            f"{prev_unit:,.1f}원 → {curr_unit:,.1f}원 "
+                            f"({diff_rate:+.1f}%)"
+                        )
+                    else:
+                        price_text = (
+                            f"{prev_price:,.0f}원 → {current_price:,.0f}원 "
+                            f"({diff_rate:+.1f}%)"
+                        )
 
-                cards.append(render_card(
-                    bg=bg,
-                    border=border,
-                    title=icon,
-                    content=(
-                        f"날짜: {latest_change['date']}<br>"
-                        f"{price_text}"
-                    )
-                ))
+                    cards.append(render_card(
+                        bg=bg,
+                        border=border,
+                        title=icon,
+                        content=(
+                            f"날짜: {latest_change['date']}<br>"
+                            f"{price_text}"
+                        )
+                    ))
         if not cards:
             cards.append(render_card(
                 "#f3f4f6",
@@ -4526,6 +4533,10 @@ if selected_products:
                 for _, row in df_changes.iterrows():
                     prev_price = float(row["prev_price"]) if row["prev_price"] else 0
                     current_price = float(row["unit_price"]) if row["unit_price"] else 0
+                        # ✅ 실제 가격 변동이 없으면 스킵 (재할인 시작을 하락으로 오인한 경우)
+                        if row["price_change_type"] in ("DISCOUNT_DOWN", "DISCOUNT_UP"):
+                            if abs(prev_price - current_price) < 0.1:
+                                continue
 
                     if current_price == 0 and row["price_change_type"] in ("NORMAL_DOWN", "NORMAL_UP"):
                         display_rows.append({
@@ -4663,6 +4674,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
