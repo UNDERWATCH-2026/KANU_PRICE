@@ -291,7 +291,7 @@ def classify_intent(q: str):
 
     if "할인" in q and ("기간" in q or "언제" in q):
         return "DISCOUNT_PERIOD"
-    if "할인" in q and any(w in q for w in ["률", "율", "퍼센트", "%", "높은", "최대", "가장 많이"]):
+    if "할인" in q and any(w in q for w in ["률", "율", "퍼센트", "%", "높은", "최대", "가장 많이", "가장 큰", "제일 큰"]):
         return "DISCOUNT_RATE"
     if any(kw in q for kw in ["할인가", "판매가"]) and any(w in q for w in ["인상", "상승", "올랐", "올라"]):
         return "DISCOUNT_PRICE_UP"
@@ -2983,6 +2983,9 @@ with col_tabs:
             filtered_df = df_all.copy()
 
             _top_n, _top_dir, _top_mode = extract_top_n(question)
+            # "가장 큰/높은/낮은/싼/비싼" 키워드 있으면 자동으로 1위
+            if not _top_n and any(w in question for w in ["가장 큰", "제일 큰", "가장 높은", "제일 높은", "가장 낮은", "제일 낮은"]):
+                _top_n, _top_dir, _top_mode = 1, "top", "rank"
             _top_n_arg = (_top_n, _top_dir, _top_mode) if _top_n else None
             
             answer = execute_rule(
@@ -4537,6 +4540,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
