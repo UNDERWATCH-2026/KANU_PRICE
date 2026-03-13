@@ -3123,11 +3123,10 @@ with col_tabs:
                                 st.markdown("⭐", help="이미 저장됨")
                         with col_delete:
                             if st.button("🗑️", key=f"delete_q_{idx}", help="질문 삭제"):
-                                
-                            st.session_state.question_history.pop(
-                                len(st.session_state.question_history) - 1 - idx
-                            )
-                            st.rerun()
+                                st.session_state.question_history.pop(
+                                    len(st.session_state.question_history) - 1 - idx
+                                )
+                                st.rerun()
 
                     answer_data = history["answer"]
 
@@ -4627,6 +4626,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
