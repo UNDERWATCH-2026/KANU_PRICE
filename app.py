@@ -643,11 +643,36 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
                     disp_end = min(period['discount_end_date'], date_to.strftime("%Y-%m-%d") if date_to else period['discount_end_date'])
                     
                     # ✅ 수정4: detail_str 형식도 통일
-                    if normal_price and discount_price and normal_price > discount_price:
-                        discount_rate = (normal_price - discount_price) / normal_price * 100
-                        detail_str = f"📅 {disp_start} ~ {disp_end} | 💰 {normal_price:,.1f}원 → {discount_price:,.1f}원 ({discount_rate:.0f}% 할인)"
-                    elif discount_price:
-                        detail_str = f"📅 {disp_start} ~ {disp_end} | 💰 할인가: {discount_price:,.1f}원"
+                    # 기간 내 할인가 통계 조회
+                    stat_res = (
+                        supabase.table("raw_daily_prices_unit")
+                        .select("unit_sale_price, unit_normal_price")
+                        .eq("product_url", row["product_url"])
+                        .gte("date", disp_start)
+                        .lte("date", disp_end)
+                        .execute()
+                    )
+                    if stat_res.data:
+                        sale_prices = [
+                            float(r["unit_sale_price"]) for r in stat_res.data
+                            if r.get("unit_sale_price") and float(r["unit_sale_price"]) > 0
+                        ]
+                        norm_prices = [
+                            float(r["unit_normal_price"]) for r in stat_res.data
+                            if r.get("unit_normal_price") and float(r["unit_normal_price"]) > 0
+                        ]
+                        if sale_prices and norm_prices:
+                            avg_p = sum(sale_prices) / len(sale_prices)
+                            min_p = min(sale_prices)
+                            max_p = max(sale_prices)
+                            norm_p = norm_prices[0]
+                            detail_str = (
+                                f"📅 {disp_start} ~ {disp_end} | "
+                                f"정상가: {norm_p:,.1f}원 | "
+                                f"할인가 평균: {avg_p:,.1f}원 / 최저: {min_p:,.1f}원 / 최고: {max_p:,.1f}원"
+                            )
+                        else:
+                            detail_str = f"📅 {disp_start} ~ {disp_end}"
                     else:
                         detail_str = f"📅 {disp_start} ~ {disp_end}"
     
@@ -4316,6 +4341,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
