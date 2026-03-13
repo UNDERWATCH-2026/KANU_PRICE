@@ -3953,32 +3953,55 @@ if selected_products:
                 # 이벤트 히스토리와 동일한 로직으로 이벤트 수집
                 ev_rows = []
 
-                # 1) 할인 시작/종료
-                disc_res = supabase.rpc(
-                    "get_discount_periods_in_range",
-                    {
-                        "p_product_url": product_url,
-                        "p_date_from": filter_date_from.strftime("%Y-%m-%d"),
-                        "p_date_to": filter_date_to.strftime("%Y-%m-%d"),
-                    }
-                ).execute()
-                disc_periods = disc_res.data if disc_res.data else []
+                # 1) 할인 시작/종료 - raw_daily_prices에서 직접 계산
+                raw_xl_res = (
+                    supabase.table("raw_daily_prices")
+                    .select("date, normal_price, sale_price")
+                    .eq("product_url", product_url)
+                    .gte("date", filter_date_from.strftime("%Y-%m-%d"))
+                    .lte("date", filter_date_to.strftime("%Y-%m-%d"))
+                    .order("date", desc=False)
+                    .execute()
+                )
+                if raw_xl_res.data:
+                    raw_xl = pd.DataFrame(raw_xl_res.data)
+                    raw_xl["normal_price"] = pd.to_numeric(raw_xl["normal_price"], errors="coerce").fillna(0)
+                    raw_xl["sale_price"] = pd.to_numeric(raw_xl["sale_price"], errors="coerce").fillna(0)
+                    cc_xl = float(p_row.get("capsule_count") or 1)
+                    raw_xl["is_disc"] = (
+                        (raw_xl["normal_price"] > 0) &
+                        (raw_xl["sale_price"] > 0) &
+                        (raw_xl["sale_price"] < raw_xl["normal_price"])
+                    )
+                    raw_xl["prev_is_disc"] = raw_xl["is_disc"].shift(1, fill_value=False)
+                    raw_xl["prev_sale"] = raw_xl["sale_price"].shift(1, fill_value=0)
 
-                for period in disc_periods:
-                    # 할인 시작
-                    n, d, r = get_price_cols(product_url, period["discount_start_date"])
-                    ev_rows.append({
-                        "날짜": period["discount_start_date"],
-                        "이벤트": "💸 할인 시작",
-                        "정상가": n, "할인가": d, "할인율": f"{r:.1f}%" if r else None
-                    })
-                    # 할인 종료
-                    n, d, r = get_price_cols(product_url, period["discount_end_date"])
-                    ev_rows.append({
-                        "날짜": period["discount_end_date"],
-                        "이벤트": "💸 할인 종료",
-                        "정상가": n, "할인가": d, "할인율": f"{r:.1f}%" if r else None
-                    })
+                    for _, rr in raw_xl.iterrows():
+                        date_str = str(rr["date"])
+                        norm_u = round(rr["normal_price"] / cc_xl, 1)
+                        sale_u = round(rr["sale_price"] / cc_xl, 1)
+
+                        if rr["is_disc"] and not rr["prev_is_disc"]:
+                            rate = round((rr["normal_price"] - rr["sale_price"]) / rr["normal_price"] * 100, 1)
+                            ev_rows.append({
+                                "날짜": date_str,
+                                "이벤트": "💸 할인 시작",
+                                "정상가": norm_u, "할인가": sale_u, "할인율": f"{rate:.1f}%"
+                            })
+                        elif not rr["is_disc"] and rr["prev_is_disc"] and rr["normal_price"] > 0:
+                            ev_rows.append({
+                                "날짜": date_str,
+                                "이벤트": "💸 할인 종료",
+                                "정상가": norm_u, "할인가": None, "할인율": None
+                            })
+                        elif rr["is_disc"] and rr["prev_is_disc"] and abs(rr["sale_price"] - rr["prev_sale"]) > 0.5:
+                            direction = "💸 할인가 하락" if rr["sale_price"] < rr["prev_sale"] else "💸 할인가 상승"
+                            rate = round((rr["normal_price"] - rr["sale_price"]) / rr["normal_price"] * 100, 1)
+                            ev_rows.append({
+                                "날짜": date_str,
+                                "이벤트": direction,
+                                "정상가": norm_u, "할인가": sale_u, "할인율": f"{rate:.1f}%"
+                            })
 
                 # 2) 라이프사이클 이벤트 (신제품, 품절, 복원)
                 lc_res = (
@@ -4636,6 +4659,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
