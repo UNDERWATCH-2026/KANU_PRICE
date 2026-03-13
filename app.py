@@ -624,7 +624,7 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
         for r in results:
             url = r["product_url"]
             if url in product_details:
-                product_details[url] += " → " + r["detail"]
+                product_details[url] += " / " + r["detail"]
             else:
                 product_details[url] = r["detail"]
         
@@ -4274,6 +4274,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
