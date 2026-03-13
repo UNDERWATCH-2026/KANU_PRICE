@@ -4548,28 +4548,7 @@ if selected_products:
                     prev_price = float(row["prev_price"]) if row["prev_price"] else 0
                     current_price = float(row["unit_price"]) if row["unit_price"] else 0
                     
-                    if row["price_change_type"] == "DISCOUNT_DOWN":
-                        row_date = str(row["date"])
-                    
-                        prev_date = str((pd.Timestamp(row_date) - pd.Timedelta(days=1)).date())
-                    
-                        raw_today = df_raw_unit_all[
-                            (df_raw_unit_all["product_url"] == p["product_url"]) &
-                            (df_raw_unit_all["date"] == row_date)
-                        ]
-                    
-                        raw_prev = df_raw_unit_all[
-                            (df_raw_unit_all["product_url"] == p["product_url"]) &
-                            (df_raw_unit_all["date"] == prev_date)
-                        ]
-                    
-                        if not raw_today.empty and not raw_prev.empty:
-                            today_sale = float(raw_today.iloc[0].get("unit_sale_price") or 0)
-                            prev_sale = float(raw_prev.iloc[0].get("unit_sale_price") or 0)
-                    
-                            # 가격 동일한 경우만 제외
-                            if abs(today_sale - prev_sale) < 0.1:
-                                continue
+                    # DISCOUNT_DOWN 가격 동일 체크 제거 - product_price_change_events 데이터 신뢰
 
                     if current_price == 0 and row["price_change_type"] in ("NORMAL_DOWN", "NORMAL_UP"):
                         display_rows.append({
@@ -4710,6 +4689,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
