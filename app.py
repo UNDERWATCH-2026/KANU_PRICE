@@ -865,28 +865,49 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
         date_from_str2 = date_from.strftime("%Y-%m-%d") if date_from else (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
         date_to_str2 = date_to.strftime("%Y-%m-%d") if date_to else datetime.now().strftime("%Y-%m-%d")
 
+        def calc_disc_periods_simple(product_url, dfrom, dto):
+            r = (
+                supabase.table("raw_daily_prices")
+                .select("date, normal_price, sale_price")
+                .eq("product_url", product_url)
+                .gte("date", dfrom)
+                .lte("date", dto)
+                .order("date", desc=False)
+                .execute()
+            )
+            if not r.data:
+                return []
+            periods = []
+            start = None
+            prev_date = None
+            for rd in r.data:
+                n = float(rd["normal_price"]) if rd["normal_price"] else 0
+                s = float(rd["sale_price"]) if rd["sale_price"] else 0
+                is_disc = n > 0 and s > 0 and s < n
+                if is_disc:
+                    if start is None:
+                        start = rd["date"]
+                    prev_date = rd["date"]
+                else:
+                    if start is not None:
+                        periods.append((start, prev_date))
+                        start = None
+            if start is not None:
+                periods.append((start, prev_date))
+            return periods
+
         for url, disc_price, norm_price, rate in rate_list:
             results.append({"product_url": url})
-            # 할인 기간 조회
             orig_url = url_orig_map_for_period.get(url, url)
-            period_res2 = supabase.rpc("get_discount_periods_in_range", {
-                "p_product_url": orig_url,
-                "p_date_from": date_from_str2,
-                "p_date_to": date_to_str2,
-            }).execute()
-            if period_res2.data:
+            periods2 = calc_disc_periods_simple(orig_url, date_from_str2, date_to_str2)
+            if periods2:
                 periods_str2 = "  /  ".join([
-                    f"📅 {max(p['discount_start_date'], date_from_str2)} ~ {min(p['discount_end_date'], date_to_str2)}"
-                    for p in period_res2.data
+                    f"📅 {s} ~ {e}" for s, e in periods2
                 ])
                 period_detail = f"  |  {periods_str2}"
             else:
                 disc_date = discount_date_map.get(url, "")
-                if disc_date:
-                    disc_date_str = str(disc_date)[:10] if disc_date else ""
-                    period_detail = f"  |  📅 {disc_date_str}"
-                else:
-                    period_detail = ""
+                period_detail = f"  |  📅 {str(disc_date)[:10]}" if disc_date else ""
             if norm_price:
                 product_details[url] = f"할인율: {rate:.1f}% | 정상가: {norm_price:,.1f}원 → 할인가: {disc_price:,.1f}원{period_detail}"
             else:
@@ -4550,6 +4571,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
