@@ -2994,12 +2994,25 @@ with col_tabs:
     with tab3:
         # 자주 쓰는 검색어
         if st.session_state.get("saved_queries"):
-            st.markdown("##### ⭐ 자주 쓰는 검색어")
-            sq_cols = st.columns(4)
+            st.markdown(
+                "<div style='font-size:12px; color:#6b7280; margin-bottom:6px;'>⭐ 자주 쓰는 검색어</div>",
+                unsafe_allow_html=True
+            )
+            sq_cols = st.columns(5)
             for sq_idx, sq in enumerate(st.session_state.saved_queries):
-                with sq_cols[sq_idx % 4]:
-                    col_sq_btn, col_sq_del = st.columns([5, 1])
+                with sq_cols[sq_idx % 5]:
+                    col_sq_btn, col_sq_del = st.columns([6, 1])
                     with col_sq_btn:
+                        st.markdown(
+                            f"""<style>
+                            div[data-testid="stButton"] button[kind="secondary"]{{
+                                font-size: 11px !important;
+                                padding: 2px 6px !important;
+                                height: auto !important;
+                            }}
+                            </style>""",
+                            unsafe_allow_html=True
+                        )
                         if st.button(sq["query_text"], key=f"sq_run_{sq_idx}", use_container_width=True):
                             st.session_state["_run_saved_query"] = sq["query_text"]
                             st.rerun()
@@ -3011,7 +3024,8 @@ with col_tabs:
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"삭제 실패: {e}")
-            st.markdown("---")
+            st.markdown("<div style='margin-bottom:8px;'></div>", unsafe_allow_html=True)
+            st.divider()
 
         with st.form("question_form", clear_on_submit=True):
             question = st.text_input(
@@ -4626,6 +4640,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
