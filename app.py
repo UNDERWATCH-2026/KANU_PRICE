@@ -4504,7 +4504,21 @@ if selected_products:
                 .execute()
             )
 
+            df_changes_res = (
+                supabase.table("product_price_change_events")
+                .select("*")
+                .eq("product_url", p["product_url"])
+                .gte("date", filter_date_from.strftime("%Y-%m-%d"))
+                .lte("date", filter_date_to.strftime("%Y-%m-%d"))
+                .order("date", desc=True)
+                .execute()
+            )
+
             df_changes = pd.DataFrame(df_changes_res.data)
+            
+            # ✅ 디버깅: 원시 데이터 확인
+            if not df_changes.empty:
+                st.write("🔍 raw df_changes:", df_changes[["date","price_change_type","prev_price","unit_price"]])
 
             if not df_changes.empty:
                 icon_map = {
@@ -4674,6 +4688,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
