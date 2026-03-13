@@ -4533,10 +4533,10 @@ if selected_products:
                 for _, row in df_changes.iterrows():
                     prev_price = float(row["prev_price"]) if row["prev_price"] else 0
                     current_price = float(row["unit_price"]) if row["unit_price"] else 0
-                        # ✅ 실제 가격 변동이 없으면 스킵 (재할인 시작을 하락으로 오인한 경우)
-                        if row["price_change_type"] in ("DISCOUNT_DOWN", "DISCOUNT_UP"):
-                            if abs(prev_price - current_price) < 0.1:
-                                continue
+                    # ✅ 실제 가격 변동이 없으면 스킵 (재할인 시작을 하락으로 오인한 경우)
+                    if row["price_change_type"] in ("DISCOUNT_DOWN", "DISCOUNT_UP"):
+                        if abs(prev_price - current_price) < 0.1:
+                            continue
 
                     if current_price == 0 and row["price_change_type"] in ("NORMAL_DOWN", "NORMAL_UP"):
                         display_rows.append({
@@ -4674,6 +4674,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
