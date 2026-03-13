@@ -4635,8 +4635,11 @@ if selected_products:
                         else:
                             rate_text = ""
                         price_text = f"{prev_price:,.1f}원 → {current_price:,.1f}원 {rate_text}"
-                    if any(r["날짜"] == row["date"] and r["이벤트"] == _event for r in display_rows):
+                    event_key = f"{row['date']}|{row['price_change_type']}"
+
+                    if event_key in seen_events:
                         continue
+                    seen_events.add(event_key)
                     display_rows.append({
                         "날짜": row["date"],
                         "이벤트": _event,
@@ -4707,6 +4710,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
