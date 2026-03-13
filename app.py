@@ -724,10 +724,13 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
         product_details = {}
         for r in results:
             url = r["product_url"]
+            new_detail = r["detail"]
             if url in product_details:
-                product_details[url] += " / " + r["detail"]
+                # 중복 체크 후 추가
+                if new_detail not in product_details[url]:
+                    product_details[url] += " / " + new_detail
             else:
-                product_details[url] = r["detail"]
+                product_details[url] = new_detail
         
         seen = set()
         unique_products = []
@@ -4484,6 +4487,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
