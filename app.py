@@ -4527,7 +4527,7 @@ if selected_products:
                     "NORMAL_UP": "📈 정상가 상승",
                     "NORMAL_DOWN": "📉 정상가 하락",
                 }
-
+                seen_events = set()
                 restore_dates_in_display = []
                 if not df_life_all.empty:
                     restore_dates_in_display = [
@@ -4543,11 +4543,11 @@ if selected_products:
                     for d in discount_end_dates
                 ]
                 restore_dates_in_display += discount_end_dates_plus1
-
+                df_raw_unit_all["date"] = df_raw_unit_all["date"].astype(str)
                 for _, row in df_changes.iterrows():
                     prev_price = float(row["prev_price"]) if row["prev_price"] else 0
                     current_price = float(row["unit_price"]) if row["unit_price"] else 0
-                    df_raw_unit_all["date"] = df_raw_unit_all["date"].astype(str)
+                    
                     if row["price_change_type"] == "DISCOUNT_DOWN":
                         row_date = str(row["date"])
                     
@@ -4710,6 +4710,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
