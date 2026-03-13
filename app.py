@@ -14,7 +14,16 @@ st.markdown("""
 <style>
 button[data-baseweb="tab"] {
     font-size: 15px;
-    padding: 10px 30px;   /* 좌우 간격 조절 */
+    padding: 10px 30px;
+}
+/* 자주 쓰는 검색어 버튼 */
+div[data-testid="stButton"][id*="sq_run"] > button,
+button[key*="sq_run"] {
+    font-size: 11px !important;
+    padding: 2px 8px !important;
+    height: 28px !important;
+    min-height: 28px !important;
+    line-height: 1.2 !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -3003,16 +3012,6 @@ with col_tabs:
                 with sq_cols[sq_idx % 5]:
                     col_sq_btn, col_sq_del = st.columns([6, 1])
                     with col_sq_btn:
-                        st.markdown(
-                            f"""<style>
-                            div[data-testid="stButton"] button[kind="secondary"]{{
-                                font-size: 11px !important;
-                                padding: 2px 6px !important;
-                                height: auto !important;
-                            }}
-                            </style>""",
-                            unsafe_allow_html=True
-                        )
                         if st.button(sq["query_text"], key=f"sq_run_{sq_idx}", use_container_width=True):
                             st.session_state["_run_saved_query"] = sq["query_text"]
                             st.rerun()
@@ -4640,6 +4639,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
