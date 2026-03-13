@@ -4373,54 +4373,7 @@ if selected_products:
                     df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]["date"]
                 ).tolist()
 
-            for row in discount_rows:
-                discount_start = pd.to_datetime(row["discount_start_date"])
-                discount_end = pd.to_datetime(row["discount_end_date"])
-
-                discount_price_res = (
-                    supabase.table("product_all_events")
-                    .select("unit_price")
-                    .eq("product_url", p["product_url"])
-                    .eq("event_type", "DISCOUNT")
-                    .eq("date", row["discount_start_date"])
-                    .limit(1)
-                    .execute()
-                )
-                discount_price = (
-                    float(discount_price_res.data[0]["unit_price"])
-                    if discount_price_res.data else None
-                )
-                display_rows.append({
-                    "날짜": row["discount_start_date"],
-                    "이벤트": "💸 할인 시작",
-                    "가격 정보": f"할인가 {discount_price:,.1f}원" if discount_price else ""
-                })
-
-                show_discount_end = True
-                for out_date in out_dates:
-                    if discount_end + pd.Timedelta(days=1) == out_date:
-                        show_discount_end = False
-                        break
-
-                if show_discount_end:
-                    discount_end_price_res = (
-                        supabase.table("product_all_events")
-                        .select("unit_price")
-                        .eq("product_url", p["product_url"])
-                        .eq("event_type", "DISCOUNT")
-                        .eq("date", row["discount_end_date"])
-                        .limit(1)
-                        .execute()
-                    )
-                    discount_end_price = (
-                        float(discount_end_price_res.data[0]["unit_price"])
-                        if discount_end_price_res.data else None
-                    )
-                    display_rows.append({
-                        "날짜": row["discount_end_date"],
-                        "이벤트": "💸 할인 종료",
-                        "가격 정보": f"종료가 {discount_end_price:,.1f}원" if discount_end_price else ""
-                    })
+            # 할인 시작/종료는 raw_daily_prices에서 직접 계산 (아래에서 처리)
 
             df_life_all = load_lifecycle_events(p["product_url"])
             if not df_life_all.empty:
@@ -4521,110 +4474,76 @@ if selected_products:
                 st.write("🔍 raw df_changes:", df_changes[["date","price_change_type","prev_price","unit_price"]])
 
             if not df_changes.empty:
-                icon_map = {
-                    "DISCOUNT_DOWN": "💸 할인가 하락",
-                    "DISCOUNT_UP": "💸 할인가 상승",
-                    "NORMAL_UP": "📈 정상가 상승",
-                    "NORMAL_DOWN": "📉 정상가 하락",
-                }
-                seen_events = set()
-                restore_dates_in_display = []
-                if not df_life_all.empty:
-                    restore_dates_in_display = [
-                        str(d.date())
-                        for d in df_life_all[df_life_all["lifecycle_event"] == "RESTOCK"]["date"].tolist()
-                    ]
-                discount_end_dates = [
-                    r["날짜"] for r in display_rows if r["이벤트"] == "💸 할인 종료"
-                ]
-                restore_dates_in_display += discount_end_dates
-                discount_end_dates_plus1 = [
-                    str((pd.Timestamp(d) + pd.Timedelta(days=1)).date())
-                    for d in discount_end_dates
-                ]
-                restore_dates_in_display += discount_end_dates_plus1
-                df_raw_unit_all["date"] = df_raw_unit_all["date"].astype(str)
-                for _, row in df_changes.iterrows():
-                    prev_price = float(row["prev_price"]) if row["prev_price"] else 0
-                    current_price = float(row["unit_price"]) if row["unit_price"] else 0
-                    
-                    # DISCOUNT_DOWN 가격 동일 체크 제거 - product_price_change_events 데이터 신뢰
+                # raw_daily_prices에서 직접 할인 시작/종료 계산
+            raw_hist_res = (
+                supabase.table("raw_daily_prices")
+                .select("date, normal_price, sale_price")
+                .eq("product_url", p["product_url"])
+                .gte("date", filter_date_from.strftime("%Y-%m-%d"))
+                .lte("date", filter_date_to.strftime("%Y-%m-%d"))
+                .order("date", desc=False)
+                .execute()
+            )
 
-                    if current_price == 0 and row["price_change_type"] in ("NORMAL_DOWN", "NORMAL_UP"):
-                        display_rows.append({
-                            "날짜": row["date"],
-                            "이벤트": "❌ 품절",
-                            "가격 정보": f"정상가 {prev_price:,.1f}원 → 품절"
-                        })
-                        continue
+            if raw_hist_res.data:
+                raw_hist = pd.DataFrame(raw_hist_res.data)
+                raw_hist["normal_price"] = pd.to_numeric(raw_hist["normal_price"], errors="coerce").fillna(0)
+                raw_hist["sale_price"] = pd.to_numeric(raw_hist["sale_price"], errors="coerce").fillna(0)
+                cc = float(p.get("capsule_count") or 1)
 
-                    if prev_price == 0 and current_price > 0 and row["price_change_type"] in ("NORMAL_DOWN", "NORMAL_UP"):
-                        display_rows.append({
-                            "날짜": row["date"],
-                            "이벤트": "🔄 복원",
-                            "가격 정보": f"품절 → 정상가 {current_price:,.1f}원"
-                        })
-                        continue
+                raw_hist["is_disc"] = (
+                    (raw_hist["normal_price"] > 0) &
+                    (raw_hist["sale_price"] > 0) &
+                    (raw_hist["sale_price"] < raw_hist["normal_price"])
+                )
+                raw_hist["prev_is_disc"] = raw_hist["is_disc"].shift(1, fill_value=False)
+                raw_hist["prev_sale"] = raw_hist["sale_price"].shift(1, fill_value=0)
 
-                    if row["price_change_type"] == "NORMAL_UP" and str(row["date"]) in restore_dates_in_display:
-                        continue
+                existing_dates_events = set(
+                    (r["날짜"], r["이벤트"]) for r in display_rows
+                )
 
-                    # 실제 정상가 변동 여부 확인: normal_price_events에 없으면 스킵
-                    if row["price_change_type"] in ("NORMAL_UP", "NORMAL_DOWN"):
-                        verify_res = (
-                            supabase.table("product_normal_price_events")
-                            .select("date")
-                            .eq("product_url", p["product_url"])
-                            .eq("date", row["date"])
-                            .execute()
-                        )
-                        if not verify_res.data:
-                            continue
+                for _, rr in raw_hist.iterrows():
+                    date_str = str(rr["date"])
+                    norm_u = round(rr["normal_price"] / cc, 1)
+                    sale_u = round(rr["sale_price"] / cc, 1)
 
-                    _event = icon_map.get(row["price_change_type"], "")
+                    # 할인 시작: 이전 날 할인 아님 → 오늘 할인
+                    if rr["is_disc"] and not rr["prev_is_disc"]:
+                        key = (date_str, "💸 할인 시작")
+                        if key not in existing_dates_events:
+                            rate = round((rr["normal_price"] - rr["sale_price"]) / rr["normal_price"] * 100, 1)
+                            display_rows.append({
+                                "날짜": date_str,
+                                "이벤트": "💸 할인 시작",
+                                "가격 정보": f"정상가: {norm_u:,.1f}원 | 할인가: {sale_u:,.1f}원 | 할인율: {rate:.1f}%"
+                            })
+                            existing_dates_events.add(key)
 
-                    # 할인가 이벤트: raw_daily_prices_unit에서 해당 날짜 정상가/할인가 직접 조회
-                    if row["price_change_type"] in ("DISCOUNT_DOWN", "DISCOUNT_UP"):
-                        raw_res2 = (
-                            supabase.table("raw_daily_prices_unit")
-                            .select("unit_normal_price, unit_sale_price")
-                            .eq("product_url", p["product_url"])
-                            .eq("date", row["date"])
-                            .limit(1)
-                            .execute()
-                        )
-                        if raw_res2.data:
-                            r2 = raw_res2.data[0]
-                            norm_price = float(r2["unit_normal_price"]) if r2.get("unit_normal_price") else None
-                            disc_price = float(r2["unit_sale_price"]) if r2.get("unit_sale_price") else None
-                            if norm_price and disc_price and norm_price > 0 and disc_price > 0 and norm_price >= disc_price:
-                                disc_rate = (norm_price - disc_price) / norm_price * 100
-                                price_text = f"정상가: {norm_price:,.1f}원 | 할인가: {disc_price:,.1f}원 | 할인율: {disc_rate:.1f}%"
-                            elif norm_price and norm_price > 0:
-                                price_text = f"정상가: {norm_price:,.1f}원 | 할인가: {current_price:,.1f}원"
-                            else:
-                                price_text = f"할인가: {current_price:,.1f}원"
-                        else:
-                            price_text = f"할인가: {current_price:,.1f}원"
-                    else:
-                        if prev_price > 0:
-                            diff = current_price - prev_price
-                            diff_rate = (diff / prev_price) * 100
-                            rate_text = f"({diff_rate:+.1f}%)"
-                        else:
-                            rate_text = ""
-                        price_text = f"{prev_price:,.1f}원 → {current_price:,.1f}원 {rate_text}"
-                    event_key = f"{row['date']}|{row['price_change_type']}"
+                    # 할인 종료: 이전 날 할인 → 오늘 할인 아님 (품절 아닌 경우)
+                    elif not rr["is_disc"] and rr["prev_is_disc"] and rr["normal_price"] > 0:
+                        key = (date_str, "💸 할인 종료")
+                        if key not in existing_dates_events:
+                            display_rows.append({
+                                "날짜": date_str,
+                                "이벤트": "💸 할인 종료",
+                                "가격 정보": f"정상가: {norm_u:,.1f}원"
+                            })
+                            existing_dates_events.add(key)
 
-                    if event_key in seen_events:
-                        continue
-                    seen_events.add(event_key)
-                    display_rows.append({
-                        "날짜": row["date"],
-                        "이벤트": _event,
-                        "가격 정보": price_text
-                    })
-
+                    # 할인 중 할인가 변동
+                    elif rr["is_disc"] and rr["prev_is_disc"] and abs(rr["sale_price"] - rr["prev_sale"]) > 0.5:
+                        direction = "💸 할인가 하락" if rr["sale_price"] < rr["prev_sale"] else "💸 할인가 상승"
+                        key = (date_str, direction)
+                        if key not in existing_dates_events:
+                            prev_sale_u = round(rr["prev_sale"] / cc, 1)
+                            rate = round((rr["normal_price"] - rr["sale_price"]) / rr["normal_price"] * 100, 1)
+                            display_rows.append({
+                                "날짜": date_str,
+                                "이벤트": direction,
+                                "가격 정보": f"정상가: {norm_u:,.1f}원 | {prev_sale_u:,.1f}원 → {sale_u:,.1f}원 | 할인율: {rate:.1f}%"
+                            })
+                            existing_dates_events.add(key)
             normal_res = (
                 supabase.table("product_normal_price_events")
                 .select("*")
@@ -4689,6 +4608,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
