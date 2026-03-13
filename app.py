@@ -2375,6 +2375,13 @@ if "search_keyword" not in st.session_state:
     st.session_state.search_keyword = ""
 if "search_history" not in st.session_state:
     st.session_state.search_history = []
+if "saved_queries" not in st.session_state:
+    # Supabase에서 저장된 검색어 로드
+    try:
+        sq_res = supabase.table("saved_queries").select("*").order("created_at", desc=False).execute()
+        st.session_state.saved_queries = sq_res.data if sq_res.data else []
+    except:
+        st.session_state.saved_queries = []
 
 if "selected_products" not in st.session_state:
     st.session_state.selected_products = set()
@@ -2985,6 +2992,27 @@ with col_tabs:
     # TAB 3: 자연어 질문
     # =========================
     with tab3:
+        # 자주 쓰는 검색어
+        if st.session_state.get("saved_queries"):
+            st.markdown("##### ⭐ 자주 쓰는 검색어")
+            sq_cols = st.columns(4)
+            for sq_idx, sq in enumerate(st.session_state.saved_queries):
+                with sq_cols[sq_idx % 4]:
+                    col_sq_btn, col_sq_del = st.columns([5, 1])
+                    with col_sq_btn:
+                        if st.button(sq["query_text"], key=f"sq_run_{sq_idx}", use_container_width=True):
+                            st.session_state["_run_saved_query"] = sq["query_text"]
+                            st.rerun()
+                    with col_sq_del:
+                        if st.button("×", key=f"sq_del_{sq_idx}", help="삭제"):
+                            try:
+                                supabase.table("saved_queries").delete().eq("id", sq["id"]).execute()
+                                st.session_state.saved_queries.pop(sq_idx)
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"삭제 실패: {e}")
+            st.markdown("---")
+
         with st.form("question_form", clear_on_submit=True):
             question = st.text_input(
                 "자연어로 질문하세요",
@@ -2992,6 +3020,11 @@ with col_tabs:
                 key="insight_question_input"
             )
             ask_question = st.form_submit_button("🔍 질문하기", type="primary", use_container_width=True)
+
+        # 저장된 검색어 실행
+        if "_run_saved_query" in st.session_state:
+            question = st.session_state.pop("_run_saved_query")
+            ask_question = True
 
         if ask_question and question:
             st.session_state.active_mode = "자연어 질문"
@@ -3068,7 +3101,29 @@ with col_tabs:
                         st.markdown(f"**Q:** {history['question']}")
 
                     with col_del:
-                        if st.button("🗑️", key=f"delete_q_{idx}", help="질문 삭제"):
+                        col_save, col_delete = st.columns(2)
+                        with col_save:
+                            already_saved = any(
+                                sq["query_text"] == history["question"]
+                                for sq in st.session_state.get("saved_queries", [])
+                            )
+                            if not already_saved:
+                                if st.button("⭐", key=f"save_q_{idx}", help="자주 쓰는 검색어로 저장"):
+                                    try:
+                                        res = supabase.table("saved_queries").insert({
+                                            "query_text": history["question"],
+                                            "created_at": datetime.now().isoformat()
+                                        }).execute()
+                                        if res.data:
+                                            st.session_state.saved_queries.append(res.data[0])
+                                            st.rerun()
+                                    except Exception as e:
+                                        st.error(f"저장 실패: {e}")
+                            else:
+                                st.markdown("⭐", help="이미 저장됨")
+                        with col_delete:
+                            if st.button("🗑️", key=f"delete_q_{idx}", help="질문 삭제"):
+                                
                             st.session_state.question_history.pop(
                                 len(st.session_state.question_history) - 1 - idx
                             )
@@ -4572,6 +4627,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
