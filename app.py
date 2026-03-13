@@ -520,6 +520,28 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
                 df_work = _filtered
             break
 
+    # category1 키워드 필터 (전용캡슐, 네스프레소 호환, 돌체구스토 호환 등)
+    _cat1_map = [
+        (["전용", "전용캡슐"], "전용캡슐"),
+        (["네스프레소호환", "네스프레소 호환"], "네스프레소 호환캡슐"),
+        (["돌체구스토호환", "돌체구스토 호환", "돌체호환"], "돌체구스토 호환캡슐"),
+        (["호환캡슐", "호환 캡슐"], None),  # 네스프레소+돌체 모두
+    ]
+    _q_nospace = question.replace(" ", "")
+    for _triggers, _cat1_kw in _cat1_map:
+        if any(t.replace(" ", "") in _q_nospace for t in _triggers):
+            if _cat1_kw:
+                _filtered = df_work[
+                    _norm_series(df_work["category1"]).str.contains(_norm_kw(_cat1_kw), case=False)
+                ]
+            else:
+                # 호환캡슐 = 네스프레소 호환 + 돌체구스토 호환 모두
+                _filtered = df_work[
+                    _norm_series(df_work["category1"]).str.contains("호환", case=False)
+                ]
+            if not _filtered.empty:
+                df_work = _filtered
+            break
     # =========================
     # 🔥 할인 기간 조회
     # =========================
@@ -907,14 +929,45 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
                     }
                 ).execute()
                 if period_res.data:
-                    # 조회 기간으로 클리핑
                     date_from_str = date_from.strftime("%Y-%m-%d") if date_from else None
                     date_to_str = date_to.strftime("%Y-%m-%d") if date_to else None
-                    periods_str = "  /  ".join([
-                        f"📅 {max(p['discount_start_date'], date_from_str) if date_from_str else p['discount_start_date']} ~ {min(p['discount_end_date'], date_to_str) if date_to_str else p['discount_end_date']}"
-                        for p in period_res.data
-                    ])
-                    detail = f"💰 {norm_str}{disc_price:,.1f}원{rate_str}  |  {periods_str}"
+                    period_details = []
+                    for p in period_res.data:
+                        p_start = max(p['discount_start_date'], date_from_str) if date_from_str else p['discount_start_date']
+                        p_end = min(p['discount_end_date'], date_to_str) if date_to_str else p['discount_end_date']
+                        # 기간 내 할인가 통계
+                        stat_res = (
+                            supabase.table("raw_daily_prices_unit")
+                            .select("unit_sale_price, unit_normal_price")
+                            .eq("product_url", row["product_url"])
+                            .gte("date", p_start)
+                            .lte("date", p_end)
+                            .execute()
+                        )
+                        if stat_res.data:
+                            sale_prices = [
+                                float(r["unit_sale_price"]) for r in stat_res.data
+                                if r.get("unit_sale_price") and float(r["unit_sale_price"]) > 0
+                            ]
+                            norm_prices = [
+                                float(r["unit_normal_price"]) for r in stat_res.data
+                                if r.get("unit_normal_price") and float(r["unit_normal_price"]) > 0
+                            ]
+                            if sale_prices and norm_prices:
+                                avg_p = sum(sale_prices) / len(sale_prices)
+                                min_p = min(sale_prices)
+                                max_p = max(sale_prices)
+                                norm_p = norm_prices[0]
+                                period_details.append(
+                                    f"📅 {p_start} ~ {p_end} | "
+                                    f"정상가: {norm_p:,.1f}원 | "
+                                    f"할인가 평균: {avg_p:,.1f}원 / 최저: {min_p:,.1f}원 / 최고: {max_p:,.1f}원"
+                                )
+                            else:
+                                period_details.append(f"📅 {p_start} ~ {p_end}")
+                        else:
+                            period_details.append(f"📅 {p_start} ~ {p_end}")
+                    detail = "  /  ".join(period_details)
                 else:
                     detail = f"💰 {norm_str}{disc_price:,.1f}원{rate_str}"
             else:
@@ -4341,6 +4394,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
