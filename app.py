@@ -509,6 +509,17 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
             keywords_str = ", ".join(all_keywords)
             return f"'{keywords_str}'에 해당하는 제품이 없습니다."
 
+    # category2 키워드 필터 (버츄오, 오리지널 등)
+    _cat2_keywords = ["버츄오", "오리지널"]
+    for _cat2_kw in _cat2_keywords:
+        if _cat2_kw in question:
+            _filtered = df_work[
+                _norm_series(df_work["category2"]).str.contains(_norm_kw(_cat2_kw), case=False)
+            ]
+            if not _filtered.empty:
+                df_work = _filtered
+            break
+
     # =========================
     # 🔥 할인 기간 조회
     # =========================
@@ -4263,6 +4274,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
