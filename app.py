@@ -902,7 +902,8 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
             periods2 = calc_disc_periods_simple(orig_url, date_from_str2, date_to_str2)
             if periods2:
                 periods_str2 = "  /  ".join([
-                    f"📅 {s} ~ {e}" for s, e in periods2
+                    f"📅 {s}" if s == e else f"📅 {s} ~ {e}"
+                    for s, e in periods2
                 ])
                 period_detail = f"  |  {periods_str2}"
             else:
@@ -4571,6 +4572,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
