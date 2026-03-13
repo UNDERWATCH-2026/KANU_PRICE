@@ -349,6 +349,11 @@ def extract_period_from_question(q: str, base_date=None):
     today = base_date if base_date else datetime.today()
     q_lower = q.lower()
 
+    if any(w in q_lower for w in ["이번 주", "이번주"]):
+        return today - timedelta(days=7), today, "이번 주"
+    if any(w in q_lower for w in ["이번 달", "이번달"]):
+        from_dt = today.replace(day=1)
+        return from_dt, today, f"{today.year}년 {today.month}월"
     if any(w in q_lower for w in ["최근 7일", "최근 일주일", "최근 1주일"]):
         return today - timedelta(days=7), today, "최근 7일 내"
     if any(w in q_lower for w in ["최근 한 달", "최근 30일"]):
@@ -4647,6 +4652,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
