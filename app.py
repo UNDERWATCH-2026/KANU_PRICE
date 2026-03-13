@@ -1007,7 +1007,6 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
                     else:
                         detail = f"💰 {norm_str}{disc_price:,.1f}원{rate_str}"
             else:
-                else:
                 disc_price = float(row["current_unit_price"])
                 norm_price = float(row.get("normal_unit_price") or 0)
                 # 통계 조회
@@ -4459,6 +4458,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
