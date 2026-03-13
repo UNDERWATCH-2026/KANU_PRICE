@@ -882,9 +882,13 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
                 period_detail = f"  |  {periods_str2}"
             else:
                 disc_date = discount_date_map.get(url, "")
-                period_detail = f"  |  📅 {disc_date}" if disc_date else ""
+                if disc_date:
+                    disc_date_str = str(disc_date)[:10] if disc_date else ""
+                    period_detail = f"  |  📅 {disc_date_str}"
+                else:
+                    period_detail = ""
             if norm_price:
-                product_details[url] = f"💰 {norm_price:,.1f}원 → {disc_price:,.1f}원 ({rate:.1f}%){period_detail}"
+                product_details[url] = f"할인율: {rate:.1f}% | 정상가: {norm_price:,.1f}원 → 할인가: {disc_price:,.1f}원{period_detail}"
             else:
                 product_details[url] = f"💰 {disc_price:,.1f}원 (정상가 미상){period_detail}"
 
@@ -2985,10 +2989,13 @@ with col_tabs:
             _top_n, _top_dir, _top_mode = extract_top_n(question)
             # "가장 큰/높은/낮은/싼/비싼" 키워드 있으면 자동으로 1위
             if not _top_n:
-                if any(w in question for w in ["가장 큰", "제일 큰", "가장 높은", "제일 높은"]):
+                if any(w in question for w in ["가장 큰", "제일 큰", "가장 높은", "제일 높은", "최대", "최고"]):
                     _top_n, _top_dir, _top_mode = 1, "top", "rank"
                 elif any(w in question for w in ["가장 낮은", "제일 낮은", "가장 작은", "제일 작은", "가장 적은", "제일 적은", "최저", "최소"]):
                     _top_n, _top_dir, _top_mode = 1, "bottom", "rank"
+                elif intent == "DISCOUNT_RATE":
+                    # 할인율 관련 질문은 기본적으로 1위(동점 포함)만
+                    _top_n, _top_dir, _top_mode = 1, "top", "rank"
             _top_n_arg = (_top_n, _top_dir, _top_mode) if _top_n else None
             
             answer = execute_rule(
@@ -4543,6 +4550,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
