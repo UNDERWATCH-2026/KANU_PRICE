@@ -1161,9 +1161,31 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
     
             results.append({"product_url": url_key})
     
-            product_details[url_key] = (
-                f"💰 최저가: {min_price:,.1f}원 ({sd} ~ {ed})"
+            # 해당 날짜 raw 가격 조회
+            raw_min = (
+                supabase.table("raw_daily_prices_unit")
+                .select("unit_normal_price, unit_sale_price")
+                .eq("product_url", url)
+                .gte("date", str(sd))
+                .lte("date", str(ed))
+                .order("unit_sale_price", desc=False)
+                .limit(1)
+                .execute()
             )
+            if raw_min.data:
+                rm = raw_min.data[0]
+                norm = float(rm["unit_normal_price"]) if rm.get("unit_normal_price") else None
+                disc = float(rm["unit_sale_price"]) if rm.get("unit_sale_price") else None
+                if norm and disc and norm > disc:
+                    rate = (norm - disc) / norm * 100
+                    price_str = f"정상가: {norm:,.1f}원 | 할인가: {disc:,.1f}원 | 할인율: {rate:.1f}%"
+                elif norm:
+                    price_str = f"정상가: {norm:,.1f}원"
+                else:
+                    price_str = f"최저가: {min_price:,.1f}원"
+            else:
+                price_str = f"최저가: {min_price:,.1f}원"
+            product_details[url_key] = f"{price_str} ({sd} ~ {ed})"
     
         return {
             "type": "product_list",
@@ -1232,9 +1254,30 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
     
             results.append({"product_url": url_key})
     
-            product_details[url_key] = (
-                f"💰 최고가: {max_price:,.1f}원 ({sd} ~ {ed})"
+            raw_max = (
+                supabase.table("raw_daily_prices_unit")
+                .select("unit_normal_price, unit_sale_price")
+                .eq("product_url", url)
+                .gte("date", str(sd))
+                .lte("date", str(ed))
+                .order("unit_sale_price", desc=True)
+                .limit(1)
+                .execute()
             )
+            if raw_max.data:
+                rm = raw_max.data[0]
+                norm = float(rm["unit_normal_price"]) if rm.get("unit_normal_price") else None
+                disc = float(rm["unit_sale_price"]) if rm.get("unit_sale_price") else None
+                if norm and disc and norm > disc:
+                    rate = (norm - disc) / norm * 100
+                    price_str = f"정상가: {norm:,.1f}원 | 할인가: {disc:,.1f}원 | 할인율: {rate:.1f}%"
+                elif norm:
+                    price_str = f"정상가: {norm:,.1f}원"
+                else:
+                    price_str = f"최고가: {max_price:,.1f}원"
+            else:
+                price_str = f"최고가: {max_price:,.1f}원"
+            product_details[url_key] = f"{price_str} ({sd} ~ {ed})"
     
         return {
             "type": "product_list",
@@ -4494,6 +4537,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
