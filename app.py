@@ -497,6 +497,24 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
     # 🔧 추가
     all_keywords = extract_product_name_from_question(question)
 
+    # 제품명 키워드 필터 (브랜드 제외 키워드로 df_work 필터링)
+    if all_keywords and brands:
+        brand_words = [b.lower().replace(" ", "") for b in brands]
+        product_kws = [
+            kw for kw in all_keywords
+            if kw.lower().replace(" ", "") not in brand_words
+            and kw not in ["할인", "기간", "언제", "알려줘", "보여줘", "제품", "신제품",
+                           "품절", "복원", "최저가", "최고가", "변동", "상승", "하락",
+                           "인상", "인하", "신상", "출시", "새로", "신규"]
+        ]
+        if product_kws:
+            for kw in product_kws:
+                _filtered = df_work[
+                    _norm_series(df_work["product_name"]).str.contains(_norm_kw(kw), case=False)
+                ]
+                if not _filtered.empty:
+                    df_work = _filtered
+
     question_period = extract_period_from_question(question)
 
     if question_period:
@@ -4645,6 +4663,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
