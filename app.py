@@ -1540,6 +1540,7 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
         if df.empty:
             return None
         
+        df = df.drop_duplicates(subset=["product_url"])
         df["product_url_key"] = df["product_url"].astype(str).str.strip().str.lower()
         df["launch_date"] = pd.to_datetime(df["product_url_key"].map(new_product_data))
         
@@ -4644,6 +4645,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
