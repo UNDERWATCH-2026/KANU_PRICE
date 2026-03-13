@@ -2387,6 +2387,8 @@ if df_all is None or df_all.empty:
 # 제품명 정제
 df_all["product_name_raw"] = df_all["product_name"]
 df_all["product_name"] = df_all["product_name"].apply(clean_product_name)
+df_all["category1"] = df_all["category1"].str.replace("전용슐", "전용캡슐", regex=False)
+df_all["category2"] = df_all["category2"].str.replace("전용슐", "전용캡슐", regex=False)
 
 # 🔎 검색용 컬럼 생성
 df_all["product_name_search"] = (
@@ -4394,6 +4396,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
