@@ -2293,7 +2293,7 @@ df_all["category1"] = df_all["category1"].str.replace(
     r"카.*바리스타.*캡슐",
     "카누 바리스타 전용캡슐",
     regex=True
-)
+).str.replace("전용슐", "전용캡슐")
 
 # 카누 네스프레소 호환
 df_all["category1"] = df_all["category1"].str.replace(
@@ -4394,6 +4394,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
