@@ -297,6 +297,10 @@ def classify_intent(q: str):
         return "DISCOUNT_PRICE_UP"
     if any(kw in q for kw in ["할인가", "판매가"]) and any(w in q for w in ["인하", "하락", "내렸", "내려"]):
         return "DISCOUNT_PRICE_DOWN"
+    if "할인" in q and any(w in q for w in ["최저가", "가장 싼", "제일 싼", "가장 저렴", "제일 저렴"]):
+        return "PRICE_MIN"
+    if "할인" in q and any(w in q for w in ["최고가", "가장 비싼", "제일 비싼"]):
+        return "PRICE_MAX"
     if "할인" in q or "행사" in q:
         return "DISCOUNT"
     if any(word in q for word in ["신제품", "새롭게", "새로", "신규", "출시", "새로운", "처음", "신상"]):
@@ -1111,6 +1115,9 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
         ]
     
         df_hist = df_hist[df_hist["unit_price"] > 0]
+        # "할인 중 최저가" 질문이면 DISCOUNT 이벤트만
+        if "할인" in question:
+            df_hist = df_hist[df_hist["event_type"] == "DISCOUNT"] if "event_type" in df_hist.columns else df_hist
     
         if df_hist.empty:
             return "조회 기간 내 가격 데이터가 없습니다."
@@ -2120,7 +2127,7 @@ def query_events_bulk(supabase, product_urls, date_from, date_to, chunk_size=200
         chunk = product_urls[i:i+chunk_size]
         res = (
             supabase.table("product_all_events")
-            .select("product_url, date, unit_price")
+            .select("product_url, date, unit_price, event_type")
             .in_("product_url", chunk)
             .gte("date", date_from.strftime("%Y-%m-%d"))
             .lte("date", date_to.strftime("%Y-%m-%d"))
@@ -4487,6 +4494,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
