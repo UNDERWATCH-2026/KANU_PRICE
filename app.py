@@ -4547,11 +4547,28 @@ if selected_products:
                 for _, row in df_changes.iterrows():
                     prev_price = float(row["prev_price"]) if row["prev_price"] else 0
                     current_price = float(row["unit_price"]) if row["unit_price"] else 0
-                    # ✅ 할인 종료 다음날 재할인 시작인 경우 DISCOUNT_DOWN 스킵
+                    df_raw_unit_all["date"] = df_raw_unit_all["date"].astype(str)
                     if row["price_change_type"] == "DISCOUNT_DOWN":
                         row_date = str(row["date"])
+                        # 할인 종료 다음날이면 스킵
                         if row_date in discount_end_dates_plus1:
                             continue
+                        # 전날 할인가와 오늘 할인가 비교 - 동일하면 재할인 시작이므로 스킵
+                        prev_date = str((pd.Timestamp(row_date) - pd.Timedelta(days=1)).date())
+                        raw_today = df_raw_unit_all[
+                            (df_raw_unit_all["product_url"] == p["product_url"]) &
+                            (df_raw_unit_all["date"] == row_date)
+                        ]
+                        raw_prev = df_raw_unit_all[
+                            (df_raw_unit_all["product_url"] == p["product_url"]) &
+                            (df_raw_unit_all["date"] == prev_date)
+                        ]
+                        if not raw_today.empty and not raw_prev.empty:
+                            today_sale = float(raw_today.iloc[0].get("unit_sale_price") or 0)
+                            prev_sale = float(raw_prev.iloc[0].get("unit_sale_price") or 0)
+                            # 전날 할인 없었거나(prev_sale=0) 가격 동일이면 재할인 시작
+                            if prev_sale == 0 or abs(today_sale - prev_sale) < 0.1:
+                                continue
 
                     if current_price == 0 and row["price_change_type"] in ("NORMAL_DOWN", "NORMAL_UP"):
                         display_rows.append({
@@ -4689,6 +4706,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
