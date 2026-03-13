@@ -543,10 +543,15 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
     _has_compat = any(t in _q_nospace for t in ["호환캡슐", "호환 캡슐".replace(" ", "")])
 
     if _has_dolce and not _has_nes_compat:
-        # 돌체 or 돌체구스토 → 돌체구스토 호환캡슐만
-        _filtered = df_work[
-            _norm_series(df_work["category1"]).str.contains("돌체", case=False)
-        ]
+        # 브랜드가 카누면 "카누 돌체구스토"만, 아니면 전체 돌체구스토
+        if brands and any("카누" in b for b in brands):
+            _filtered = df_work[
+                _norm_series(df_work["category1"]).str.contains("카누돌체", case=False)
+            ]
+        else:
+            _filtered = df_work[
+                _norm_series(df_work["category1"]).str.contains("돌체", case=False)
+            ]
         if not _filtered.empty:
             df_work = _filtered
     elif _has_nes_compat:
@@ -4639,6 +4644,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
