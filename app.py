@@ -931,20 +931,46 @@ def _execute_rule_inner(intent, question, df_summary, date_from=None, date_to=No
                     norm_price = float(row.get("current_unit_price") or 0)
                 rate_str = f" ({(norm_price - disc_price) / norm_price * 100:.1f}%)" if norm_price > disc_price else ""
                 norm_str = f"{norm_price:,.1f}원 → " if norm_price > 0 else ""
-                # 할인 기간 조회
-                period_res = supabase.rpc(
-                    "get_discount_periods_in_range",
-                    {
-                        "p_product_url": row["product_url"],
-                        "p_date_from": (date_from if date_from else datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d"),
-                        "p_date_to": (date_to if date_to else datetime.now()).strftime("%Y-%m-%d"),
-                    }
-                ).execute()
-                if period_res.data:
-                    date_from_str = date_from.strftime("%Y-%m-%d") if date_from else None
-                    date_to_str = date_to.strftime("%Y-%m-%d") if date_to else None
+                # 할인 기간 조회 - raw_daily_prices에서 직접 계산
+                def calc_discount_periods(product_url, dfrom, dto):
+                    r = (
+                        supabase.table("raw_daily_prices")
+                        .select("date, normal_price, sale_price")
+                        .eq("product_url", product_url)
+                        .gte("date", dfrom)
+                        .lte("date", dto)
+                        .order("date", desc=False)
+                        .execute()
+                    )
+                    if not r.data:
+                        return []
+                    periods = []
+                    start = None
+                    prev_date = None
+                    for rd in r.data:
+                        n = float(rd["normal_price"]) if rd["normal_price"] else 0
+                        s = float(rd["sale_price"]) if rd["sale_price"] else 0
+                        is_disc = n > 0 and s > 0 and s < n
+                        if is_disc:
+                            if start is None:
+                                start = rd["date"]
+                            prev_date = rd["date"]
+                        else:
+                            if start is not None:
+                                periods.append({"discount_start_date": start, "discount_end_date": prev_date})
+                                start = None
+                    if start is not None:
+                        periods.append({"discount_start_date": start, "discount_end_date": prev_date})
+                    return periods
+
+                period_res_data = calc_discount_periods(
+                    row["product_url"],
+                    date_from_str,
+                    date_to_str
+                )
+                if period_res_data:
                     period_details = []
-                    for p in period_res.data:
+                    for p in period_res_data:
                         p_start = max(p['discount_start_date'], date_from_str) if date_from_str else p['discount_start_date']
                         p_end = min(p['discount_end_date'], date_to_str) if date_to_str else p['discount_end_date']
                         # 기간 내 할인가 통계
@@ -4458,6 +4484,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
