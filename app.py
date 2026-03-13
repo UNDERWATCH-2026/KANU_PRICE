@@ -3867,8 +3867,14 @@ if selected_products:
 
                 row = product_row.iloc[0]
                 label = format_product_label(row)
-                display_name = f"{row['brand']} - {row['product_name']}"
-                hex_color = color_map.get(display_name, "#999999")
+                # 차트의 product_name 컬럼과 동일한 방식으로 생성
+                pname_legend = row["product_name"]
+                if row['brand'] == '네스프레소':
+                    cat2 = str(row.get('category2') or '').strip()
+                    chart_display_name = f"{row['brand']} - {cat2} - {pname_legend}" if cat2 else f"{row['brand']} - {pname_legend}"
+                else:
+                    chart_display_name = f"{row['brand']} - {pname_legend}"
+                hex_color = color_map.get(chart_display_name, "#999999")
 
                 col_btn, col_name = st.columns([1, 10])
 
@@ -4421,24 +4427,6 @@ if selected_products:
         with st.expander("📅 이벤트 히스토리"):
 
             display_rows = []
-
-            discount_res = supabase.rpc(
-                "get_discount_periods_in_range",
-                {
-                    "p_product_url": p["product_url"],
-                    "p_date_from": filter_date_from.strftime("%Y-%m-%d"),
-                    "p_date_to": filter_date_to.strftime("%Y-%m-%d"),
-                }
-            ).execute()
-
-            discount_rows = discount_res.data if discount_res.data else []
-
-            df_life = load_lifecycle_events(p["product_url"])
-            out_dates = []
-            if not df_life.empty:
-                out_dates = pd.to_datetime(
-                    df_life[df_life["lifecycle_event"] == "OUT_OF_STOCK"]["date"]
-                ).tolist()
 
             # 할인 시작/종료는 raw_daily_prices에서 직접 계산 (아래에서 처리)
 
