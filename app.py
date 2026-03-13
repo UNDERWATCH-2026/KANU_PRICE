@@ -4142,50 +4142,60 @@ if selected_products:
                 st.metric("개당 정상가", "-")
 
         cards = []
-        discount_res = supabase.rpc(
-            "get_discount_periods_in_range",
-            {
-                "p_product_url": p["product_url"],
-                "p_date_from": filter_date_from.strftime("%Y-%m-%d"),
-                "p_date_to": filter_date_to.strftime("%Y-%m-%d"),
-            }
-        ).execute()
-        discount_rows = discount_res.data if discount_res.data else []
-
-        # RPC 결과 없으면 product_all_events에서 직접 확인
-        if not discount_rows:
-            fallback_res = (
-                supabase.table("product_all_events")
-                .select("date, unit_price")
-                .eq("product_url", p["product_url"])
-                .eq("event_type", "DISCOUNT")
-                .gte("date", filter_date_from.strftime("%Y-%m-%d"))
-                .lte("date", filter_date_to.strftime("%Y-%m-%d"))
+        # raw_daily_prices에서 직접 할인 기간 계산
+        def calc_disc_periods_for_card(product_url, dfrom, dto):
+            r = (
+                supabase.table("raw_daily_prices")
+                .select("date, normal_price, sale_price")
+                .eq("product_url", product_url)
+                .gte("date", dfrom)
+                .lte("date", dto)
                 .order("date", desc=False)
                 .execute()
             )
-            if fallback_res.data:
-                dates = [r["date"] for r in fallback_res.data]
-                last_price = float(fallback_res.data[-1]["unit_price"]) if fallback_res.data[-1].get("unit_price") else None
-                discount_rows = [{"discount_start_date": dates[0], "discount_end_date": dates[-1], "_last_price": last_price}]
+            if not r.data:
+                return []
+            periods = []
+            start = None
+            prev_date = None
+            prev_sale = None
+            for rd in r.data:
+                n = float(rd["normal_price"]) if rd["normal_price"] else 0
+                s = float(rd["sale_price"]) if rd["sale_price"] else 0
+                is_disc = n > 0 and s > 0 and s < n
+                if is_disc:
+                    if start is None:
+                        start = rd["date"]
+                    prev_date = rd["date"]
+                    prev_sale = s
+                else:
+                    if start is not None:
+                        periods.append({
+                            "discount_start_date": start,
+                            "discount_end_date": prev_date,
+                            "_last_price": prev_sale
+                        })
+                        start = None
+            if start is not None:
+                periods.append({
+                    "discount_start_date": start,
+                    "discount_end_date": prev_date,
+                    "_last_price": prev_sale
+                })
+            return periods
+
+        discount_rows = calc_disc_periods_for_card(
+            p["product_url"],
+            filter_date_from.strftime("%Y-%m-%d"),
+            filter_date_to.strftime("%Y-%m-%d")
+        )
 
         if discount_rows:
             last = discount_rows[-1]
             last_price = last.get("_last_price")
-            if last_price is None:
-                last_price_res = (
-                    supabase.table("product_all_events")
-                    .select("unit_price")
-                    .eq("product_url", p["product_url"])
-                    .eq("event_type", "DISCOUNT")
-                    .lte("date", last["discount_end_date"])
-                    .order("date", desc=True)
-                    .limit(1)
-                    .execute()
-                )
-                if last_price_res.data:
-                    last_price = float(last_price_res.data[0]["unit_price"])
-            price_str = f"<br>마지막 할인가: {last_price:,.1f}원" if last_price else ""
+            cc_card = float(p.get("capsule_count") or 1)
+            last_price_unit = round(last_price / cc_card, 1) if last_price else None
+            price_str = f"<br>마지막 할인가: {last_price_unit:,.1f}원" if last_price_unit else ""
             cards.append(render_card(
                 "#e9f3ec",
                 "#2f7d32",
@@ -4592,6 +4602,7 @@ if selected_products:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.caption("이벤트 없음")
+
 
 
 
