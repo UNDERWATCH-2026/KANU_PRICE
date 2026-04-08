@@ -3380,11 +3380,20 @@ if selected_products:
         ].copy()
         if not df_price.empty:
             tmp = df_price.copy()
+
+            # 1️⃣ display_name 먼저 정의
+            if row['brand'] == '네스프레소':
+                cat2 = str(row.get('category2') or '').strip()
+                display_name = f"{row['brand']} - {cat2} - {pname}" if cat2 else f"{row['brand']} - {pname}"
+            else:
+                display_name = f"{row['brand']} - {pname}"
+            
+            # 2️⃣ 그 다음 사용
             tmp["product_name"] = display_name
             tmp["event_date"] = pd.to_datetime(tmp["date"])
             tmp = tmp.sort_values("event_date")
             
-            # 🔥 추가: 날짜별 중복 제거 (DISCOUNT 우선)
+            # 3️⃣ 중복 제거 (DISCOUNT 우선)
             type_priority = {"DISCOUNT": 1, "NORMAL": 0}
             tmp["_priority"] = tmp["event_type"].map(type_priority).fillna(0)
             tmp = (
