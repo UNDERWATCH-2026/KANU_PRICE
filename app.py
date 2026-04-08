@@ -3380,22 +3380,25 @@ if selected_products:
         ].copy()
         if not df_price.empty:
             tmp = df_price.copy()
-            if row['brand'] == '네스프레소':
-                cat2 = str(row.get('category2') or '').strip()
-                display_name = f"{row['brand']} - {cat2} - {pname}" if cat2 else f"{row['brand']} - {pname}"
-            else:
-                display_name = f"{row['brand']} - {pname}"
             tmp["product_name"] = display_name
             tmp["event_date"] = pd.to_datetime(tmp["date"])
-
             tmp = tmp.sort_values("event_date")
-
+            
+            # 🔥 추가: 날짜별 중복 제거 (DISCOUNT 우선)
+            type_priority = {"DISCOUNT": 1, "NORMAL": 0}
+            tmp["_priority"] = tmp["event_type"].map(type_priority).fillna(0)
+            tmp = (
+                tmp.sort_values(["event_date", "_priority"])
+                   .drop_duplicates(subset=["event_date"], keep="last")
+                   .drop(columns=["_priority"])
+            )
+            
             all_dates = pd.date_range(
                 start=tmp["event_date"].min(),
                 end=tmp["event_date"].max(),
                 freq="D"
             )
-
+            
             tmp = tmp.set_index("event_date").reindex(all_dates).reset_index()
             tmp.rename(columns={"index": "event_date"}, inplace=True)
 
