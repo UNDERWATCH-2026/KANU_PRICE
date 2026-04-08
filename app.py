@@ -3706,13 +3706,31 @@ if selected_products:
                 )
             )
 
+            # 라이프사이클 이벤트를 df_chart 형태로 변환해서 합치기
+            if lifecycle_rows:
+                df_life_for_count = pd.concat(lifecycle_rows, ignore_index=True).copy()
+                df_life_for_count = df_life_for_count.merge(
+                    df_chart[["product_name", "event_date", "unit_price"]].drop_duplicates(),
+                    on=["product_name", "event_date"],
+                    how="left"
+                )
+                df_life_for_count = df_life_for_count.dropna(subset=["unit_price"])
+                df_life_for_count["price_detail"] = df_life_for_count["lifecycle_event"]
+                df_life_for_count["price_status"] = df_life_for_count["lifecycle_event"]
+                df_chart_for_points = pd.concat(
+                    [df_chart, df_life_for_count[["product_name", "event_date", "unit_price", "price_detail", "price_status"]]],
+                    ignore_index=True
+                )
+            else:
+                df_chart_for_points = df_chart.copy()
+            
             df_points = (
-                df_chart.groupby(["event_date", "unit_price"])
+                df_chart_for_points.groupby(["event_date", "unit_price"])
                 .agg(
                     product_names=("product_name", lambda x: "\n".join(sorted(set(x)))),
                     price_detail=("price_detail", lambda x: " / ".join(dict.fromkeys(x))),
                     price_status=("price_status", "first"),
-                    count=("product_name", "count"),
+                    count=("product_name", lambda x: len(set(x))),
                     product_name=("product_name", "first"),
                 )
                 .reset_index()
