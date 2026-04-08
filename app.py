@@ -3714,6 +3714,17 @@ if selected_products:
                     on=["product_name", "event_date"],
                     how="left"
                 )
+                # unit_price가 없으면 해당 제품의 직전 가격으로 채우기
+                for idx2, r2 in df_life_for_count[df_life_for_count["unit_price"].isna()].iterrows():
+                    product_prices = df_chart[
+                        (df_chart["product_name"] == r2["product_name"]) &
+                        (df_chart["event_date"] <= r2["event_date"]) &
+                        (df_chart["unit_price"].notna())
+                    ]
+                    if not product_prices.empty:
+                        closest = product_prices.sort_values("event_date").iloc[-1]
+                        df_life_for_count.at[idx2, "unit_price"] = closest["unit_price"]
+                
                 df_life_for_count = df_life_for_count.dropna(subset=["unit_price"])
                 df_life_for_count["price_detail"] = df_life_for_count["lifecycle_event"]
                 df_life_for_count["price_status"] = df_life_for_count["lifecycle_event"]
